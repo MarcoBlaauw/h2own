@@ -1,7 +1,6 @@
 -- ============================================================================
--- H2Own schema: merged additions for membership, tokens, kits/photos, rec status,
--- costs, notifications, audit, device telemetry, and minor test_session upgrades.
--- Target: PostgreSQL, UUIDs via pgcrypto.
+-- H2Own Complete Database Schema
+-- Target: PostgreSQL, UUIDs via pgcrypto
 -- ============================================================================
 
 -- Ensure pgcrypto for UUIDs
@@ -13,8 +12,62 @@ BEGIN
 END$$;
 
 -- --------------------------------------------------------------------------
--- A) Per-pool membership (RBAC at pool level)
+-- Core Tables (in dependency order)
 -- --------------------------------------------------------------------------
+
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+  user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  name VARCHAR(120),
+  is_active BOOLEAN DEFAULT TRUE,
+  email_verified BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- User locations
+CREATE TABLE IF NOT EXISTS user_locations (
+  location_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  name VARCHAR(120) NOT NULL,
+  latitude DECIMAL(10,8),
+  longitude DECIMAL(11,8),
+  timezone VARCHAR(50) DEFAULT 'UTC',
+  is_primary BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_locations_user ON user_locations(user_id);
+
+-- Pools table
+CREATE TABLE IF NOT EXISTS pools (
+  pool_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  location_id UUID REFERENCES user_locations(location_id) ON DELETE SET NULL,
+  name VARCHAR(120) NOT NULL,
+  volume_gallons INTEGER NOT NULL,
+  surface_type VARCHAR(30), -- plaster, fiberglass, vinyl, etc.
+  sanitizer_type VARCHAR(30), -- salt, chlorine, bromine
+  salt_level_ppm INTEGER,
+  shade_level VARCHAR(20), -- full, partial, minimal
+  enclosure_type VARCHAR(20), -- open, screen, glass
+  has_cover BOOLEAN DEFAULT FALSE,
+  pump_gpm INTEGER,
+  filter_type VARCHAR(30),
+  has_heater BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pools_owner ON pools(owner_id);
+CREATE INDEX IF NOT EXISTS idx_pools_location ON pools(location_id);
+
+-- Pool membership (RBAC at pool level)
 CREATE TABLE IF NOT EXISTS pool_members (
   pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -28,15 +81,13 @@ CREATE TABLE IF NOT EXISTS pool_members (
   CONSTRAINT chk_pool_role CHECK (role_name ~ '^[a-z_]+$')
 );
 
--- --------------------------------------------------------------------------
--- B) API tokens (personal access tokens for integrations/CLI)
--- --------------------------------------------------------------------------
+-- API tokens
 CREATE TABLE IF NOT EXISTS api_tokens (
   token_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   name VARCHAR(120) NOT NULL,
-  token_hash TEXT NOT NULL,                 -- store only a hash
-  permissions JSONB,                        -- e.g., {"scopes":["read:tests","write:pools"]}
+  token_hash TEXT NOT NULL,
+  permissions JSONB,
   rate_limit_tier VARCHAR(20) DEFAULT 'standard',
   last_used_at TIMESTAMPTZ,
   revoked BOOLEAN NOT NULL DEFAULT FALSE,
@@ -46,86 +97,153 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked ON api_tokens(revoked);
 
--- --------------------------------------------------------------------------
--- C) Photos linked to pools/tests/etc. (kept minimal for now)
--- --------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS photos (
-  photo_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pool_id UUID REFERENCES pools(pool_id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
-  url TEXT NOT NULL,
-  thumbnail_url TEXT,
-  meta JSONB,                 -- EXIF/dimensions
-  tags JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- --------------------------------------------------------------------------
--- D) Test kits and test_sessions linkage
--- --------------------------------------------------------------------------
+-- Test kits
 CREATE TABLE IF NOT EXISTS test_kits (
   test_kit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   brand VARCHAR(80) NOT NULL,
   model VARCHAR(80) NOT NULL,
-  test_methods JSONB,                 -- e.g., ["FC","pH","TA"]
+  test_methods JSONB,
   accuracy_rating VARCHAR(20),
   notes TEXT,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Extend test_sessions with optional kit/photo + computed CC (combined chlorine)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'test_sessions' AND column_name = 'test_kit_id'
-  ) THEN
-    ALTER TABLE test_sessions
-      ADD COLUMN test_kit_id UUID REFERENCES test_kits(test_kit_id) ON DELETE SET NULL,
-      ADD COLUMN photo_id UUID REFERENCES photos(photo_id) ON DELETE SET NULL;
-  END IF;
-END$$;
+-- Photos
+CREATE TABLE IF NOT EXISTS photos (
+  photo_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pool_id UUID REFERENCES pools(pool_id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  url TEXT NOT NULL,
+  thumbnail_url TEXT,
+  meta JSONB,
+  tags JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- Add combined chlorine as a generated column if not present
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name='test_sessions' AND column_name='combined_chlorine_ppm'
-  ) THEN
-    ALTER TABLE test_sessions
-      ADD COLUMN combined_chlorine_ppm DECIMAL(4,2)
-      GENERATED ALWAYS AS (COALESCE(total_chlorine_ppm,0) - COALESCE(free_chlorine_ppm,0)) STORED;
-  END IF;
-END$$;
+-- Test sessions
+CREATE TABLE IF NOT EXISTS test_sessions (
+  session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
+  tested_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  tested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  test_kit_id UUID REFERENCES test_kits(test_kit_id) ON DELETE SET NULL,
+  photo_id UUID REFERENCES photos(photo_id) ON DELETE SET NULL,
+  -- Water chemistry readings
+  free_chlorine_ppm DECIMAL(4,2),
+  total_chlorine_ppm DECIMAL(4,2),
+  combined_chlorine_ppm DECIMAL(4,2) GENERATED ALWAYS AS (COALESCE(total_chlorine_ppm,0) - COALESCE(free_chlorine_ppm,0)) STORED,
+  ph_level DECIMAL(3,2),
+  total_alkalinity_ppm INTEGER,
+  calcium_hardness_ppm INTEGER,
+  cyanuric_acid_ppm INTEGER,
+  salt_ppm INTEGER,
+  water_temp_f INTEGER,
+  orp_mv INTEGER,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- Helpful index for latest tests per pool
-CREATE INDEX IF NOT EXISTS idx_test_sessions_pool_time
-  ON test_sessions(pool_id, tested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_test_sessions_pool_time ON test_sessions(pool_id, tested_at DESC);
 
--- --------------------------------------------------------------------------
--- E) Recommendation status + indexes
--- --------------------------------------------------------------------------
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name='recommendations' AND column_name='status'
-  ) THEN
-    ALTER TABLE recommendations
-      ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'pending';  -- pending|accepted|rejected|applied|dismissed|expired
-  END IF;
-END$$;
+-- Product categories
+CREATE TABLE IF NOT EXISTS product_categories (
+  category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(50) NOT NULL UNIQUE,
+  description TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
-CREATE INDEX IF NOT EXISTS idx_recommendations_pool_status
-  ON recommendations(pool_id, status);
-CREATE INDEX IF NOT EXISTS idx_recommendations_priority
-  ON recommendations(priority_score DESC);
+-- Products (chemicals)
+CREATE TABLE IF NOT EXISTS products (
+  product_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id UUID NOT NULL REFERENCES product_categories(category_id) ON DELETE CASCADE,
+  brand VARCHAR(80),
+  name VARCHAR(120) NOT NULL,
+  product_type VARCHAR(50),
+  active_ingredients JSONB,
+  concentration_percent DECIMAL(5,2),
+  ph_effect DECIMAL(3,2) DEFAULT 0,
+  strength_factor DECIMAL(4,2) DEFAULT 1.0,
+  dose_per_10k_gallons DECIMAL(8,2),
+  dose_unit VARCHAR(20),
+  -- Effects on water chemistry
+  affects_fc BOOLEAN DEFAULT FALSE,
+  affects_ph BOOLEAN DEFAULT FALSE,
+  affects_ta BOOLEAN DEFAULT FALSE,
+  affects_cya BOOLEAN DEFAULT FALSE,
+  fc_change_per_dose DECIMAL(4,2) DEFAULT 0,
+  ph_change_per_dose DECIMAL(4,2) DEFAULT 0,
+  ta_change_per_dose INTEGER DEFAULT 0,
+  cya_change_per_dose INTEGER DEFAULT 0,
+  form VARCHAR(20), -- liquid, powder, tablet
+  package_sizes JSONB,
+  is_active BOOLEAN DEFAULT TRUE,
+  average_cost_per_unit DECIMAL(8,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- --------------------------------------------------------------------------
--- F) Costs (OPEX) and categories
--- --------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_type ON products(product_type);
+
+-- Chemical actions (dosing events)
+CREATE TABLE IF NOT EXISTS chemical_actions (
+  action_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
+  added_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  linked_test_id UUID REFERENCES test_sessions(session_id) ON DELETE SET NULL,
+  amount DECIMAL(8,2) NOT NULL,
+  unit VARCHAR(20) NOT NULL,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reason TEXT,
+  addition_method VARCHAR(50),
+  target_effect JSONB,
+  actual_effect JSONB,
+  cost DECIMAL(8,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chemical_actions_pool ON chemical_actions(pool_id);
+CREATE INDEX IF NOT EXISTS idx_chemical_actions_product ON chemical_actions(product_id);
+
+-- Recommendations
+CREATE TABLE IF NOT EXISTS recommendations (
+  recommendation_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
+  created_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  linked_test_id UUID REFERENCES test_sessions(session_id) ON DELETE SET NULL,
+  type VARCHAR(30) NOT NULL, -- chemical_adjustment, maintenance, alert
+  priority_score INTEGER NOT NULL DEFAULT 5,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  payload JSONB, -- action details, doses, etc.
+  status VARCHAR(16) NOT NULL DEFAULT 'pending', -- pending|accepted|rejected|applied|dismissed|expired
+  confidence_score DECIMAL(3,2),
+  factors_considered JSONB,
+  expires_at TIMESTAMPTZ,
+  user_action JSONB, -- what the user actually did
+  user_feedback TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recommendations_pool_status ON recommendations(pool_id, status);
+CREATE INDEX IF NOT EXISTS idx_recommendations_priority ON recommendations(priority_score DESC);
+
+-- Prediction outcomes (for ML feedback)
+CREATE TABLE IF NOT EXISTS prediction_outcomes (
+  outcome_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recommendation_id UUID NOT NULL REFERENCES recommendations(recommendation_id) ON DELETE CASCADE,
+  predicted_values JSONB NOT NULL,
+  actual_values JSONB,
+  accuracy_score DECIMAL(3,2),
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Cost categories
 CREATE TABLE IF NOT EXISTS cost_categories (
   category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(50) NOT NULL UNIQUE,
@@ -134,6 +252,7 @@ CREATE TABLE IF NOT EXISTS cost_categories (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Costs
 CREATE TABLE IF NOT EXISTS costs (
   cost_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
@@ -141,10 +260,9 @@ CREATE TABLE IF NOT EXISTS costs (
   amount NUMERIC(10,2) NOT NULL,
   currency CHAR(3) DEFAULT 'USD',
   description TEXT,
-  -- Optional links to other entities
   chemical_action_id UUID REFERENCES chemical_actions(action_id) ON DELETE SET NULL,
-  maintenance_event_id UUID,         -- future table; placeholder for linkage
-  equipment_id UUID,                 -- could point to cleaning_equipment in MVP
+  maintenance_event_id UUID,
+  equipment_id UUID,
   vendor VARCHAR(120),
   receipt_url TEXT,
   incurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -155,19 +273,18 @@ CREATE TABLE IF NOT EXISTS costs (
 CREATE INDEX IF NOT EXISTS idx_costs_pool_time ON costs(pool_id, incurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_costs_category ON costs(category_id);
 
--- --------------------------------------------------------------------------
--- G) Notifications (templates + sent notifications)
--- --------------------------------------------------------------------------
+-- Notification templates
 CREATE TABLE IF NOT EXISTS notification_templates (
   template_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL UNIQUE,
-  channel VARCHAR(30) NOT NULL,     -- email|push|sms
+  channel VARCHAR(30) NOT NULL,
   subject VARCHAR(200),
   body_template TEXT NOT NULL,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Notifications
 CREATE TABLE IF NOT EXISTS notifications (
   notification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -177,21 +294,17 @@ CREATE TABLE IF NOT EXISTS notifications (
   title VARCHAR(200),
   message TEXT NOT NULL,
   data JSONB,
-  status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending|sent|delivered|failed|read
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
   sent_at TIMESTAMPTZ,
   delivered_at TIMESTAMPTZ,
   read_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_notifications_user_status
-  ON notifications(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_notifications_pool
-  ON notifications(pool_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_notifications_pool ON notifications(pool_id);
 
--- --------------------------------------------------------------------------
--- H) Audit log (immutable business audit; keep system_logs for technical logs)
--- --------------------------------------------------------------------------
+-- Audit log
 CREATE TABLE IF NOT EXISTS audit_log (
   audit_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
@@ -210,13 +323,27 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_user_action ON audit_log(user_id, actio
 CREATE INDEX IF NOT EXISTS idx_audit_log_pool ON audit_log(pool_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_time ON audit_log(at DESC);
 
--- --------------------------------------------------------------------------
--- I) Device telemetry (optional; future-proof)
--- --------------------------------------------------------------------------
+-- Weather data
+CREATE TABLE IF NOT EXISTS weather_data (
+  weather_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_id UUID NOT NULL REFERENCES user_locations(location_id) ON DELETE CASCADE,
+  recorded_at TIMESTAMPTZ NOT NULL,
+  air_temp_f INTEGER,
+  uv_index INTEGER,
+  rainfall_in DECIMAL(4,2),
+  wind_speed_mph INTEGER,
+  humidity_percent INTEGER,
+  pressure_inhg DECIMAL(5,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_weather_location_time ON weather_data(location_id, recorded_at DESC);
+
+-- Devices (optional)
 CREATE TABLE IF NOT EXISTS devices (
   device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
-  device_type VARCHAR(40) NOT NULL,          -- ph|orp|temp|tds|level|flow|...
+  device_type VARCHAR(40) NOT NULL,
   vendor VARCHAR(120),
   model VARCHAR(120),
   address VARCHAR(255),
@@ -233,6 +360,7 @@ CREATE TABLE IF NOT EXISTS devices (
 CREATE INDEX IF NOT EXISTS idx_devices_pool_type ON devices(pool_id, device_type);
 CREATE INDEX IF NOT EXISTS idx_devices_online ON devices(is_online);
 
+-- Device readings
 CREATE TABLE IF NOT EXISTS device_readings (
   reading_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   device_id UUID NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
@@ -249,14 +377,18 @@ CREATE TABLE IF NOT EXISTS device_readings (
 CREATE INDEX IF NOT EXISTS idx_device_readings_device_time ON device_readings(device_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_device_readings_metric ON device_readings(metric);
 
+-- --------------------------------------------------------------------------
+-- Seed Data
+-- --------------------------------------------------------------------------
+
 -- Seed product categories
 INSERT INTO product_categories (name, description) VALUES
   ('sanitizers', 'Primary disinfection chemicals'),
   ('balancers', 'pH and alkalinity adjustments'),
   ('shock', 'High-dose sanitizing treatments')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
--- Seed a few products
+-- Seed basic products
 INSERT INTO products (
   category_id, brand, name, product_type, active_ingredients, concentration_percent,
   ph_effect, strength_factor, dose_per_10k_gallons, dose_unit,
@@ -288,3 +420,11 @@ SELECT c.category_id, 'Generic', 'Muriatic Acid 31.45%', 'muriatic_acid',
        'liquid', '["1 gal"]'::jsonb, TRUE, 8.50
 FROM product_categories c WHERE c.name='balancers'
 ON CONFLICT DO NOTHING;
+
+-- Seed cost categories
+INSERT INTO cost_categories (name, description) VALUES
+  ('chemicals', 'Pool chemical purchases'),
+  ('equipment', 'Pool equipment and supplies'),
+  ('maintenance', 'Professional maintenance services'),
+  ('utilities', 'Electricity, water, gas costs')
+ON CONFLICT (name) DO NOTHING;

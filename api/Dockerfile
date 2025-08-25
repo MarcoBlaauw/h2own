@@ -12,7 +12,8 @@ RUN pnpm build || true
 
 FROM node:20-alpine
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
+RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=deps /app/node_modules node_modules
 COPY . .
 EXPOSE 3001
