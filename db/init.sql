@@ -248,3 +248,43 @@ CREATE TABLE IF NOT EXISTS device_readings (
 
 CREATE INDEX IF NOT EXISTS idx_device_readings_device_time ON device_readings(device_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_device_readings_metric ON device_readings(metric);
+
+-- Seed product categories
+INSERT INTO product_categories (name, description) VALUES
+  ('sanitizers', 'Primary disinfection chemicals'),
+  ('balancers', 'pH and alkalinity adjustments'),
+  ('shock', 'High-dose sanitizing treatments')
+ON CONFLICT DO NOTHING;
+
+-- Seed a few products
+INSERT INTO products (
+  category_id, brand, name, product_type, active_ingredients, concentration_percent,
+  ph_effect, strength_factor, dose_per_10k_gallons, dose_unit,
+  affects_fc, affects_ph, affects_ta, affects_cya,
+  fc_change_per_dose, ph_change_per_dose, ta_change_per_dose, cya_change_per_dose,
+  form, package_sizes, is_active, average_cost_per_unit
+)
+SELECT c.category_id, 'Generic', 'Liquid Chlorine 12.5%', 'liquid_chlorine',
+       '{"sodium_hypochlorite":12.5}'::jsonb, 12.5,
+       0.1, 1.0, 10.0, 'oz_fl',
+       TRUE, TRUE, FALSE, FALSE,
+       0.5, 0.05, 0, 0,
+       'liquid', '["1 gal","2.5 gal"]'::jsonb, TRUE, 4.50
+FROM product_categories c WHERE c.name='sanitizers'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO products (
+  category_id, brand, name, product_type, active_ingredients, concentration_percent,
+  ph_effect, strength_factor, dose_per_10k_gallons, dose_unit,
+  affects_fc, affects_ph, affects_ta, affects_cya,
+  fc_change_per_dose, ph_change_per_dose, ta_change_per_dose,
+  form, package_sizes, is_active, average_cost_per_unit
+)
+SELECT c.category_id, 'Generic', 'Muriatic Acid 31.45%', 'muriatic_acid',
+       '{"hydrochloric_acid":31.45}'::jsonb, 31.45,
+       -0.8, 1.0, 8.0, 'oz_fl',
+       FALSE, TRUE, TRUE, FALSE,
+       0, -0.4, -10,
+       'liquid', '["1 gal"]'::jsonb, TRUE, 8.50
+FROM product_categories c WHERE c.name='balancers'
+ON CONFLICT DO NOTHING;
