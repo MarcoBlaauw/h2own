@@ -1,0 +1,67 @@
+# ----------------------------------------------------------------------
+# Node.js / pnpm
+# ----------------------------------------------------------------------
+node_modules/
+.pnpm-debug.log
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+
+# ----------------------------------------------------------------------
+# Build artifacts
+# ----------------------------------------------------------------------
+dist/
+build/
+.cache/
+.svelte-kit/
+.vite/
+coverage/
+.env
+.env.local
+.env.*.local
+
+# ----------------------------------------------------------------------
+# Editor & OS
+# ----------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ----------------------------------------------------------------------
+# Database
+# ----------------------------------------------------------------------
+db/*.sqlite
+db/seed/*.local.sql
+*.db
+*.db-journal
+
+# ----------------------------------------------------------------------
+# Docker
+# ----------------------------------------------------------------------
+/data/
+docker-data/
+volumes/
+*.pid
+*.sock
+
+# ----------------------------------------------------------------------
+# Project-specific exclusions
+# ----------------------------------------------------------------------
+docs/schema-diagram.png       # you keep this in repo, but ignore big exports
+docs/cline-goals.md           # AI assistant prompts, internal only
+**/cline/**                   # any cline-specific files if you add them
+woodpecker.secret.yml         # local secrets (public CI stays in .woodpecker.yml)
+
+# ----------------------------------------------------------------------
+# Misc
+# ----------------------------------------------------------------------
+tmp/
+temp/
+*.bak
+*.old
