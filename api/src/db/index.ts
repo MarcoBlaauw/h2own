@@ -25,8 +25,4 @@ export async function healthCheck() {
   }
 }
 
-// Run health check on startup
-healthCheck().catch((error) => {
-  console.error('Failed to establish database connection on startup');
-  process.exit(1);
-});
+// The health check is now called from app.ts to ensure proper startup sequence.

@@ -1,53 +1,170 @@
+// src/app.ts
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import { randomBytes } from 'crypto';
 import { env } from './env.js';
-import { db, healthCheck } from './db/index.js';
+import { healthCheck } from './db/index.js';
 
-const app = Fastify({ 
-  logger: {
-    level: env.LOG_LEVEL
-  }
-});
+// ⬇️ Import route GROUPS directly (no fp wrappers) so prefixes work automatically
+import { authRoutes } from './routes/auth';
+import { poolsRoutes } from './routes/pools';
+import { testsRoutes } from './routes/tests';
+import { chemicalsRoutes } from './routes/chemicals';
 
-await app.register(helmet);
-await app.register(cors, { 
-  origin: env.CORS_ORIGIN, 
-  credentials: true 
-});
-await app.register(cookie, { 
-  secret: env.SESSION_SECRET 
-});
 
-// health
-app.get('/healthz', async () => ({ ok: true }));
+async function buildApp() {
+  const app = Fastify({
+    logger: {
+      level: env.LOG_LEVEL,
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers.cookie', 'req.body.password'],
+        remove: true,
+      },
+      serializers: {
+        // keep only statusCode from the response object
+        res(res) { return { statusCode: res.statusCode }; },
+      },
+    },
+  });
 
-app.get('/db-health', async (request, reply) => {
-  try {
-    await healthCheck();
-    reply.send({ ok: true, message: 'Database connection successful' });
-  } catch (error) {
-    reply.status(500).send({ ok: false, message: 'Database connection failed' });
-  }
-});
+  // If you run behind a proxy/ingress that terminates TLS, uncomment:
+  // app.setTrustProxy(true);
 
-// placeholder routes so compose doesn't 404
-app.get('/', async () => ({ 
-  name: 'H2Own API',
-  version: '1.0.0',
-  environment: env.NODE_ENV,
-  timestamp: new Date().toISOString()
-}));
+  // 🔎 Log every route as it is registered (dev-only)
+  app.addHook('onRoute', (o) => {
+    const method = Array.isArray(o.method) ? o.method.join(',') : o.method;
+    const path = (o as any).path ?? `${(o as any).prefix ?? ''}${o.url}`;
+    app.log.info({ method, url: o.url, path }, 'route registered');
+  });
+
+  // --- Global hardening & cross-origin ---
+  await app.register(helmet);
+  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
+  await app.register(cookie, { secret: env.SESSION_SECRET });
+
+  // --- Minimal server-side session store (in-memory Map for now) ---
+  // NOTE: Replace with DB-backed store in production (see notes below).
+  const ONE_WEEK_SECONDS = 60 * 60 * 24 * 7;
+  const sessionStore = new Map<
+    string,
+    { userId: string; role?: string; expiresAt: number }
+  >();
+
+  // Expose a small session API for routes to use (login/logout)
+  app.decorate('sessions', {
+    create: async (reply, userId: string, role?: string) => {
+      const sid = randomBytes(32).toString('hex');
+      const expiresAt = Math.floor(Date.now() / 1000) + ONE_WEEK_SECONDS;
+      sessionStore.set(sid, { userId, role, expiresAt });
+
+      reply.setCookie('sid', sid, {
+        path: '/',
+        httpOnly: true,
+        secure: env.NODE_ENV === 'production',
+        sameSite: 'lax', // consider 'strict' + CSRF tokens if UX allows
+        maxAge: ONE_WEEK_SECONDS, // seconds (cookie)
+        signed: true
+      });
+
+      return sid;
+    },
+    destroy: async (reply, sid?: string | null) => {
+      if (sid) sessionStore.delete(sid);
+      reply.clearCookie('sid', { path: '/' });
+    },
+    touch: (sid: string) => {
+      const s = sessionStore.get(sid);
+      if (s) s.expiresAt = Math.floor(Date.now() / 1000) + ONE_WEEK_SECONDS;
+    }
+  });
+
+  // --- Load session for each request (read-only on request object) ---
+  app.addHook('onRequest', async (req, reply) => {
+    app.log.info({ cookies: req.cookies }, 'incoming cookies');
+    let sid: string | null = null;
+    let userId: string | null = null;
+    let role: string | null = null;
+
+    const raw = req.cookies.sid;
+    if (raw) {
+      const res = req.server.unsignCookie(raw);
+      if (res.valid) {
+        sid = res.value;
+        const rec = sid ? sessionStore.get(sid) : undefined;
+        if (rec && rec.expiresAt > Math.floor(Date.now() / 1000)) {
+          userId = rec.userId ?? null;
+          role = (rec.role as string | undefined) ?? null;
+          // optional idle refresh:
+          // app.sessions.touch(sid);
+        } else if (sid) {
+          // expired -> cleanup
+          sessionStore.delete(sid);
+          reply.clearCookie('sid', { path: '/' });
+          sid = null;
+        }
+      }
+    }
+
+    req.session = {
+      id: sid,
+      userId,
+      role,
+      delete: async () => app.sessions.destroy(reply, sid)
+    };
+
+    if (userId) {
+      req.user = { id: userId, role: role ?? undefined };
+    }
+  });
+
+  // --- Global auth helpers (available everywhere) ---
+  app.decorate('auth', {
+    verifySession: async (req, reply) => {
+      if (!req.session?.userId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+    },
+    requireRole: (role: string) => {
+      return async (req, reply) => {
+        const current = req.user?.role;
+        if (current !== role) {
+          return reply.code(403).send({ error: 'Forbidden' });
+        }
+      };
+    }
+  });
+
+  // --- Health endpoints ---
+  app.get('/healthz', async () => ({ ok: true }));
+  app.get('/db-health', async (_req, reply) => {
+    try {
+      await healthCheck();
+      reply.send({ ok: true, message: 'Database connection successful' });
+    } catch {
+      reply.status(500).send({ ok: false, message: 'Database connection failed' });
+    }
+  });
+
+  // --- Route groups (plain plugins so prefixes & per-scope hooks work) ---
+  await app.register(authRoutes, { prefix: '/auth' });   // public login/logout
+  await app.register(poolsRoutes, { prefix: '/pools' }); // secure these inside the module with app.auth.verifySession
+  await app.register(testsRoutes, { prefix: '/tests' });
+  await app.register(chemicalsRoutes, { prefix: '/chemicals' });
+
+  // --- Dev convenience route ---
+  app.get('/test', async () => ({ ok: true, message: 'test route' }));
+
+  // Finalize & print
+  await app.ready();
+  app.log.info('\n' + app.printRoutes({ includeMeta: true }));
+
+  return app;
+}
 
 const start = async () => {
-  try {
-    await healthCheck();
-    await app.listen({ port: env.PORT, host: '0.0.0.0' });
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
+  const app = await buildApp();
+  await app.listen({ port: env.PORT, host: '0.0.0.0' });
 };
-
 start();

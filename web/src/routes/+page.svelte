@@ -1,51 +1,53 @@
-<script>
-  // Placeholder for H2Own SvelteKit app
+<script lang="ts">
+  import AppHeader from '$lib/components/layout/AppHeader.svelte';
+  import Container from '$lib/components/layout/Container.svelte';
+  import MetricTile from '$lib/components/MetricTile.svelte';
+  import PoolSummaryCard from '$lib/components/PoolSummaryCard.svelte';
+  import QuickTestForm from '$lib/components/QuickTestForm.svelte';
+  import RecommendationsCard from '$lib/components/RecommendationsCard.svelte';
+
+  export let data;
+
+  const metrics = [
+    { label: 'Free Chlorine', value: '3.0 ppm', trend: 'flat', hint: 'target 3–5' },
+    { label: 'pH', value: '7.6', trend: 'up', hint: 'target 7.4–7.6' },
+    { label: 'Total Alkalinity', value: '90 ppm', trend: 'down', hint: 'target 80–120' },
+    { label: 'Cyanuric Acid', value: '40 ppm', trend: 'flat', hint: 'target 30–50' },
+    { label: 'Calcium Hardness', value: '250 ppm', trend: 'flat', hint: 'target 200–400' },
+    { label: 'Phosphates', value: '100 ppb', trend: 'flat', hint: 'target < 125' }
+  ];
 </script>
 
-<svelte:head>
-  <title>H2Own - Pool Chemistry Management</title>
-</svelte:head>
-
-<main class="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 p-6">
-  <div class="max-w-4xl mx-auto text-center">
-    <div class="mb-8">
-      <h1 class="text-4xl font-bold text-blue-900 mb-2 flex items-center justify-center gap-3">
-        <svg class="w-10 h-10 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732L14.146 12.8l-1.179 4.456a1 1 0 01-1.934 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732L9.854 7.2l1.179-4.456A1 1 0 0112 2z" clip-rule="evenodd" />
-        </svg>
-        H2Own
-      </h1>
-      <p class="text-blue-700 text-lg">Smart Pool Chemistry Advisor</p>
+<Container>
+  {#if data.session}
+    <!-- Metrics row -->
+    <h2 class="text-xl font-semibold mt-6">Last Test Results</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+      {#each metrics as m}
+        <MetricTile {...m} />
+      {/each}
     </div>
 
-    <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
-      <h2 class="text-2xl font-semibold text-gray-800 mb-4">Welcome to H2Own</h2>
-      <p class="text-gray-600 mb-6">
-        Your intelligent pool chemistry management system is being built.
-      </p>
-      
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-        <div class="bg-blue-50 p-4 rounded-lg">
-          <h3 class="font-semibold text-blue-800">Smart Testing</h3>
-          <p class="text-blue-600 text-sm">Track water chemistry with precision</p>
-        </div>
-        <div class="bg-green-50 p-4 rounded-lg">
-          <h3 class="font-semibold text-green-800">AI Recommendations</h3>
-          <p class="text-green-600 text-sm">Get personalized chemical dosing advice</p>
-        </div>
-        <div class="bg-purple-50 p-4 rounded-lg">
-          <h3 class="font-semibold text-purple-800">Cost Tracking</h3>
-          <p class="text-purple-600 text-sm">Monitor maintenance expenses</p>
-        </div>
+    <!-- Main grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+      <div class="lg:col-span-2">
+        {#if data.pools.length > 0}
+          <PoolSummaryCard pool={data.pools[0]} />
+        {/if}
+      </div>
+
+      {#if data.pools.length > 0}
+        <QuickTestForm poolId={data.pools[0].id} />
+      {/if}
+
+      <div class="lg:col-span-3">
+        <RecommendationsCard />
       </div>
     </div>
-
-    <div class="text-sm text-gray-500">
-      <p>API Status: 
-        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-          ✓ Connected
-        </span>
-      </p>
+  {:else}
+    <div class="text-center mt-10">
+      <h1 class="text-2xl">Welcome to H2Own</h1>
+      <p class="mt-4">Please <a href="/auth/login" class="text-brand-600 hover:underline">sign in</a> or <a href="/auth/register" class="text-brand-600 hover:underline">register</a> to manage your pools.</p>
     </div>
-  </div>
-</main>
+  {/if}
+</Container>

@@ -1,0 +1,33 @@
+/* Tailwind layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: smooth fonts + layout helpers */
+:root{
+  color-scheme: light dark;
+}
+html, body, #svelte {
+  height: 100%;
+}
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+.dark body {
+  @apply bg-gray-900 text-gray-100;
+}
+
+/* Form inputs */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"] {
+  @apply bg-white text-gray-900 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-500 focus:border-brand-500;
+}
+
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="number"] {
+  @apply bg-gray-800 text-gray-100 border-gray-600;
+}

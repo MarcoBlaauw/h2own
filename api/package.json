@@ -7,26 +7,30 @@
     "start": "node dist/app.js",
     "build": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "tsx src/seed.ts"
   },
   "dependencies": {
-    "fastify": "^4.28.1",
-    "@fastify/cors": "^8.5.0",
     "@fastify/cookie": "^9.3.1",
+    "@fastify/cors": "^8.5.0",
     "@fastify/helmet": "^10.1.1",
     "argon2": "^0.41.1",
-    "zod": "^3.23.8",
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "^0.23.0",
     "drizzle-orm": "^0.33.0",
+    "fastify": "^4.28.1",
+    "fastify-plugin": "^4.5.1",
+    "oslo": "^1.2.1",
     "postgres": "^3.4.4",
-    "dotenv": "^16.4.5"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "^5.5.4",
-    "tsx": "^4.19.2",
-    "vitest": "^2.1.9",
-    "@types/node": "^22.5.4",
-    "eslint": "^9.9.0",
+    "@types/node": "^22.18.0",
     "@typescript-eslint/eslint-plugin": "^8.6.0",
-    "@typescript-eslint/parser": "^8.6.0"
+    "@typescript-eslint/parser": "^8.6.0",
+    "eslint": "^9.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
   }
 }

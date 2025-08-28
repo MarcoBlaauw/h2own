@@ -8,6 +8,9 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().min(32).default('dev-secret-please-change-in-production'),
   CORS_ORIGIN: z.string().url().default('http://localhost:3000'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  CAPTCHA_PROVIDER: z.enum(['turnstile', 'hcaptcha']).optional(),
+  CAPTCHA_SITE_KEY: z.string().optional(),
+  CAPTCHA_SECRET: z.string().optional(),
 });
 
 function parseEnv() {

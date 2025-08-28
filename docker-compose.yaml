@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -21,13 +19,13 @@ services:
 
   api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     container_name: h2own-api
     environment:
       NODE_ENV: development
       PORT: ${API_PORT:-3001}
-      LOG_LEVEL: info
+      LOG_LEVEL: debug
       DATABASE_URL: postgres://${POSTGRES_USER:-h2own}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-h2own}
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret-please-change-this-to-32plus-chars}
       COOKIE_SECURE: "false"

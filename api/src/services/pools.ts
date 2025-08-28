@@ -1,0 +1,232 @@
+import { db } from '../db/index.js';
+import * as schema from '../db/schema/index.js';
+import { eq, and, sql, desc, gt } from 'drizzle-orm';
+
+export interface CreatePoolData {
+  name: string;
+  volumeGallons: number;
+  sanitizer: string;
+  surface: string;
+  locationId?: string;
+  notes?: string;
+}
+
+export interface CreateTestData {
+  fc?: number;
+  tc?: number;
+  ph?: number;
+  ta?: number;
+  cya?: number;
+  ch?: number;
+  salt?: number;
+  temp?: number;
+  collectedAt?: string;
+}
+
+export interface CreateDosingData {
+  chemicalId: string;
+  amount: number;
+  unit: string;
+  linkedTestId?: string;
+  notes?: string;
+}
+
+export class PoolsService {
+  async createPool(userId: string, data: CreatePoolData) {
+    const [pool] = await db.insert(schema.pools).values({
+      ...data,
+      ownerId: userId,
+      isActive: true,
+    }).returning();
+
+    // Add owner as a member
+    await db.insert(schema.poolMembers).values({
+      poolId: pool.poolId,
+      userId,
+      roleName: 'owner',
+    });
+
+    return pool;
+  }
+
+  async getPools(userId: string, filterOwner = false) {
+    if (filterOwner) {
+      return db.select().from(schema.pools).where(eq(schema.pools.ownerId, userId));
+    }
+    
+    // Return all pools the user is a member of
+    const memberships = await db.select().from(schema.poolMembers).where(eq(schema.poolMembers.userId, userId));
+    const poolIds = memberships.map(m => m.poolId);
+    
+    if (poolIds.length === 0) {
+      return [];
+    }
+    
+    return db.select().from(schema.pools).where(
+      sql`pool_id IN ${poolIds}`
+    );
+  }
+
+  async getPoolById(poolId: string) {
+    const [pool] = await db.select().from(schema.pools).where(eq(schema.pools.poolId, poolId));
+    return pool;
+  }
+
+  async updatePool(poolId: string, data: Partial<CreatePoolData>) {
+    const [pool] = await db.update(schema.pools)
+      .set(data)
+      .where(eq(schema.pools.poolId, poolId))
+      .returning();
+    return pool;
+  }
+
+  async deletePool(poolId: string) {
+    await db.delete(schema.pools).where(eq(schema.pools.poolId, poolId));
+  }
+
+  async getPoolMembers(poolId: string) {
+    return db.select().from(schema.poolMembers).where(eq(schema.poolMembers.poolId, poolId));
+  }
+
+  async addPoolMember(poolId: string, userId: string, role: string) {
+    const [member] = await db.insert(schema.poolMembers).values({
+      poolId,
+      userId,
+      roleName: role,
+    }).returning();
+    return member;
+  }
+
+  async updatePoolMember(poolId: string, userId: string, role: string) {
+    const [member] = await db.update(schema.poolMembers)
+      .set({ roleName: role })
+      .where(and(
+        eq(schema.poolMembers.poolId, poolId),
+        eq(schema.poolMembers.userId, userId)
+      ))
+      .returning();
+    return member;
+  }
+
+  async removePoolMember(poolId: string, userId: string) {
+    await db.delete(schema.poolMembers)
+      .where(and(
+        eq(schema.poolMembers.poolId, poolId),
+        eq(schema.poolMembers.userId, userId)
+      ));
+  }
+
+  async createTest(poolId: string, userId: string, data: CreateTestData) {
+    let cc;
+    if (typeof data.tc === 'number' && typeof data.fc === 'number') {
+      cc = Math.max(0, data.tc - data.fc);
+    }
+
+    const dbData = {
+      poolId,
+      testedBy: userId,
+      testedAt: data.collectedAt ? new Date(data.collectedAt) : new Date(),
+      freeChlorinePpm: data.fc?.toString(),
+      totalChlorinePpm: data.tc?.toString(),
+      phLevel: data.ph?.toString(),
+      totalAlkalinityPpm: data.ta,
+      cyanuricAcidPpm: data.cya,
+      calciumHardnessPpm: data.ch,
+      saltPpm: data.salt,
+      waterTempF: data.temp,
+    };
+
+    const [test] = await db.insert(schema.testSessions).values(dbData).returning();
+
+    return { ...test, cc };
+  }
+
+  async getTestsByPoolId(poolId: string, limit: number, cursor?: string) {
+    const query = db
+      .select()
+      .from(schema.testSessions)
+      .where(
+        and(
+          eq(schema.testSessions.poolId, poolId),
+          cursor ? gt(schema.testSessions.sessionId, cursor) : undefined
+        )
+      )
+      .orderBy(desc(schema.testSessions.testedAt))
+      .limit(limit);
+
+    const items = await query;
+    let nextCursor: string | null = null;
+    if (items.length === limit) {
+      nextCursor = items[items.length - 1].sessionId;
+    }
+
+    const itemsWithCC = items.map((item) => {
+      let cc;
+      if (item.totalChlorinePpm && item.freeChlorinePpm) {
+        cc = Math.max(0, parseFloat(item.totalChlorinePpm) - parseFloat(item.freeChlorinePpm));
+      }
+      return { ...item, cc };
+    });
+
+    return { items: itemsWithCC, nextCursor };
+  }
+
+  async getTestById(sessionId: string) {
+    const [test] = await db
+      .select()
+      .from(schema.testSessions)
+      .where(eq(schema.testSessions.sessionId, sessionId));
+
+    if (!test) {
+      return null;
+    }
+
+    let cc;
+    if (test.totalChlorinePpm && test.freeChlorinePpm) {
+      cc = Math.max(0, parseFloat(test.totalChlorinePpm) - parseFloat(test.freeChlorinePpm));
+    }
+
+    return { ...test, cc };
+  }
+
+  async createDosingEvent(poolId: string, userId: string, data: CreateDosingData) {
+    const [chemical] = await db
+      .select()
+      .from(schema.products)
+      .where(eq(schema.products.productId, data.chemicalId));
+
+    if (!chemical) {
+      throw new Error('Chemical not found');
+    }
+
+    if (data.linkedTestId) {
+      const [test] = await db
+        .select()
+        .from(schema.testSessions)
+        .where(eq(schema.testSessions.sessionId, data.linkedTestId));
+
+      if (!test || test.poolId !== poolId) {
+        throw new Error('Test does not belong to this pool');
+      }
+    }
+
+    const dbData = {
+      poolId,
+      productId: data.chemicalId,
+      addedBy: userId,
+      linkedTestId: data.linkedTestId,
+      amount: data.amount.toString(),
+      unit: data.unit,
+      notes: data.notes,
+    };
+
+    const [dosingEvent] = await db
+      .insert(schema.chemicalActions)
+      .values(dbData)
+      .returning();
+
+    return dosingEvent;
+  }
+}
+
+export const poolsService = new PoolsService();
