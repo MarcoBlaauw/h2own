@@ -47,14 +47,6 @@ export class AuthService {
       return null;
     }
 
-    if (data.password === '') {
-      return {
-        userId: user.userId,
-        email: user.email,
-        name: user.name,
-      };
-    }
-
     const isValid = await verify(user.passwordHash, data.password);
     if (!isValid) {
       return null;
