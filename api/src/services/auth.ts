@@ -18,11 +18,11 @@ export interface LoginData {
 
 export class AuthService {
   private static readonly HASH_OPTIONS = {
-    type: 2 as 2, // argon2id
+    type: 2, // argon2id
     memoryCost: 19456,
     timeCost: 2,
     parallelism: 1,
-  };
+  } as const;
 
   async createUser(data: CreateUserData) {
     const passwordHash = await hash(data.password, AuthService.HASH_OPTIONS);

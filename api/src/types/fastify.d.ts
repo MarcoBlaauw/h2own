@@ -1,12 +1,13 @@
-import 'fastify';
+import "fastify";
+import "@fastify/redis";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyRequest {
     // ephemeral view of the current session (loaded on each request)
     session?: {
-      id?: string | null;         // opaque session id, if present
-      userId?: string | null;     // authenticated user id, if present
-      role?: string | null;       // optional role, if you store it
+      id?: string | null; // opaque session id, if present
+      userId?: string | null; // authenticated user id, if present
+      role?: string | null; // optional role, if you store it
       delete: () => Promise<void>;
     };
     user?: { id: string; role?: string };
@@ -21,7 +22,7 @@ declare module 'fastify' {
     sessions: {
       create: (reply: any, userId: string, role?: string) => Promise<string>;
       destroy: (reply: any, sid?: string | null) => Promise<void>;
-      touch: (sid: string) => void; // optional idle-refresh if you want it
+      touch: (sid?: string | null) => Promise<void>; // optional idle-refresh if you want it
     };
   }
 }

@@ -1,28 +1,21 @@
-import { FastifyInstance } from 'fastify';
-import type {} from '../types/fastify.d.ts';
-import { authService } from '../services/auth.js';
-import { env } from '../env.js';
-
+import type { FastifyInstance } from "fastify";
+import type {} from "../types/fastify.d.ts";
+import { authService } from "../services/auth.js";
 
 export async function authRoutes(app: FastifyInstance) {
   // POST /auth/register
-  app.post('/register', async (req, reply) => {
-    try {
-      const userId = await authService.createUser(req.body as any);
-      const user = await authService.getUserById(userId);
-      return reply.code(201).send(user);
-    } catch (err) {
-      // TODO: Handle unique constraint violation for email
-      throw err;
-    }
+  app.post("/register", async (req, reply) => {
+    const userId = await authService.createUser(req.body as any);
+    const user = await authService.getUserById(userId);
+    return reply.code(201).send(user);
   });
   // POST /auth/login  (prefix applied in app.ts)
-  app.post('/login', async (req, reply) => {
+  app.post("/login", async (req, reply) => {
     const user = await authService.validateCredentials(req.body as any);
     if (!user) {
       return reply.code(401).send({
-        error: 'Unauthorized',
-        message: 'Invalid email or password',
+        error: "Unauthorized",
+        message: "Invalid email or password",
       });
     }
 
@@ -35,13 +28,13 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // POST /auth/logout
-  app.post('/logout', async (req, reply) => {
+  app.post("/logout", async (req, reply) => {
     await app.sessions.destroy(reply, req.session?.id ?? null);
     return reply.send({ ok: true });
   });
 
   // (optional) GET /auth/me – quick probe that auth works
-  app.get('/me', { preHandler: app.auth.verifySession }, async (req) => {
+  app.get("/me", { preHandler: app.auth.verifySession }, async (req) => {
     const user = await authService.getUserById(req.user!.id);
     return { user: { id: user!.userId, email: user!.email, name: user!.name } };
   });
