@@ -1,13 +1,20 @@
-name: CI
+name: Continuous Integration
 
 on:
   push:
-    branches: ['**']
+    branches:
+      - main
   pull_request:
 
+env:
+  PNPM_VERSION: 9
+  NODE_VERSION: 20
+
 jobs:
-  build-and-test:
+  quality-checks:
+    name: Lint and unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -15,19 +22,30 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json', 'api/package.json', 'web/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: Install API dependencies
-        run: pnpm --dir api install
+        working-directory: api
+        run: pnpm install --frozen-lockfile=false
 
       - name: Install web dependencies
-        run: pnpm --dir web install
+        working-directory: web
+        run: pnpm install --frozen-lockfile=false
 
       - name: Lint
         run: pnpm lint
@@ -40,6 +58,43 @@ jobs:
 
       - name: Run web unit tests
         run: pnpm test:web
+
+  e2e-smoke-tests:
+    name: End-to-end smoke tests
+    needs: quality-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json', 'api/package.json', 'web/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install API dependencies
+        working-directory: api
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile=false
 
       - name: Run end-to-end smoke tests
         run: pnpm test:e2e

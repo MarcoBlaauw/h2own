@@ -44,3 +44,7 @@ Common workflows are available through pnpm scripts from the repository root:
 - `pnpm test` — execute API unit tests (Redis interactions are mocked).
 - `pnpm test:web` — execute SvelteKit unit/component tests with Vitest.
 - `pnpm test:e2e` — launch the Docker Compose stack (Postgres + Redis + API) and run smoke tests that cover the login/session lifecycle.
+
+## ✅ Continuous Integration
+
+GitHub Actions automatically runs linting, formatting, unit tests, and the Docker-based smoke test workflow for every pull request and pushes to the `main` branch. The workflow definition lives at [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
