@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Script to run end-to-end tests for the pools API
 
-API_BASE="http://localhost:3001"
-COOKIE_JAR="cookie.txt"
-COOKIE_JAR_USER2="cookie2.txt"
+API_BASE="${API_BASE:-http://localhost:3001}"
+COOKIE_JAR="${COOKIE_JAR:-cookie.txt}"
+COOKIE_JAR_USER2="${COOKIE_JAR_USER2:-cookie2.txt}"
 
 # Helper function to print success messages
 print_success() {

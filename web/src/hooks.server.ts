@@ -1,9 +1,10 @@
-import type { HandleFetch } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import type { HandleFetch } from "@sveltejs/kit";
+import { env } from "$env/dynamic/private";
 
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
-  if (request.url.startsWith(env.VITE_API_URL)) {
-    request.headers.set('cookie', event.request.headers.get('cookie') || '');
+  const apiBase = env.VITE_API_URL;
+  if (apiBase && request.url.startsWith(apiBase)) {
+    request.headers.set("cookie", event.request.headers.get("cookie") || "");
   }
   return fetch(request);
 };

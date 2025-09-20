@@ -32,3 +32,15 @@ h2own/
 ├── .woodpecker.yml
 ├── .gitignore
 └── README.md
+
+---
+
+## 🛠️ Developer Tooling
+
+Common workflows are available through pnpm scripts from the repository root:
+
+- `pnpm lint` — run ESLint for the API and `svelte-check` for the web app.
+- `pnpm format:check` — verify Prettier formatting across API and web sources.
+- `pnpm test` — execute API unit tests (Redis interactions are mocked).
+- `pnpm test:web` — execute SvelteKit unit/component tests with Vitest.
+- `pnpm test:e2e` — launch the Docker Compose stack (Postgres + Redis + API) and run smoke tests that cover the login/session lifecycle.

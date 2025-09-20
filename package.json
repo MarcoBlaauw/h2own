@@ -1,0 +1,13 @@
+{
+  "name": "h2own-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "pnpm --dir api lint && pnpm --dir web lint",
+    "format": "pnpm --dir api format && pnpm --dir web format",
+    "format:check": "pnpm --dir api format:check && pnpm --dir web format:check",
+    "test": "pnpm --dir api test",
+    "test:web": "pnpm --dir web test",
+    "test:e2e": "bash ./scripts/test-e2e.sh"
+  }
+}
