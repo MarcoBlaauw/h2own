@@ -40,34 +40,70 @@
 </script>
 
 <Card>
-  <h2 class="text-lg font-semibold">Quick Test Update</h2>
-  <form class="mt-4 grid grid-cols-2 gap-3" on:submit|preventDefault={handleSubmit}>
-    <div class="col-span-1">
-      <label class="block text-sm font-medium text-gray-700" for="fc">FC</label>
-      <input class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" id="fc" type="number" bind:value={fc}>
+  <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-50">Quick Test Update</h2>
+  <form class="mt-5 grid gap-4 sm:grid-cols-2" on:submit|preventDefault={handleSubmit}>
+    <div class="space-y-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="fc">FC</label>
+      <input
+        id="fc"
+        type="number"
+        min="0"
+        bind:value={fc}
+        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+      >
     </div>
-    <div class="col-span-1">
-      <label class="block text-sm font-medium text-gray-700" for="tc">TC</label>
-      <input class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" id="tc" type="number" bind:value={tc}>
+    <div class="space-y-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="tc">TC</label>
+      <input
+        id="tc"
+        type="number"
+        min="0"
+        bind:value={tc}
+        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+      >
     </div>
-    <div class="col-span-1">
-      <label class="block text-sm font-medium text-gray-700" for="ph">pH</label>
-      <input class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" id="ph" type="number" bind:value={ph}>
+    <div class="space-y-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="ph">pH</label>
+      <input
+        id="ph"
+        type="number"
+        min="0"
+        step="0.1"
+        bind:value={ph}
+        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+      >
     </div>
-    <div class="col-span-1">
-      <label class="block text-sm font-medium text-gray-700" for="ta">TA</label>
-      <input class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" id="ta" type="number" bind:value={ta}>
+    <div class="space-y-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="ta">TA</label>
+      <input
+        id="ta"
+        type="number"
+        min="0"
+        bind:value={ta}
+        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+      >
     </div>
-    <div class="col-span-1">
-      <label class="block text-sm font-medium text-gray-700" for="cya">CYA</label>
-      <input class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" id="cya" type="number" bind:value={cya}>
+    <div class="space-y-1">
+      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="cya">CYA</label>
+      <input
+        id="cya"
+        type="number"
+        min="0"
+        bind:value={cya}
+        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+      >
     </div>
     {#if error}
-      <p class="text-red-500 text-xs italic col-span-2">{error}</p>
+      <p class="sm:col-span-2 text-xs font-medium text-error-500" role="alert" aria-live="polite">{error}</p>
     {/if}
     {#if success}
-      <p class="text-green-500 text-xs italic col-span-2">{success}</p>
+      <p class="sm:col-span-2 text-xs font-medium text-success-500" role="status" aria-live="polite">{success}</p>
     {/if}
-    <button type="submit" class="col-span-2 mt-2 inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700">Save</button>
+    <button
+      type="submit"
+      class="sm:col-span-2 btn btn-base preset-filled-primary-500 shadow-card hover:brightness-110"
+    >
+      Save
+    </button>
   </form>
 </Card>
