@@ -1,33 +1,25 @@
-/* Tailwind layers */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import '@skeletonlabs/skeleton';
+@import '@skeletonlabs/skeleton/optional/presets.css';
 
-/* Optional: smooth fonts + layout helpers */
-:root{
-  color-scheme: light dark;
-}
-html, body, #svelte {
-  height: 100%;
-}
-body {
-  @apply bg-gray-50 text-gray-900 antialiased;
-}
-.dark body {
-  @apply bg-gray-900 text-gray-100;
-}
+@layer base {
+  :root {
+    color-scheme: light;
+  }
 
-/* Form inputs */
-input[type="text"],
-input[type="email"],
-input[type="password"],
-input[type="number"] {
-  @apply bg-white text-gray-900 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-500 focus:border-brand-500;
-}
+  .dark {
+    color-scheme: dark;
+  }
 
-.dark input[type="text"],
-.dark input[type="email"],
-.dark input[type="password"],
-.dark input[type="number"] {
-  @apply bg-gray-800 text-gray-100 border-gray-600;
+  html,
+  body,
+  #svelte {
+    min-height: 100%;
+  }
+
+  body {
+    font-family: var(--theme-font-family-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }

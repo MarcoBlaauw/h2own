@@ -2,8 +2,10 @@
   export let className = '';
 </script>
 
-<section class={`rounded-2xl bg-white shadow-card ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10 ${className}`}>
-  <div class="p-4 sm:p-6">
+<section
+  class={`card border border-surface-200/60 bg-surface-50/90 shadow-card backdrop-blur-sm dark:border-surface-700/60 dark:bg-surface-900/80 ${className}`}
+>
+  <div class="p-5 sm:p-6">
     <slot />
   </div>
 </section>

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import AppHeader from "$lib/components/layout/AppHeader.svelte";
   import Container from "$lib/components/layout/Container.svelte";
   import MetricTile from "$lib/components/MetricTile.svelte";
   import PoolSummaryCard from "$lib/components/PoolSummaryCard.svelte";
@@ -51,15 +50,15 @@
 <Container>
   {#if data.session}
     <!-- Metrics row -->
-    <h2 class="text-xl font-semibold mt-6">Last Test Results</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+    <h2 class="mt-6 text-xl font-semibold text-surface-900 dark:text-surface-50">Last Test Results</h2>
+    <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {#each metrics as m}
         <MetricTile {...m} />
       {/each}
     </div>
 
     <!-- Main grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+    <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div class="lg:col-span-2">
         {#if data.pools.length > 0}
           <PoolSummaryCard pool={data.pools[0]} />
@@ -75,14 +74,14 @@
       </div>
     </div>
   {:else}
-    <div class="text-center mt-10">
-      <h1 class="text-2xl">Welcome to H2Own</h1>
-      <p class="mt-4">
-        Please <a href="/auth/login" class="text-brand-600 hover:underline"
+    <div class="mt-10 text-center">
+      <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-50">Welcome to H2Own</h1>
+      <p class="mt-4 text-surface-600 dark:text-surface-300">
+        Please <a href="/auth/login" class="font-medium text-primary-600 hover:underline"
           >sign in</a
         >
         or
-        <a href="/auth/register" class="text-brand-600 hover:underline"
+        <a href="/auth/register" class="font-medium text-primary-600 hover:underline"
           >register</a
         > to manage your pools.
       </p>
