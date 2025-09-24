@@ -4,6 +4,8 @@
   import PoolSummaryCard from "$lib/components/PoolSummaryCard.svelte";
   import QuickTestForm from "$lib/components/QuickTestForm.svelte";
   import RecommendationsCard from "$lib/components/RecommendationsCard.svelte";
+  import ToolQuickActions from "$lib/components/ToolQuickActions.svelte";
+  import { toolCategories } from "$lib/data/tools";
 
   export let data;
 
@@ -48,6 +50,8 @@
 </script>
 
 <Container>
+  <ToolQuickActions categories={toolCategories} />
+
   {#if data.session}
     <!-- Metrics row -->
     <h2 class="mt-6 text-xl font-semibold text-surface-900 dark:text-surface-50">Last Test Results</h2>
