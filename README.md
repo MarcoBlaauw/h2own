@@ -39,11 +39,14 @@ h2own/
 
 Common workflows are available through pnpm scripts from the repository root:
 
-- `pnpm lint` — run ESLint for the API and `svelte-check` for the web app.
+- `pnpm lint` — run ESLint for both the API and web app plus `svelte-check` for Svelte-specific diagnostics.
 - `pnpm format:check` — verify Prettier formatting across API and web sources.
 - `pnpm test` — execute API unit tests (Redis interactions are mocked).
 - `pnpm test:web` — execute SvelteKit unit/component tests with Vitest.
+- `pnpm test:web:e2e` — run Playwright end-to-end smoke tests against a local preview build of the web app.
 - `pnpm test:e2e` — launch the Docker Compose stack (Postgres + Redis + API) and run smoke tests that cover the login/session lifecycle.
+
+> ℹ️ Playwright requires browser binaries. Install them once with `pnpm --dir web exec playwright install --with-deps`.
 
 ## ✅ Continuous Integration
 

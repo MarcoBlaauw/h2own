@@ -18,6 +18,7 @@ build/
 .cache/
 .svelte-kit/
 .vite/
+web/test-results/
 coverage/
 .env
 .env.local
