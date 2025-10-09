@@ -8,10 +8,16 @@ import { recommenderService } from '../services/recommender.js';
 const createPoolSchema = z.object({
   name: z.string(),
   volumeGallons: z.coerce.number(), // accepts "123" or 123
-  sanitizer: z.string(),
-  surface: z.string(),
+  sanitizerType: z.string(),
+  surfaceType: z.string(),
   locationId: z.string().optional(),
-  notes: z.string().optional(),
+  saltLevelPpm: z.coerce.number().optional(),
+  shadeLevel: z.string().optional(),
+  enclosureType: z.string().optional(),
+  hasCover: z.coerce.boolean().optional(),
+  pumpGpm: z.coerce.number().optional(),
+  filterType: z.string().optional(),
+  hasHeater: z.coerce.boolean().optional(),
 });
 const updatePoolSchema = createPoolSchema.partial();
 

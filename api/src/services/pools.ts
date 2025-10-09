@@ -1,14 +1,20 @@
-import { db } from '../db/index.js';
+import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { eq, and, sql, desc, gt } from 'drizzle-orm';
 
 export interface CreatePoolData {
   name: string;
   volumeGallons: number;
-  sanitizer: string;
-  surface: string;
+  sanitizerType: string;
+  surfaceType: string;
   locationId?: string;
-  notes?: string;
+  saltLevelPpm?: number;
+  shadeLevel?: string;
+  enclosureType?: string;
+  hasCover?: boolean;
+  pumpGpm?: number;
+  filterType?: string;
+  hasHeater?: boolean;
 }
 
 export interface CreateTestData {
@@ -31,16 +37,57 @@ export interface CreateDosingData {
   notes?: string;
 }
 
+type PoolInsert = typeof schema.pools.$inferInsert;
+
+function mapCreatePoolData(userId: string, data: CreatePoolData): PoolInsert {
+  return {
+    ownerId: userId,
+    isActive: true,
+    name: data.name,
+    volumeGallons: data.volumeGallons,
+    sanitizerType: data.sanitizerType,
+    surfaceType: data.surfaceType,
+    locationId: data.locationId,
+    saltLevelPpm: data.saltLevelPpm,
+    shadeLevel: data.shadeLevel,
+    enclosureType: data.enclosureType,
+    hasCover: data.hasCover,
+    pumpGpm: data.pumpGpm,
+    filterType: data.filterType,
+    hasHeater: data.hasHeater,
+  } satisfies PoolInsert;
+}
+
+function mapUpdatePoolData(data: Partial<CreatePoolData>): Partial<PoolInsert> {
+  const mapped: Partial<PoolInsert> = {};
+
+  if (data.name !== undefined) mapped.name = data.name;
+  if (data.volumeGallons !== undefined) mapped.volumeGallons = data.volumeGallons;
+  if (data.sanitizerType !== undefined) mapped.sanitizerType = data.sanitizerType;
+  if (data.surfaceType !== undefined) mapped.surfaceType = data.surfaceType;
+  if (data.locationId !== undefined) mapped.locationId = data.locationId;
+  if (data.saltLevelPpm !== undefined) mapped.saltLevelPpm = data.saltLevelPpm;
+  if (data.shadeLevel !== undefined) mapped.shadeLevel = data.shadeLevel;
+  if (data.enclosureType !== undefined) mapped.enclosureType = data.enclosureType;
+  if (data.hasCover !== undefined) mapped.hasCover = data.hasCover;
+  if (data.pumpGpm !== undefined) mapped.pumpGpm = data.pumpGpm;
+  if (data.filterType !== undefined) mapped.filterType = data.filterType;
+  if (data.hasHeater !== undefined) mapped.hasHeater = data.hasHeater;
+
+  return mapped;
+}
+
 export class PoolsService {
+  constructor(private readonly db = dbClient) {}
+
   async createPool(userId: string, data: CreatePoolData) {
-    const [pool] = await db.insert(schema.pools).values({
-      ...data,
-      ownerId: userId,
-      isActive: true,
-    }).returning();
+    const [pool] = await this.db
+      .insert(schema.pools)
+      .values(mapCreatePoolData(userId, data))
+      .returning();
 
     // Add owner as a member
-    await db.insert(schema.poolMembers).values({
+    await this.db.insert(schema.poolMembers).values({
       poolId: pool.poolId,
       userId,
       roleName: 'owner',
@@ -51,45 +98,46 @@ export class PoolsService {
 
   async getPools(userId: string, filterOwner = false) {
     if (filterOwner) {
-      return db.select().from(schema.pools).where(eq(schema.pools.ownerId, userId));
+      return this.db.select().from(schema.pools).where(eq(schema.pools.ownerId, userId));
     }
-    
+
     // Return all pools the user is a member of
-    const memberships = await db.select().from(schema.poolMembers).where(eq(schema.poolMembers.userId, userId));
+    const memberships = await this.db.select().from(schema.poolMembers).where(eq(schema.poolMembers.userId, userId));
     const poolIds = memberships.map(m => m.poolId);
-    
+
     if (poolIds.length === 0) {
       return [];
     }
-    
-    return db.select().from(schema.pools).where(
+
+    return this.db.select().from(schema.pools).where(
       sql`pool_id IN ${poolIds}`
     );
   }
 
   async getPoolById(poolId: string) {
-    const [pool] = await db.select().from(schema.pools).where(eq(schema.pools.poolId, poolId));
+    const [pool] = await this.db.select().from(schema.pools).where(eq(schema.pools.poolId, poolId));
     return pool;
   }
 
   async updatePool(poolId: string, data: Partial<CreatePoolData>) {
-    const [pool] = await db.update(schema.pools)
-      .set(data)
+    const [pool] = await this.db
+      .update(schema.pools)
+      .set(mapUpdatePoolData(data))
       .where(eq(schema.pools.poolId, poolId))
       .returning();
     return pool;
   }
 
   async deletePool(poolId: string) {
-    await db.delete(schema.pools).where(eq(schema.pools.poolId, poolId));
+    await this.db.delete(schema.pools).where(eq(schema.pools.poolId, poolId));
   }
 
   async getPoolMembers(poolId: string) {
-    return db.select().from(schema.poolMembers).where(eq(schema.poolMembers.poolId, poolId));
+    return this.db.select().from(schema.poolMembers).where(eq(schema.poolMembers.poolId, poolId));
   }
 
   async addPoolMember(poolId: string, userId: string, role: string) {
-    const [member] = await db.insert(schema.poolMembers).values({
+    const [member] = await this.db.insert(schema.poolMembers).values({
       poolId,
       userId,
       roleName: role,
@@ -98,7 +146,7 @@ export class PoolsService {
   }
 
   async updatePoolMember(poolId: string, userId: string, role: string) {
-    const [member] = await db.update(schema.poolMembers)
+    const [member] = await this.db.update(schema.poolMembers)
       .set({ roleName: role })
       .where(and(
         eq(schema.poolMembers.poolId, poolId),
@@ -109,7 +157,7 @@ export class PoolsService {
   }
 
   async removePoolMember(poolId: string, userId: string) {
-    await db.delete(schema.poolMembers)
+    await this.db.delete(schema.poolMembers)
       .where(and(
         eq(schema.poolMembers.poolId, poolId),
         eq(schema.poolMembers.userId, userId)
@@ -136,13 +184,13 @@ export class PoolsService {
       waterTempF: data.temp,
     };
 
-    const [test] = await db.insert(schema.testSessions).values(dbData).returning();
+    const [test] = await this.db.insert(schema.testSessions).values(dbData).returning();
 
     return { ...test, cc };
   }
 
   async getTestsByPoolId(poolId: string, limit: number, cursor?: string) {
-    const query = db
+    const query = this.db
       .select()
       .from(schema.testSessions)
       .where(
@@ -172,7 +220,7 @@ export class PoolsService {
   }
 
   async getTestById(sessionId: string) {
-    const [test] = await db
+    const [test] = await this.db
       .select()
       .from(schema.testSessions)
       .where(eq(schema.testSessions.sessionId, sessionId));
@@ -190,7 +238,7 @@ export class PoolsService {
   }
 
   async createDosingEvent(poolId: string, userId: string, data: CreateDosingData) {
-    const [chemical] = await db
+    const [chemical] = await this.db
       .select()
       .from(schema.products)
       .where(eq(schema.products.productId, data.chemicalId));
@@ -200,7 +248,7 @@ export class PoolsService {
     }
 
     if (data.linkedTestId) {
-      const [test] = await db
+      const [test] = await this.db
         .select()
         .from(schema.testSessions)
         .where(eq(schema.testSessions.sessionId, data.linkedTestId));
@@ -220,7 +268,7 @@ export class PoolsService {
       notes: data.notes,
     };
 
-    const [dosingEvent] = await db
+    const [dosingEvent] = await this.db
       .insert(schema.chemicalActions)
       .values(dbData)
       .returning();

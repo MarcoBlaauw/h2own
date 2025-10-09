@@ -1,0 +1,115 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PoolsService, type CreatePoolData } from './pools.js';
+import * as schema from '../db/schema/index.js';
+
+describe('PoolsService', () => {
+  const userId = 'user-1';
+  let insertSpy: ReturnType<typeof vi.fn>;
+  let updateSpy: ReturnType<typeof vi.fn>;
+  let capturedPoolInsert: any;
+  let capturedMemberInsert: any;
+  let capturedUpdate: any;
+  let service: PoolsService;
+
+  beforeEach(() => {
+    capturedPoolInsert = undefined;
+    capturedMemberInsert = undefined;
+    capturedUpdate = undefined;
+
+    insertSpy = vi.fn((table) => {
+      if (table === schema.pools) {
+        return {
+          values: (value: any) => {
+            capturedPoolInsert = value;
+            return {
+              returning: () => Promise.resolve([{ ...value, poolId: 'pool-123' }]),
+            };
+          },
+        };
+      }
+
+      if (table === schema.poolMembers) {
+        return {
+          values: (value: any) => {
+            capturedMemberInsert = value;
+            return Promise.resolve([{ ...value }]);
+          },
+        };
+      }
+
+      throw new Error('Unexpected table insert');
+    });
+
+    updateSpy = vi.fn(() => ({
+      set: (value: any) => {
+        capturedUpdate = value;
+        return {
+          where: () => ({
+            returning: () => Promise.resolve([{ poolId: 'pool-123', ...value }]),
+          }),
+        };
+      },
+    }));
+
+    const mockDb = {
+      insert: insertSpy,
+      update: updateSpy,
+      delete: vi.fn(),
+      select: vi.fn(),
+    } as unknown as typeof import('../db/index.js')['db'];
+
+    service = new PoolsService(mockDb);
+  });
+
+  it('maps create payloads to database column names', async () => {
+    const payload: CreatePoolData = {
+      name: 'Backyard Pool',
+      volumeGallons: 15000,
+      sanitizerType: 'chlorine',
+      surfaceType: 'plaster',
+      shadeLevel: 'partial',
+      hasCover: true,
+    };
+
+    const pool = await service.createPool(userId, payload);
+
+    expect(pool.poolId).toBe('pool-123');
+    expect(capturedPoolInsert).toMatchObject({
+      ownerId: userId,
+      isActive: true,
+      name: payload.name,
+      volumeGallons: payload.volumeGallons,
+      sanitizerType: payload.sanitizerType,
+      surfaceType: payload.surfaceType,
+      shadeLevel: payload.shadeLevel,
+      hasCover: payload.hasCover,
+    });
+    expect(capturedPoolInsert).not.toHaveProperty('sanitizer');
+    expect(capturedPoolInsert).not.toHaveProperty('surface');
+
+    expect(capturedMemberInsert).toEqual({
+      poolId: 'pool-123',
+      userId,
+      roleName: 'owner',
+    });
+  });
+
+  it('maps update payloads to database column names', async () => {
+    const pool = await service.updatePool('pool-123', {
+      sanitizerType: 'bromine',
+      surfaceType: 'fiberglass',
+    });
+
+    expect(pool).toMatchObject({
+      poolId: 'pool-123',
+      sanitizerType: 'bromine',
+      surfaceType: 'fiberglass',
+    });
+    expect(capturedUpdate).toEqual({
+      sanitizerType: 'bromine',
+      surfaceType: 'fiberglass',
+    });
+    expect(capturedUpdate).not.toHaveProperty('sanitizer');
+    expect(capturedUpdate).not.toHaveProperty('surface');
+  });
+});
