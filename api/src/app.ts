@@ -108,7 +108,11 @@ async function buildApp() {
 
   // --- Load session for each request (read-only on request object) ---
   app.addHook("onRequest", async (req, reply) => {
-    app.log.info({ cookies: req.cookies }, "incoming cookies");
+    if (app.log.isLevelEnabled("debug")) {
+      const hasCookies = !!req.cookies && Object.keys(req.cookies).length > 0;
+      const hasSignedSid = Boolean(req.cookies?.sid);
+      app.log.debug({ hasCookies, hasSignedSid }, "incoming cookies metadata");
+    }
     let sid: string | null = null;
     let userId: string | null = null;
     let role: string | null = null;
