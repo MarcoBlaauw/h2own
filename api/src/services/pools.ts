@@ -1,6 +1,6 @@
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-import { eq, and, sql, desc, gt } from 'drizzle-orm';
+import { eq, and, sql, desc, lt, or } from 'drizzle-orm';
 
 export interface CreatePoolData {
   name: string;
@@ -35,6 +35,11 @@ export interface CreateDosingData {
   unit: string;
   linkedTestId?: string;
   notes?: string;
+}
+
+export interface TestsPaginationCursor {
+  testedAt: string;
+  sessionId?: string;
 }
 
 type PoolInsert = typeof schema.pools.$inferInsert;
@@ -189,23 +194,45 @@ export class PoolsService {
     return { ...test, cc };
   }
 
-  async getTestsByPoolId(poolId: string, limit: number, cursor?: string) {
+  async getTestsByPoolId(poolId: string, limit: number, cursor?: TestsPaginationCursor) {
+    const filters = [eq(schema.testSessions.poolId, poolId)];
+
+    if (cursor?.testedAt) {
+      const testedAtDate = new Date(cursor.testedAt);
+
+      if (cursor.sessionId) {
+        filters.push(
+          or(
+            lt(schema.testSessions.testedAt, testedAtDate),
+            and(
+              eq(schema.testSessions.testedAt, testedAtDate),
+              lt(schema.testSessions.sessionId, cursor.sessionId)
+            )
+          )
+        );
+      } else {
+        filters.push(lt(schema.testSessions.testedAt, testedAtDate));
+      }
+    }
+
+    const whereClause =
+      filters.length === 1 ? filters[0] : and(...filters);
+
     const query = this.db
       .select()
       .from(schema.testSessions)
-      .where(
-        and(
-          eq(schema.testSessions.poolId, poolId),
-          cursor ? gt(schema.testSessions.sessionId, cursor) : undefined
-        )
-      )
-      .orderBy(desc(schema.testSessions.testedAt))
+      .where(whereClause)
+      .orderBy(desc(schema.testSessions.testedAt), desc(schema.testSessions.sessionId))
       .limit(limit);
 
     const items = await query;
-    let nextCursor: string | null = null;
+    let nextCursor: TestsPaginationCursor | null = null;
     if (items.length === limit) {
-      nextCursor = items[items.length - 1].sessionId;
+      const lastItem = items[items.length - 1];
+      nextCursor = {
+        testedAt: lastItem.testedAt.toISOString(),
+        sessionId: lastItem.sessionId,
+      };
     }
 
     const itemsWithCC = items.map((item) => {

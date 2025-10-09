@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import type {} from '../types/fastify.d.ts';
 import { z } from 'zod';
-import { poolsService } from '../services/pools.js';
+import { poolsService, type TestsPaginationCursor } from '../services/pools.js';
 import { recommenderService } from '../services/recommender.js';
 
 // Body schemas
@@ -54,10 +54,16 @@ const createDosingSchema = z.object({
 const poolIdParams = z.object({ poolId: z.string().uuid() });
 const poolMemberParams = z.object({ poolId: z.string().uuid(), userId: z.string().uuid() });
 const getPoolsQuery = z.object({ owner: z.coerce.boolean().optional() });
-const getTestsQuery = z.object({
-  limit: z.coerce.number().int().positive().default(20),
-  cursor: z.string().uuid().optional(),
-});
+const getTestsQuery = z
+  .object({
+    limit: z.coerce.number().int().positive().default(20),
+    cursorTestedAt: z.string().datetime().optional(),
+    cursorSessionId: z.string().uuid().optional(),
+  })
+  .refine((data) => !data.cursorSessionId || data.cursorTestedAt, {
+    message: 'cursorSessionId requires cursorTestedAt',
+    path: ['cursorSessionId'],
+  });
 
 export async function poolsRoutes(app: FastifyInstance) {
   // 🔒 All /pools/* endpoints require a valid session
@@ -185,7 +191,10 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.get('/:poolId/tests', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
-      const { limit, cursor } = getTestsQuery.parse(req.query);
+      const { limit, cursorTestedAt, cursorSessionId } = getTestsQuery.parse(req.query);
+      const cursor: TestsPaginationCursor | undefined = cursorTestedAt
+        ? { testedAt: cursorTestedAt, sessionId: cursorSessionId }
+        : undefined;
       const tests = await poolsService.getTestsByPoolId(poolId, limit, cursor);
       return reply.send(tests);
     } catch (err) {
