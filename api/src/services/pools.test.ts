@@ -6,6 +6,7 @@ describe('PoolsService', () => {
   const userId = 'user-1';
   let insertSpy: ReturnType<typeof vi.fn>;
   let updateSpy: ReturnType<typeof vi.fn>;
+  let selectSpy: ReturnType<typeof vi.fn>;
   let capturedPoolInsert: any;
   let capturedMemberInsert: any;
   let capturedUpdate: any;
@@ -51,11 +52,13 @@ describe('PoolsService', () => {
       },
     }));
 
+    selectSpy = vi.fn();
+
     const mockDb = {
       insert: insertSpy,
       update: updateSpy,
       delete: vi.fn(),
-      select: vi.fn(),
+      select: selectSpy,
     } as unknown as typeof import('../db/index.js')['db'];
 
     service = new PoolsService(mockDb);
@@ -111,5 +114,41 @@ describe('PoolsService', () => {
     });
     expect(capturedUpdate).not.toHaveProperty('sanitizer');
     expect(capturedUpdate).not.toHaveProperty('surface');
+  });
+
+  it('returns pools for memberships', async () => {
+    selectSpy
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.poolMembers);
+          return {
+            where: () =>
+              Promise.resolve([
+                { poolId: 'pool-1', userId },
+                { poolId: 'pool-2', userId },
+              ]),
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            where: () =>
+              Promise.resolve([
+                { poolId: 'pool-1', name: 'Pool 1' },
+                { poolId: 'pool-2', name: 'Pool 2' },
+              ]),
+          };
+        },
+      }));
+
+    const pools = await service.getPools(userId);
+
+    expect(pools).toEqual([
+      { poolId: 'pool-1', name: 'Pool 1' },
+      { poolId: 'pool-2', name: 'Pool 2' },
+    ]);
+    expect(selectSpy).toHaveBeenCalledTimes(2);
   });
 });

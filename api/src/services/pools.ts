@@ -1,6 +1,6 @@
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-import { eq, and, sql, desc, gt } from 'drizzle-orm';
+import { eq, and, desc, gt, inArray } from 'drizzle-orm';
 
 export interface CreatePoolData {
   name: string;
@@ -109,9 +109,7 @@ export class PoolsService {
       return [];
     }
 
-    return this.db.select().from(schema.pools).where(
-      sql`pool_id IN ${poolIds}`
-    );
+    return this.db.select().from(schema.pools).where(inArray(schema.pools.poolId, poolIds));
   }
 
   async getPoolById(poolId: string) {
