@@ -1,37 +1,32 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
   import { tests } from '$lib/api';
-  import { z } from 'zod';
+  import { quickTestSchema, buildSubmission } from './quick-test-form-helpers.js';
 
   export let poolId: string;
 
-  let fc = 0;
-  let tc = 0;
-  let ph = 0;
-  let ta = 0;
-  let cya = 0;
+  let fc = '';
+  let tc = '';
+  let ph = '';
+  let ta = '';
+  let cya = '';
   let error = '';
   let success = '';
-
-  const testSchema = z.object({
-    fc: z.number().min(0),
-    tc: z.number().min(0),
-    ph: z.number().min(0),
-    ta: z.number().min(0),
-    cya: z.number().min(0),
-  });
 
   async function handleSubmit() {
     success = '';
     error = '';
-    const result = testSchema.safeParse({ fc, tc, ph, ta, cya });
+    const result = quickTestSchema.safeParse({ fc, tc, ph, ta, cya });
     if (!result.success) {
       error = result.error.errors.map(e => e.message).join(', ');
       return;
     }
-    const res = await tests.create(poolId, result.data);
+    const { payload, skipped } = buildSubmission(result.data);
+    const res = await tests.create(poolId, payload);
     if (res.ok) {
-      success = 'Test results saved successfully.';
+      success = skipped.length
+        ? `Saved test results. No measurement recorded for ${skipped.join(', ')}.`
+        : 'Test results saved successfully.';
     } else {
       const data = await res.json();
       error = data.message;

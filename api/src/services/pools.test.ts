@@ -10,12 +10,14 @@ describe('PoolsService', () => {
   let capturedPoolInsert: any;
   let capturedMemberInsert: any;
   let capturedUpdate: any;
+  let capturedTestInsert: any;
   let service: PoolsService;
 
   beforeEach(() => {
     capturedPoolInsert = undefined;
     capturedMemberInsert = undefined;
     capturedUpdate = undefined;
+    capturedTestInsert = undefined;
 
     insertSpy = vi.fn((table) => {
       if (table === schema.pools) {
@@ -34,6 +36,23 @@ describe('PoolsService', () => {
           values: (value: any) => {
             capturedMemberInsert = value;
             return Promise.resolve([{ ...value }]);
+          },
+        };
+      }
+
+      if (table === schema.testSessions) {
+        return {
+          values: (value: any) => {
+            capturedTestInsert = value;
+            return {
+              returning: () =>
+                Promise.resolve([
+                  {
+                    ...value,
+                    sessionId: 'session-1',
+                  },
+                ]),
+            };
           },
         };
       }
@@ -413,5 +432,20 @@ describe('PoolsService', () => {
       testedAt: rows[1].testedAt.toISOString(),
       sessionId: rows[1].sessionId,
     });
+  });
+
+  it('omits measurements that were not provided when creating a test', async () => {
+    const result = await service.createTest('pool-123', userId, { fc: 2.5 });
+
+    expect(capturedTestInsert).toMatchObject({
+      poolId: 'pool-123',
+      testedBy: userId,
+      freeChlorinePpm: '2.5',
+    });
+    expect(capturedTestInsert.totalChlorinePpm).toBeUndefined();
+    expect(capturedTestInsert.phLevel).toBeUndefined();
+    expect(capturedTestInsert.totalAlkalinityPpm).toBeUndefined();
+    expect(capturedTestInsert.cyanuricAcidPpm).toBeUndefined();
+    expect(result.cc).toBeUndefined();
   });
 });

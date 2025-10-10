@@ -30,16 +30,44 @@ const addMemberSchema = z.object({
   role: z.string(),
 });
 
+const optionalMeasurement = z.preprocess(
+  value => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === '') return undefined;
+      return trimmed;
+    }
+    return value;
+  },
+  z.coerce.number().min(0).optional()
+);
+
+const optionalCollectedAt = z.preprocess(
+  value => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    if (typeof value === 'string' && value.trim() === '') {
+      return undefined;
+    }
+    return value;
+  },
+  z.string().datetime().optional()
+);
+
 const createTestSchema = z.object({
-  fc: z.number().optional(),
-  tc: z.number().optional(),
-  ph: z.number().optional(),
-  ta: z.number().optional(),
-  cya: z.number().optional(),
-  ch: z.number().optional(),
-  salt: z.number().optional(),
-  temp: z.number().optional(),
-  collectedAt: z.string().datetime().optional(),
+  fc: optionalMeasurement,
+  tc: optionalMeasurement,
+  ph: optionalMeasurement,
+  ta: optionalMeasurement,
+  cya: optionalMeasurement,
+  ch: optionalMeasurement,
+  salt: optionalMeasurement,
+  temp: optionalMeasurement,
+  collectedAt: optionalCollectedAt,
 });
 
 const createDosingSchema = z.object({

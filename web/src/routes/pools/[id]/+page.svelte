@@ -1,28 +1,49 @@
-<script>
+<script lang="ts">
   import { tests, members } from '$lib/api';
   import { page } from '$app/stores';
   import { invalidateAll } from '$app/navigation';
+  import type { PageData } from './$types';
 
-  export let data;
+  export let data: PageData;
 
-  let fc = 0;
-  let tc = 0;
-  let ph = 0;
+  let fc = '';
+  let tc = '';
+  let ph = '';
+
+  const toNumberOrUndefined = (value: string) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
 
   async function handleSubmit() {
-    await tests.create($page.params.id, { fc, tc, ph });
+    const poolId = $page.params.id;
+    if (!poolId) return;
+
+    const payload: Record<string, number> = {};
+    const fcValue = toNumberOrUndefined(fc);
+    const tcValue = toNumberOrUndefined(tc);
+    const phValue = toNumberOrUndefined(ph);
+
+    if (fcValue !== undefined) payload.fc = fcValue;
+    if (tcValue !== undefined) payload.tc = tcValue;
+    if (phValue !== undefined) payload.ph = phValue;
+
+    await tests.create(poolId, payload);
     await invalidateAll();
   }
 
-  async function handleRoleChange(userId, role) {
-    if (!userId) return;
-    await members.update($page.params.id, userId, { role });
+  async function handleRoleChange(userId: string | undefined, role: string) {
+    const poolId = $page.params.id;
+    if (!poolId || !userId) return;
+    await members.update(poolId, userId, { role });
     await invalidateAll();
   }
 
-  async function handleRemoveMember(userId) {
-    if (!userId) return;
-    await members.del($page.params.id, userId);
+  async function handleRemoveMember(userId: string | undefined) {
+    const poolId = $page.params.id;
+    if (!poolId || !userId) return;
+    await members.del(poolId, userId);
     await invalidateAll();
   }
 
