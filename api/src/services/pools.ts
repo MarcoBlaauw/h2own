@@ -1,6 +1,6 @@
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-import { eq, and, desc, gt, inArray } from 'drizzle-orm';
+import { eq, and, desc, inArray, lt, or } from 'drizzle-orm';
 
 export interface CreatePoolData {
   name: string;
@@ -187,23 +187,47 @@ export class PoolsService {
     return { ...test, cc };
   }
 
-  async getTestsByPoolId(poolId: string, limit: number, cursor?: string) {
+  async getTestsByPoolId(
+    poolId: string,
+    limit: number,
+    cursor?: { testedAt: Date; sessionId?: string }
+  ) {
+    let whereClause = eq(schema.testSessions.poolId, poolId);
+
+    if (cursor) {
+      const paginationDate = cursor.testedAt;
+      if (Number.isNaN(paginationDate.getTime())) {
+        throw new Error('Invalid cursor testedAt value');
+      }
+
+      const paginationCondition = cursor.sessionId
+        ? or(
+            lt(schema.testSessions.testedAt, paginationDate),
+            and(
+              eq(schema.testSessions.testedAt, paginationDate),
+              lt(schema.testSessions.sessionId, cursor.sessionId)
+            )
+          )
+        : lt(schema.testSessions.testedAt, paginationDate);
+
+      whereClause = and(whereClause, paginationCondition);
+    }
+
     const query = this.db
       .select()
       .from(schema.testSessions)
-      .where(
-        and(
-          eq(schema.testSessions.poolId, poolId),
-          cursor ? gt(schema.testSessions.sessionId, cursor) : undefined
-        )
-      )
-      .orderBy(desc(schema.testSessions.testedAt))
+      .where(whereClause)
+      .orderBy(desc(schema.testSessions.testedAt), desc(schema.testSessions.sessionId))
       .limit(limit);
 
     const items = await query;
-    let nextCursor: string | null = null;
+    let nextCursor: { testedAt: string; sessionId: string | null } | null = null;
     if (items.length === limit) {
-      nextCursor = items[items.length - 1].sessionId;
+      const last = items[items.length - 1];
+      nextCursor = {
+        testedAt: last.testedAt.toISOString(),
+        sessionId: last.sessionId,
+      };
     }
 
     const itemsWithCC = items.map((item) => {

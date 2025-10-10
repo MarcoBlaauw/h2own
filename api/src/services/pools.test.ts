@@ -151,4 +151,58 @@ describe('PoolsService', () => {
     ]);
     expect(selectSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('paginates tests using testedAt cursor metadata', async () => {
+    const rows = [
+      {
+        sessionId: 'session-1',
+        poolId: 'pool-123',
+        testedAt: new Date('2024-01-02T00:00:00.000Z'),
+        totalChlorinePpm: '3',
+        freeChlorinePpm: '1',
+      },
+      {
+        sessionId: 'session-2',
+        poolId: 'pool-123',
+        testedAt: new Date('2024-01-01T00:00:00.000Z'),
+        totalChlorinePpm: '4',
+        freeChlorinePpm: '2',
+      },
+    ];
+
+    selectSpy.mockReturnValue({
+      from: (table: unknown) => {
+        expect(table).toBe(schema.testSessions);
+        return {
+          where: (clause: unknown) => {
+            expect(clause).toBeTruthy();
+            return {
+              orderBy: (...orderArgs: unknown[]) => {
+                expect(orderArgs).toHaveLength(2);
+                return {
+                  limit: (value: number) => {
+                    expect(value).toBe(2);
+                    return Promise.resolve(rows);
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    });
+
+    const result = await service.getTestsByPoolId('pool-123', 2, {
+      testedAt: new Date('2024-01-03T00:00:00.000Z'),
+      sessionId: 'session-5',
+    });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].cc).toBe(2);
+    expect(result.items[1].cc).toBe(2);
+    expect(result.nextCursor).toEqual({
+      testedAt: rows[1].testedAt.toISOString(),
+      sessionId: rows[1].sessionId,
+    });
+  });
 });

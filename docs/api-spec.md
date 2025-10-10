@@ -112,9 +112,9 @@ Data sourced/stored in WEATHER_DATA, tied to location.
 Test Sessions
 GET /pools/:poolId/tests
 
-Query: ?from&to&limit&cursor
+Query: ?from&to&limit&cursorTestedAt&cursorSessionId
 
-200 → { items:[{ id, testedAt, fc, tc, cc, ph, ta, ch, cya, salt, tempF, orp }], nextCursor? }
+200 → { items:[{ id, testedAt, fc, tc, cc, ph, ta, ch, cya, salt, tempF, orp }], nextCursor?: { testedAt, sessionId } }
 
 POST /pools/:poolId/tests
 
