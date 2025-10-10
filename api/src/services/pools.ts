@@ -2,6 +2,20 @@ import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { eq, and, desc, inArray, lt, or, asc } from 'drizzle-orm';
 
+export class PoolNotFoundError extends Error {
+  constructor(poolId: string) {
+    super(`Pool ${poolId} not found`);
+    this.name = 'PoolNotFoundError';
+  }
+}
+
+export class PoolForbiddenError extends Error {
+  constructor(poolId: string) {
+    super(`Pool ${poolId} forbidden`);
+    this.name = 'PoolForbiddenError';
+  }
+}
+
 export interface CreatePoolData {
   name: string;
   volumeGallons: number;
@@ -148,6 +162,33 @@ function toNumber(value: string | number | null | undefined) {
 export class PoolsService {
   constructor(private readonly db = dbClient) {}
 
+  private async ensurePoolAccess(poolId: string, userId: string) {
+    const [pool] = await this.db
+      .select({ poolId: schema.pools.poolId, ownerId: schema.pools.ownerId })
+      .from(schema.pools)
+      .where(eq(schema.pools.poolId, poolId));
+
+    if (!pool) {
+      throw new PoolNotFoundError(poolId);
+    }
+
+    if (pool.ownerId === userId) {
+      return pool;
+    }
+
+    const memberships = await this.db
+      .select({ userId: schema.poolMembers.userId })
+      .from(schema.poolMembers)
+      .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, userId)))
+      .limit(1);
+
+    if (memberships.length === 0) {
+      throw new PoolForbiddenError(poolId);
+    }
+
+    return pool;
+  }
+
   async createPool(userId: string, data: CreatePoolData) {
     const [pool] = await this.db
       .insert(schema.pools)
@@ -180,7 +221,9 @@ export class PoolsService {
     return this.db.select().from(schema.pools).where(inArray(schema.pools.poolId, poolIds));
   }
 
-  async getPoolById(poolId: string): Promise<PoolDetail | null> {
+  async getPoolById(poolId: string, requestingUserId: string): Promise<PoolDetail | null> {
+    await this.ensurePoolAccess(poolId, requestingUserId);
+
     const [poolRow] = await this.db
       .select({
         poolId: schema.pools.poolId,
@@ -209,7 +252,7 @@ export class PoolsService {
       .where(eq(schema.pools.poolId, poolId));
 
     if (!poolRow) {
-      return null;
+      throw new PoolNotFoundError(poolId);
     }
 
     const [memberRows, testRows] = await Promise.all([
@@ -325,7 +368,9 @@ export class PoolsService {
     } satisfies PoolDetail;
   }
 
-  async updatePool(poolId: string, data: Partial<CreatePoolData>) {
+  async updatePool(poolId: string, requestingUserId: string, data: Partial<CreatePoolData>) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
+
     const [pool] = await this.db
       .update(schema.pools)
       .set(mapUpdatePoolData(data))
@@ -334,15 +379,18 @@ export class PoolsService {
     return pool;
   }
 
-  async deletePool(poolId: string) {
+  async deletePool(poolId: string, requestingUserId: string) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
     await this.db.delete(schema.pools).where(eq(schema.pools.poolId, poolId));
   }
 
-  async getPoolMembers(poolId: string) {
+  async getPoolMembers(poolId: string, requestingUserId: string) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
     return this.db.select().from(schema.poolMembers).where(eq(schema.poolMembers.poolId, poolId));
   }
 
-  async addPoolMember(poolId: string, userId: string, role: string) {
+  async addPoolMember(poolId: string, requestingUserId: string, userId: string, role: string) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
     const [member] = await this.db.insert(schema.poolMembers).values({
       poolId,
       userId,
@@ -351,7 +399,8 @@ export class PoolsService {
     return member;
   }
 
-  async updatePoolMember(poolId: string, userId: string, role: string) {
+  async updatePoolMember(poolId: string, requestingUserId: string, userId: string, role: string) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
     const [member] = await this.db.update(schema.poolMembers)
       .set({ roleName: role })
       .where(and(
@@ -362,7 +411,8 @@ export class PoolsService {
     return member;
   }
 
-  async removePoolMember(poolId: string, userId: string) {
+  async removePoolMember(poolId: string, requestingUserId: string, userId: string) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
     await this.db.delete(schema.poolMembers)
       .where(and(
         eq(schema.poolMembers.poolId, poolId),
@@ -371,6 +421,8 @@ export class PoolsService {
   }
 
   async createTest(poolId: string, userId: string, data: CreateTestData) {
+    await this.ensurePoolAccess(poolId, userId);
+
     let cc;
     if (typeof data.tc === 'number' && typeof data.fc === 'number') {
       cc = Math.max(0, data.tc - data.fc);
@@ -397,9 +449,12 @@ export class PoolsService {
 
   async getTestsByPoolId(
     poolId: string,
+    requestingUserId: string,
     limit: number,
     cursor?: { testedAt: Date; sessionId?: string }
   ) {
+    await this.ensurePoolAccess(poolId, requestingUserId);
+
     let whereClause = eq(schema.testSessions.poolId, poolId);
 
     if (cursor) {
@@ -449,7 +504,7 @@ export class PoolsService {
     return { items: itemsWithCC, nextCursor };
   }
 
-  async getTestById(sessionId: string) {
+  async getTestById(sessionId: string, requestingUserId: string) {
     const [test] = await this.db
       .select()
       .from(schema.testSessions)
@@ -458,6 +513,8 @@ export class PoolsService {
     if (!test) {
       return null;
     }
+
+    await this.ensurePoolAccess(test.poolId, requestingUserId);
 
     let cc;
     if (test.totalChlorinePpm && test.freeChlorinePpm) {
@@ -468,6 +525,8 @@ export class PoolsService {
   }
 
   async createDosingEvent(poolId: string, userId: string, data: CreateDosingData) {
+    await this.ensurePoolAccess(poolId, userId);
+
     const [chemical] = await this.db
       .select()
       .from(schema.products)

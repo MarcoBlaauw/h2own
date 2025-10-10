@@ -11,6 +11,7 @@ describe('PoolsService', () => {
   let capturedMemberInsert: any;
   let capturedUpdate: any;
   let capturedTestInsert: any;
+  let ensurePoolAccessMock: ReturnType<typeof vi.fn>;
   let service: PoolsService;
 
   beforeEach(() => {
@@ -81,6 +82,8 @@ describe('PoolsService', () => {
     } as unknown as typeof import('../db/index.js')['db'];
 
     service = new PoolsService(mockDb);
+    ensurePoolAccessMock = vi.fn().mockResolvedValue({ poolId: 'pool-123', ownerId: userId });
+    (service as any).ensurePoolAccess = ensurePoolAccessMock;
   });
 
   it('maps create payloads to database column names', async () => {
@@ -117,7 +120,7 @@ describe('PoolsService', () => {
   });
 
   it('maps update payloads to database column names', async () => {
-    const pool = await service.updatePool('pool-123', {
+    const pool = await service.updatePool('pool-123', userId, {
       sanitizerType: 'bromine',
       surfaceType: 'fiberglass',
     });
@@ -133,6 +136,7 @@ describe('PoolsService', () => {
     });
     expect(capturedUpdate).not.toHaveProperty('sanitizer');
     expect(capturedUpdate).not.toHaveProperty('surface');
+    expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
   });
 
   it('returns pools for memberships', async () => {
@@ -300,7 +304,7 @@ describe('PoolsService', () => {
         },
       }));
 
-    const detail = await service.getPoolById('pool-123');
+    const detail = await service.getPoolById('pool-123', userId);
 
     expect(detail).toEqual({
       id: 'pool-123',
@@ -378,6 +382,7 @@ describe('PoolsService', () => {
       ],
       lastTestedAt: testedAt,
     });
+    expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
   });
 
   it('paginates tests using testedAt cursor metadata', async () => {
@@ -420,7 +425,7 @@ describe('PoolsService', () => {
       },
     });
 
-    const result = await service.getTestsByPoolId('pool-123', 2, {
+    const result = await service.getTestsByPoolId('pool-123', userId, 2, {
       testedAt: new Date('2024-01-03T00:00:00.000Z'),
       sessionId: 'session-5',
     });
@@ -432,6 +437,7 @@ describe('PoolsService', () => {
       testedAt: rows[1].testedAt.toISOString(),
       sessionId: rows[1].sessionId,
     });
+    expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
   });
 
   it('omits measurements that were not provided when creating a test', async () => {
@@ -447,5 +453,6 @@ describe('PoolsService', () => {
     expect(capturedTestInsert.totalAlkalinityPpm).toBeUndefined();
     expect(capturedTestInsert.cyanuricAcidPpm).toBeUndefined();
     expect(result.cc).toBeUndefined();
+    expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
   });
 });
