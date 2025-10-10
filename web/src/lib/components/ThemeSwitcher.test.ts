@@ -27,7 +27,6 @@ function createMatchMedia(matches: boolean): MatchMediaMock {
 }
 
 beforeEach(() => {
-  document.body?.removeAttribute('data-theme');
   document.documentElement.classList.remove('dark');
   localStorage.clear();
 });
@@ -37,13 +36,15 @@ afterEach(() => {
 });
 
 describe('ThemeSwitcher', () => {
-  it('sets the html data-theme before toggling dark mode on initial load', () => {
-    vi.stubGlobal('matchMedia', () => createMatchMedia(false));
+  it('reflects the current document theme on mount', () => {
+    document.documentElement.classList.add('dark');
+    vi.stubGlobal('matchMedia', () => createMatchMedia(true));
 
-    render(ThemeSwitcher);
+    const { getByRole } = render(ThemeSwitcher);
+    const toggleButton = getByRole('button', { name: 'Activate light theme' });
 
-    expect(document.body?.getAttribute('data-theme')).toBe('h2own');
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(toggleButton).toHaveAttribute('aria-pressed', 'true');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
   it('toggles between light and dark themes while persisting the preference', async () => {
@@ -53,7 +54,6 @@ describe('ThemeSwitcher', () => {
     const { getByRole } = render(ThemeSwitcher);
 
     const toggleButton = getByRole('button', { name: 'Activate dark theme' });
-    expect(document.body?.getAttribute('data-theme')).toBe('h2own');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(localStorage.getItem('theme')).toBe('light');
 

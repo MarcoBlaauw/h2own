@@ -3,14 +3,14 @@
 </script>
 
 <Card>
-  <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-50">Recommendations</h2>
+  <h2 class="text-lg font-semibold text-content-primary">Recommendations</h2>
   <div class="mt-4 space-y-3">
-    <div class="flex items-center justify-between gap-4 rounded-xl border border-surface-200/70 bg-surface-50/85 px-4 py-3 dark:border-surface-700/60 dark:bg-surface-900/70">
+    <div class="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-surface-subtle/95 px-4 py-3 dark:border-border-strong/70 dark:bg-surface-inset/80">
       <div class="space-y-1">
-        <div class="font-medium text-surface-900 dark:text-surface-50">Add 12 oz liquid chlorine</div>
-        <div class="text-xs text-surface-500/80">Raises FC by ~0.5 ppm</div>
+        <div class="font-medium text-content-primary">Add 12 oz liquid chlorine</div>
+        <div class="text-xs text-content-secondary/80">Raises FC by ~0.5 ppm</div>
       </div>
-      <button class="btn btn-sm preset-filled-primary-500 shadow-card hover:brightness-110">Apply</button>
+      <button class="btn btn-sm btn-primary">Apply</button>
     </div>
   </div>
 </Card>

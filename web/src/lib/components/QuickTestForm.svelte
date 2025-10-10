@@ -55,68 +55,68 @@
 </script>
 
 <Card>
-  <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-50">Quick Test Update</h2>
+  <h2 class="text-lg font-semibold text-content-primary">Quick Test Update</h2>
   <form class="mt-5 grid gap-4 sm:grid-cols-2" on:submit|preventDefault={handleSubmit}>
     <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="fc">FC</label>
+      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="fc">FC</label>
       <input
         id="fc"
         type="number"
         min="0"
         bind:value={fc}
-        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+        class="input"
       >
     </div>
     <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="tc">TC</label>
+      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="tc">TC</label>
       <input
         id="tc"
         type="number"
         min="0"
         bind:value={tc}
-        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+        class="input"
       >
     </div>
     <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="ph">pH</label>
+      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="ph">pH</label>
       <input
         id="ph"
         type="number"
         min="0"
         step="0.1"
         bind:value={ph}
-        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+        class="input"
       >
     </div>
     <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="ta">TA</label>
+      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="ta">TA</label>
       <input
         id="ta"
         type="number"
         min="0"
         bind:value={ta}
-        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+        class="input"
       >
     </div>
     <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-surface-500/80" for="cya">CYA</label>
+      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="cya">CYA</label>
       <input
         id="cya"
         type="number"
         min="0"
         bind:value={cya}
-        class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400"
+        class="input"
       >
     </div>
     {#if error}
-      <p class="sm:col-span-2 text-xs font-medium text-error-500" role="alert" aria-live="polite">{error}</p>
+      <p class="sm:col-span-2 text-xs font-medium text-danger" role="alert" aria-live="polite">{error}</p>
     {/if}
     {#if success}
-      <p class="sm:col-span-2 text-xs font-medium text-success-500" role="status" aria-live="polite">{success}</p>
+      <p class="sm:col-span-2 text-xs font-medium text-success" role="status" aria-live="polite">{success}</p>
     {/if}
     <button
       type="submit"
-      class="sm:col-span-2 btn btn-base preset-filled-primary-500 shadow-card hover:brightness-110"
+      class="sm:col-span-2 btn btn-base btn-primary"
     >
       Save
     </button>

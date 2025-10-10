@@ -1,0 +1,8 @@
+packages:
+  - api
+  - web
+
+onlyBuiltDependencies:
+  - '@tailwindcss/oxide'
+  - argon2
+  - esbuild

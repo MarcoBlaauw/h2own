@@ -218,25 +218,25 @@
 
 <section class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
   <div class="space-y-2">
-    <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-50">Chemical catalog</h1>
-    <p class="text-sm text-surface-600 dark:text-surface-300">
+    <h1 class="text-2xl font-semibold text-content-primary">Chemical catalog</h1>
+    <p class="text-sm text-content-secondary">
       Define the chemicals available for recommendations and dosing calculations.
     </p>
     {#if loadError}
-      <p class="rounded-lg bg-error-50 px-3 py-2 text-sm font-medium text-error-600 dark:bg-error-500/10 dark:text-error-300" role="alert">
+      <p class="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger" role="alert">
         {loadError}
       </p>
     {/if}
   </div>
 
   <form
-    class="space-y-6 rounded-2xl border border-surface-200 bg-surface-50 p-6 shadow-card dark:border-surface-700 dark:bg-surface-900"
+    class="space-y-6 rounded-2xl border border-border bg-surface-raised p-6 shadow-card dark:border-border-strong dark:bg-surface-inset"
     novalidate
     on:submit|preventDefault={handleSubmit}
   >
     <div class="grid gap-6 md:grid-cols-2">
       <div class="flex flex-col gap-2">
-        <label for="category" class="text-sm font-medium text-surface-700 dark:text-surface-200">Category</label>
+        <label for="category" class="text-sm font-medium text-content-secondary">Category</label>
         <select
           id="category"
           name="category"
@@ -252,7 +252,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="name" class="text-sm font-medium text-surface-700 dark:text-surface-200">Name</label>
+        <label for="name" class="text-sm font-medium text-content-secondary">Name</label>
         <input
           id="name"
           name="name"
@@ -265,17 +265,17 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="brand" class="text-sm font-medium text-surface-700 dark:text-surface-200">Brand</label>
+        <label for="brand" class="text-sm font-medium text-content-secondary">Brand</label>
         <input id="brand" name="brand" class="input" type="text" bind:value={form.brand} />
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="productType" class="text-sm font-medium text-surface-700 dark:text-surface-200">Product type</label>
+        <label for="productType" class="text-sm font-medium text-content-secondary">Product type</label>
         <input id="productType" name="productType" class="input" type="text" bind:value={form.productType} />
       </div>
 
       <div class="flex flex-col gap-2 md:col-span-2">
-        <label for="activeIngredients" class="text-sm font-medium text-surface-700 dark:text-surface-200">
+        <label for="activeIngredients" class="text-sm font-medium text-content-secondary">
           Active ingredients
         </label>
         <textarea
@@ -286,11 +286,11 @@
           placeholder="sodium_hypochlorite: 12.5"
           bind:value={form.activeIngredients}
         ></textarea>
-        <p class="text-xs text-surface-500 dark:text-surface-400">One per line using "ingredient: percentage".</p>
+        <p class="text-xs text-content-secondary/80">One per line using "ingredient: percentage".</p>
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="concentrationPercent" class="text-sm font-medium text-surface-700 dark:text-surface-200">Concentration (%)</label>
+        <label for="concentrationPercent" class="text-sm font-medium text-content-secondary">Concentration (%)</label>
         <input
           id="concentrationPercent"
           name="concentrationPercent"
@@ -301,17 +301,17 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="phEffect" class="text-sm font-medium text-surface-700 dark:text-surface-200">pH effect</label>
+        <label for="phEffect" class="text-sm font-medium text-content-secondary">pH effect</label>
         <input id="phEffect" name="phEffect" class="input" type="text" bind:value={form.phEffect} />
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="strengthFactor" class="text-sm font-medium text-surface-700 dark:text-surface-200">Strength factor</label>
+        <label for="strengthFactor" class="text-sm font-medium text-content-secondary">Strength factor</label>
         <input id="strengthFactor" name="strengthFactor" class="input" type="text" bind:value={form.strengthFactor} />
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="dosePer10kGallons" class="text-sm font-medium text-surface-700 dark:text-surface-200">Dose per 10k gallons</label>
+        <label for="dosePer10kGallons" class="text-sm font-medium text-content-secondary">Dose per 10k gallons</label>
         <input
           id="dosePer10kGallons"
           name="dosePer10kGallons"
@@ -322,12 +322,12 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="doseUnit" class="text-sm font-medium text-surface-700 dark:text-surface-200">Dose unit</label>
+        <label for="doseUnit" class="text-sm font-medium text-content-secondary">Dose unit</label>
         <input id="doseUnit" name="doseUnit" class="input" type="text" bind:value={form.doseUnit} />
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="averageCostPerUnit" class="text-sm font-medium text-surface-700 dark:text-surface-200">
+        <label for="averageCostPerUnit" class="text-sm font-medium text-content-secondary">
           Average cost per unit
         </label>
         <input
@@ -340,7 +340,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="fcChangePerDose" class="text-sm font-medium text-surface-700 dark:text-surface-200">FC change per dose</label>
+        <label for="fcChangePerDose" class="text-sm font-medium text-content-secondary">FC change per dose</label>
         <input
           id="fcChangePerDose"
           name="fcChangePerDose"
@@ -351,7 +351,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="phChangePerDose" class="text-sm font-medium text-surface-700 dark:text-surface-200">pH change per dose</label>
+        <label for="phChangePerDose" class="text-sm font-medium text-content-secondary">pH change per dose</label>
         <input
           id="phChangePerDose"
           name="phChangePerDose"
@@ -362,7 +362,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="taChangePerDose" class="text-sm font-medium text-surface-700 dark:text-surface-200">TA change per dose</label>
+        <label for="taChangePerDose" class="text-sm font-medium text-content-secondary">TA change per dose</label>
         <input
           id="taChangePerDose"
           name="taChangePerDose"
@@ -373,7 +373,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="cyaChangePerDose" class="text-sm font-medium text-surface-700 dark:text-surface-200">CYA change per dose</label>
+        <label for="cyaChangePerDose" class="text-sm font-medium text-content-secondary">CYA change per dose</label>
         <input
           id="cyaChangePerDose"
           name="cyaChangePerDose"
@@ -384,12 +384,12 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <label for="formType" class="text-sm font-medium text-surface-700 dark:text-surface-200">Form</label>
+        <label for="formType" class="text-sm font-medium text-content-secondary">Form</label>
         <input id="formType" name="formType" class="input" type="text" bind:value={form.formType} />
       </div>
 
       <div class="flex flex-col gap-2 md:col-span-2">
-        <label for="packageSizes" class="text-sm font-medium text-surface-700 dark:text-surface-200">Package sizes</label>
+        <label for="packageSizes" class="text-sm font-medium text-content-secondary">Package sizes</label>
         <textarea
           id="packageSizes"
           name="packageSizes"
@@ -398,36 +398,36 @@
           placeholder="1 gal\n2.5 gal"
           bind:value={form.packageSizes}
         ></textarea>
-        <p class="text-xs text-surface-500 dark:text-surface-400">Separate values with commas or new lines.</p>
+        <p class="text-xs text-content-secondary/80">Separate values with commas or new lines.</p>
       </div>
     </div>
 
-    <fieldset class="grid gap-4 rounded-xl bg-surface-100 p-4 dark:bg-surface-800 sm:grid-cols-2">
-      <legend class="text-sm font-semibold text-surface-700 dark:text-surface-200">Impacts</legend>
-      <label class="flex items-center gap-3 text-sm text-surface-600 dark:text-surface-300">
+    <fieldset class="grid gap-4 rounded-xl bg-surface-subtle p-4 dark:bg-surface-inset/80 sm:grid-cols-2">
+      <legend class="text-sm font-semibold text-content-secondary">Impacts</legend>
+      <label class="flex items-center gap-3 text-sm text-content-secondary">
         <input type="checkbox" bind:checked={form.affectsFc} />
         Affects FC
       </label>
-      <label class="flex items-center gap-3 text-sm text-surface-600 dark:text-surface-300">
+      <label class="flex items-center gap-3 text-sm text-content-secondary">
         <input type="checkbox" bind:checked={form.affectsPh} />
         Affects pH
       </label>
-      <label class="flex items-center gap-3 text-sm text-surface-600 dark:text-surface-300">
+      <label class="flex items-center gap-3 text-sm text-content-secondary">
         <input type="checkbox" bind:checked={form.affectsTa} />
         Affects TA
       </label>
-      <label class="flex items-center gap-3 text-sm text-surface-600 dark:text-surface-300">
+      <label class="flex items-center gap-3 text-sm text-content-secondary">
         <input type="checkbox" bind:checked={form.affectsCya} />
         Affects CYA
       </label>
-      <label class="flex items-center gap-3 text-sm text-surface-600 dark:text-surface-300">
+      <label class="flex items-center gap-3 text-sm text-content-secondary">
         <input type="checkbox" bind:checked={form.isActive} />
         Active
       </label>
     </fieldset>
 
     {#if formErrors.length > 0}
-      <div class="rounded-lg bg-error-50 px-3 py-2 text-sm font-medium text-error-600 dark:bg-error-500/10 dark:text-error-300" role="alert">
+      <div class="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger" role="alert">
         {#each formErrors as error}
           <p>{error}</p>
         {/each}
@@ -435,13 +435,13 @@
     {/if}
 
     {#if successMessage}
-      <p class="rounded-lg bg-success-50 px-3 py-2 text-sm font-medium text-success-600 dark:bg-success-500/10 dark:text-success-300" role="status">
+      <p class="rounded-lg bg-success/10 px-3 py-2 text-sm font-medium text-success" role="status">
         {successMessage}
       </p>
     {/if}
 
     <button
-      class="btn preset-filled-primary-500"
+      class="btn btn-base btn-primary"
       type="submit"
       disabled={submitting}
     >

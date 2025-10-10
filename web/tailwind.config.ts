@@ -1,7 +1,4 @@
-import { skeleton } from '@skeletonlabs/tw-plugin';
 import type { Config } from 'tailwindcss';
-
-import h2ownTheme from './src/lib/themes/h2own';
 
 const withOpacityValue =
   (variable: string) =>
@@ -95,14 +92,7 @@ const config = {
         relaxed: 'var(--line-height-relaxed)'
       }
     }
-  },
-  plugins: [
-    skeleton({
-      themes: {
-        custom: [h2ownTheme]
-      }
-    })
-  ]
+  }
 } satisfies Config;
 
 export default config;

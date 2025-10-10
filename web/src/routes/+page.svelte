@@ -63,7 +63,7 @@
 <Container>
   {#if data.session}
     <!-- Metrics row -->
-    <h2 class="mt-6 text-xl font-semibold text-surface-900 dark:text-surface-50">Last Test Results</h2>
+    <h2 class="mt-6 text-xl font-semibold text-content-primary">Last Test Results</h2>
     <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {#each metrics as m}
         <MetricTile {...m} />
@@ -76,7 +76,7 @@
         {#if data.highlightedPool}
           <PoolSummaryCard pool={data.highlightedPool} />
         {:else}
-          <p class="text-sm text-surface-600 dark:text-surface-300">No pools available yet.</p>
+          <p class="text-sm text-content-secondary">No pools available yet.</p>
         {/if}
       </div>
 
@@ -90,13 +90,13 @@
     </div>
   {:else}
     <div class="mt-10 text-center">
-      <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-50">Welcome to H2Own</h1>
-      <p class="mt-4 text-surface-600 dark:text-surface-300">
-        Please <a href="/auth/login" class="font-medium text-primary-600 hover:underline"
+      <h1 class="text-2xl font-semibold text-content-primary">Welcome to H2Own</h1>
+      <p class="mt-4 text-content-secondary">
+        Please <a href="/auth/login" class="font-medium text-accent hover:text-accent-strong underline-offset-2 hover:underline"
           >sign in</a
         >
         or
-        <a href="/auth/register" class="font-medium text-primary-600 hover:underline"
+        <a href="/auth/register" class="font-medium text-accent hover:text-accent-strong underline-offset-2 hover:underline"
           >register</a
         > to manage your pools.
       </p>

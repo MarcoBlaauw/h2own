@@ -24,13 +24,13 @@
     <Card className="shadow-card">
       <form class="space-y-6" on:submit|preventDefault={handleSubmit}>
         <div class="space-y-1">
-          <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-50">Create your account</h1>
-          <p class="text-sm text-surface-600 dark:text-surface-300">Join H2Own to manage your pools</p>
+          <h1 class="text-2xl font-semibold text-content-primary">Create your account</h1>
+          <p class="text-sm text-content-secondary">Join H2Own to manage your pools</p>
         </div>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-surface-700 dark:text-surface-200" for="name">Name</label>
+          <label class="text-sm font-medium text-content-secondary" for="name">Name</label>
           <input
-            class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+            class="input"
             id="name"
             type="text"
             placeholder="Name"
@@ -38,9 +38,9 @@
           >
         </div>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-surface-700 dark:text-surface-200" for="email">Email</label>
+          <label class="text-sm font-medium text-content-secondary" for="email">Email</label>
           <input
-            class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+            class="input"
             id="email"
             type="email"
             placeholder="Email"
@@ -48,9 +48,9 @@
           >
         </div>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-surface-700 dark:text-surface-200" for="password">Password</label>
+          <label class="text-sm font-medium text-content-secondary" for="password">Password</label>
           <input
-            class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+            class="input"
             id="password"
             type="password"
             placeholder="••••••••"
@@ -58,17 +58,17 @@
           >
         </div>
         {#if error}
-          <p class="text-sm font-medium text-error-600 dark:text-error-400">{error}</p>
+          <p class="text-sm font-medium text-danger">{error}</p>
         {/if}
         <div class="flex flex-wrap items-center justify-between gap-3">
           <button
-            class="btn btn-base preset-filled-primary-500 shadow-card hover:brightness-110 dark:hover:brightness-95"
+            class="btn btn-base btn-primary"
             type="submit"
           >
             Register
           </button>
           <a
-            class="text-sm font-medium text-primary-600 hover:text-primary-500 dark:text-primary-300 dark:hover:text-primary-200"
+            class="text-sm font-medium text-accent hover:text-accent-strong"
             href="/auth/login"
           >
             Login

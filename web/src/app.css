@@ -1,6 +1,5 @@
 @import './lib/styles/tokens.css';
 @import 'tailwindcss';
-@import '@skeletonlabs/skeleton';
 
 @layer base {
   :root {
@@ -73,55 +72,67 @@
 }
 
 @layer components {
-  .card-surface {
-    border-radius: var(--radius-lg);
-    background-color: rgb(var(--color-bg-raised));
-    border: 1px solid rgb(var(--color-border));
-    box-shadow: var(--shadow-soft);
-    padding: var(--space-lg);
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md font-semibold text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60;
   }
 
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2xs);
-    padding: 0 var(--space-sm);
-    height: 2rem;
-    border-radius: var(--radius-pill);
-    border: 1px solid rgb(var(--color-border));
-    background-color: rgb(var(--color-bg-subtle));
-    color: rgb(var(--color-content-secondary));
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+  .btn-sm {
+    @apply h-9 px-3;
+  }
+
+  .btn-base {
+    @apply h-11 px-4;
+  }
+
+  .btn-icon-base {
+    @apply h-10 w-10 rounded-full text-lg;
   }
 
   .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-xs);
-    padding: 0 var(--space-md);
-    height: 2.75rem;
-    border-radius: var(--radius-md);
-    border: 1px solid transparent;
-    background-color: rgb(var(--color-accent));
-    color: rgb(var(--color-accent-contrast));
-    font-weight: var(--font-weight-semibold);
-    transition: transform 150ms ease, box-shadow 150ms ease;
-    box-shadow: var(--shadow-soft);
+    @apply bg-accent text-accent-contrast shadow-card hover:bg-accent-strong focus-visible:ring-accent-strong;
   }
 
-  .btn-primary:hover,
-  .btn-primary:focus-visible {
-    background-color: rgb(var(--color-accent-strong));
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-raised);
+  .btn-secondary {
+    @apply bg-surface-subtle/90 text-content-primary shadow-card hover:bg-surface-inset focus-visible:ring-border dark:bg-surface-inset/70 dark:text-content-primary;
   }
 
-  .btn-primary:disabled {
-    cursor: not-allowed;
-    background-color: rgb(var(--color-bg-inset));
-    color: rgb(var(--color-content-muted));
-    box-shadow: none;
+  .btn-tonal {
+    @apply bg-accent/15 text-accent-strong hover:bg-accent/25 focus-visible:ring-accent/40 dark:bg-accent/20;
+  }
+
+  .btn-outline-danger {
+    @apply border border-danger/60 text-danger hover:bg-danger/10 focus-visible:ring-danger/40;
+  }
+
+  .card {
+    @apply rounded-xl border border-border/70 bg-surface-raised/95 shadow-card backdrop-blur-sm dark:border-border-strong/70 dark:bg-surface-inset/80;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface-subtle/80 px-4 py-2.5 text-sm text-content-primary shadow-sm transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-border-strong dark:bg-surface-inset/70 dark:text-content-primary;
+  }
+
+  .select {
+    @apply w-full appearance-none rounded-lg border border-border bg-surface-subtle/80 px-4 py-2.5 text-sm text-content-primary shadow-sm transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-border-strong dark:bg-surface-inset/70 dark:text-content-primary;
+  }
+
+  .textarea {
+    @apply w-full rounded-lg border border-border bg-surface-subtle/80 px-4 py-3 text-sm text-content-primary shadow-sm transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-border-strong dark:bg-surface-inset/70 dark:text-content-primary;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide;
+  }
+
+  .badge-success {
+    @apply bg-success/15 text-success;
+  }
+
+  .badge-danger {
+    @apply bg-danger/15 text-danger;
+  }
+
+  .badge-neutral {
+    @apply bg-surface-subtle/80 text-content-secondary dark:bg-surface-inset/60 dark:text-content-secondary;
   }
 }

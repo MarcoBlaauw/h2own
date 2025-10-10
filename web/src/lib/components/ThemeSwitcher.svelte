@@ -1,58 +1,70 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { onMount } from 'svelte';
+
+  const storageKey = 'theme';
+  const inlineInitializer = `(function(){try{if(typeof window==='undefined')return;var root=document.documentElement;if(!root)return;var stored=localStorage.getItem('${storageKey}');if(stored==='dark'){root.classList.add('dark');return;}if(stored==='light'){root.classList.remove('dark');return;}if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){root.classList.add('dark');}}catch(e){}})();`;
 
   let isDark = false;
 
-  function applyTheme(value: boolean) {
+  function setPreference(value: boolean, persist = true) {
+    if (!browser) return;
     isDark = value;
-    const root = document.documentElement;
-    const body = document.body;
+    document.documentElement.classList.toggle('dark', value);
 
-    if (body && body.getAttribute('data-theme') !== 'h2own') {
-      body.setAttribute('data-theme', 'h2own');
-    }
-    root.classList.toggle('dark', isDark);
+    if (!persist) return;
+
     try {
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      localStorage.setItem(storageKey, value ? 'dark' : 'light');
     } catch (error) {
       console.warn('Unable to persist theme preference', error);
     }
   }
 
-  onMount(() => {
-    const stored = (() => {
-      try {
-        return localStorage.getItem('theme');
-      } catch (error) {
-        console.warn('Unable to read stored theme preference', error);
-        return null;
-      }
-    })();
-
-    if (stored === 'dark' || stored === 'light') {
-      applyTheme(stored === 'dark');
-      return;
+  function hasStoredPreference() {
+    if (!browser) return false;
+    try {
+      return localStorage.getItem(storageKey) !== null;
+    } catch (error) {
+      console.warn('Unable to read stored theme preference', error);
+      return false;
     }
+  }
 
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyTheme(prefersDark);
+  onMount(() => {
+    if (!browser) return;
+
+    isDark = document.documentElement.classList.contains('dark');
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (hasStoredPreference()) return;
+      setPreference(event.matches, false);
+    };
+
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
   });
 
   function toggleTheme() {
-    applyTheme(!isDark);
+    setPreference(!isDark);
   }
 </script>
 
+<svelte:head>
+  {@html `<script>${inlineInitializer}</script>`}
+</svelte:head>
+
 <button
-  class="btn btn-icon-base preset-filled-surface-200-800 hover:brightness-110 dark:hover:brightness-95"
+  class="btn btn-icon-base btn-tonal"
   type="button"
   on:click={toggleTheme}
   aria-pressed={isDark}
   aria-label={isDark ? 'Activate light theme' : 'Activate dark theme'}
 >
   {#if isDark}
-    <span class="text-lg">☀️</span>
+    <span aria-hidden="true">☀️</span>
   {:else}
-    <span class="text-lg">🌙</span>
+    <span aria-hidden="true">🌙</span>
   {/if}
 </button>
