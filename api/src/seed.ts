@@ -11,7 +11,7 @@ const DATABASE_URL =
 const client = postgres(DATABASE_URL, { max: 1 });
 const db = drizzle(client, { schema });
 
-async function ensureUser(email: string, password: string, name: string) {
+async function ensureUser(email: string, password: string, name: string, role: string = 'member') {
   const hash = await argon2.hash(password, { type: argon2.argon2id });
 
   // Try insert; on email conflict, do nothing then fetch existing
@@ -23,6 +23,7 @@ async function ensureUser(email: string, password: string, name: string) {
       name,
       isActive: true,
       emailVerified: true, // helpful for dev
+      role,
     })
     .onConflictDoNothing({ target: schema.users.email })
     .returning({ userId: schema.users.userId });
@@ -30,12 +31,21 @@ async function ensureUser(email: string, password: string, name: string) {
   if (inserted.length) return { userId: inserted[0].userId, created: true };
 
   const existing = await db
-    .select({ userId: schema.users.userId })
+    .select({ userId: schema.users.userId, role: schema.users.role })
     .from(schema.users)
     .where(eq(schema.users.email, email))
     .limit(1);
 
-  return { userId: existing[0]?.userId, created: false };
+  const user = existing[0];
+
+  if (user && user.role !== role) {
+    await db
+      .update(schema.users)
+      .set({ role })
+      .where(eq(schema.users.userId, user.userId));
+  }
+
+  return { userId: user?.userId, created: false };
 }
 
 async function seed() {
@@ -44,8 +54,8 @@ async function seed() {
   try {
     // --- Users ---------------------------------------------------------------
     console.log('👤 Seeding dev users…');
-    const u1 = await ensureUser('testuser1@example.com', 'password123', 'Test User 1');
-    const u2 = await ensureUser('testuser2@example.com', 'password123', 'Test User 2');
+    const u1 = await ensureUser('testuser1@example.com', 'password123', 'Test User 1', 'admin');
+    const u2 = await ensureUser('testuser2@example.com', 'password123', 'Test User 2', 'member');
     console.log(
       `✅ Users ready: user1=${u1.userId} ${u1.created ? '(created)' : '(exists)'}, ` +
       `user2=${u2.userId} ${u2.created ? '(created)' : '(exists)'}`

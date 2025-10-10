@@ -1,15 +1,18 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { poolsRoutes } from './pools.js';
-import { poolsService } from '../services/pools.js';
+import { poolsService, PoolForbiddenError, PoolNotFoundError } from '../services/pools.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
+  const currentUserId = '2b5c4d1a-6e12-4d2a-b9f3-0a6f3a29e1f2';
 
   beforeEach(async () => {
     app = Fastify();
     app.decorate('auth', {
-      verifySession: vi.fn(async () => {}),
+      verifySession: vi.fn(async (req: any) => {
+        req.user = { id: currentUserId };
+      }),
       requireRole: () => async () => {},
     } as any);
 
@@ -108,16 +111,43 @@ describe('GET /pools/:poolId integration', () => {
       })),
       lastTestedAt: poolDetail.lastTestedAt?.toISOString() ?? null,
     });
-    expect(poolsService.getPoolById).toHaveBeenCalledWith(id);
+    expect(poolsService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
   });
 
   it('returns 404 when the pool is missing', async () => {
-    vi.spyOn(poolsService, 'getPoolById').mockResolvedValue(null);
+    vi.spyOn(poolsService, 'getPoolById').mockRejectedValue(new PoolNotFoundError('missing'));
 
     const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Pool not found' });
+    expect(poolsService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
+  });
+
+  it('returns 403 when the user is not a member of the pool', async () => {
+    vi.spyOn(poolsService, 'getPoolById').mockRejectedValue(new PoolForbiddenError('nope'));
+
+    const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(poolsService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
+  });
+
+  it('returns 403 when updating a pool without access', async () => {
+    vi.spyOn(poolsService, 'updatePool').mockRejectedValue(new PoolForbiddenError('nope'));
+
+    const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/pools/${id}`,
+      payload: { name: 'Updated' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(poolsService.updatePool).toHaveBeenCalledWith(id, currentUserId, { name: 'Updated' });
   });
 });

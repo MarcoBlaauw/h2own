@@ -1,8 +1,22 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { poolsService } from '../services/pools.js';
+import { poolsService, PoolForbiddenError, PoolNotFoundError } from '../services/pools.js';
 
 const sessionIdParams = z.object({ sessionId: z.string().uuid() });
+
+function handlePoolAccessError(reply: FastifyReply, err: unknown) {
+  if (err instanceof PoolNotFoundError) {
+    reply.code(404).send({ error: 'Test not found' });
+    return true;
+  }
+
+  if (err instanceof PoolForbiddenError) {
+    reply.code(403).send({ error: 'Forbidden' });
+    return true;
+  }
+
+  return false;
+}
 
 export async function testsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.auth.verifySession);
@@ -10,7 +24,8 @@ export async function testsRoutes(app: FastifyInstance) {
   app.get('/:sessionId', async (req, reply) => {
     try {
       const { sessionId } = sessionIdParams.parse(req.params);
-      const test = await poolsService.getTestById(sessionId);
+      const userId = req.user!.id;
+      const test = await poolsService.getTestById(sessionId, userId);
       if (!test) {
         return reply.code(404).send({ error: 'Test not found' });
       }
@@ -18,6 +33,9 @@ export async function testsRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }

@@ -5,6 +5,22 @@ import { env } from '../env.js';
 import * as schema from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 
+const POSTGRES_UNIQUE_VIOLATION = '23505';
+
+const isPostgresError = (error: unknown): error is { code: string } => {
+  return typeof error === 'object' && error !== null && 'code' in error && typeof (error as any).code === 'string';
+};
+
+export class UserAlreadyExistsError extends Error {
+  readonly statusCode = 409;
+  readonly code = 'UserAlreadyExists';
+
+  constructor(message = 'An account with that email already exists') {
+    super(message);
+    this.name = 'UserAlreadyExistsError';
+  }
+}
+
 export interface CreateUserData {
   email: string;
   password: string;
@@ -27,20 +43,37 @@ export class AuthService {
   async createUser(data: CreateUserData) {
     const passwordHash = await hash(data.password, AuthService.HASH_OPTIONS);
     
-    const [user] = await db.insert(schema.users).values({
-      email: data.email,
-      passwordHash,
-      name: data.name || null,
-      isActive: true,
-    }).returning({
-      userId: schema.users.userId,
-    });
+    try {
+      const [user] = await db.insert(schema.users).values({
+        email: data.email,
+        passwordHash,
+        name: data.name || null,
+        isActive: true,
+      }).returning({
+        userId: schema.users.userId,
+      });
 
-    return user.userId;
+      return user.userId;
+    } catch (error) {
+      if (isPostgresError(error) && error.code === POSTGRES_UNIQUE_VIOLATION) {
+        throw new UserAlreadyExistsError();
+      }
+
+      throw error;
+    }
   }
 
   async validateCredentials(data: LoginData) {
-    const [user] = await db.select().from(schema.users)
+    const [user] = await db
+      .select({
+        userId: schema.users.userId,
+        email: schema.users.email,
+        name: schema.users.name,
+        passwordHash: schema.users.passwordHash,
+        isActive: schema.users.isActive,
+        role: schema.users.role,
+      })
+      .from(schema.users)
       .where(eq(schema.users.email, data.email));
 
     if (!user || !user.isActive) {
@@ -56,6 +89,7 @@ export class AuthService {
       userId: user.userId,
       email: user.email,
       name: user.name,
+      role: user.role,
     };
   }
 
@@ -135,12 +169,15 @@ export class AuthService {
   }
 
   async getUserById(userId: string) {
-    const [user] = await db.select({
-      userId: schema.users.userId,
-      email: schema.users.email,
-      name: schema.users.name,
-      createdAt: schema.users.createdAt,
-    }).from(schema.users)
+    const [user] = await db
+      .select({
+        userId: schema.users.userId,
+        email: schema.users.email,
+        name: schema.users.name,
+        role: schema.users.role,
+        createdAt: schema.users.createdAt,
+      })
+      .from(schema.users)
       .where(eq(schema.users.userId, userId));
 
     return user;

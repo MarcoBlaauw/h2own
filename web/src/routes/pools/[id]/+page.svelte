@@ -2,6 +2,7 @@
   import { api } from '$lib/api';
   import { page } from '$app/stores';
   import { invalidateAll } from '$app/navigation';
+  import Card from '$lib/components/ui/Card.svelte';
   import type { PageData } from './$types';
 
   export let data: PageData;
@@ -56,100 +57,121 @@
   };
 </script>
 
-<div class="container mx-auto p-4">
+<div class="container mx-auto px-4 py-8 space-y-6">
   {#if data.pool}
-    <h1 class="text-2xl font-bold mb-4">{data.pool.name}</h1>
-    <p class="text-lg text-gray-600 mb-4">{data.pool.volumeGallons} gallons</p>
+    <h1 class="text-3xl font-semibold text-surface-900 dark:text-surface-50">{data.pool.name}</h1>
+    <p class="text-base text-surface-600 dark:text-surface-300">{data.pool.volumeGallons} gallons</p>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <h2 class="text-xl font-bold mb-4">Members</h2>
-        <table class="w-full text-left">
-          <thead>
-            <tr>
-              <th class="py-2">User</th>
-              <th class="py-2">Role</th>
-              <th class="py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#if data.pool.members?.length > 0}
-              {#each data.pool.members as member}
-                <tr class="border-b">
-                  <td class="py-2">{member.user?.email ?? 'Unknown user'}</td>
-                  <td class="py-2">
-                    <select bind:value={member.roleName} on:change={() => handleRoleChange(member.user?.id, member.roleName)}>
-                      <option value="owner">Owner</option>
-                      <option value="admin">Admin</option>
-                      <option value="member">Member</option>
-                    </select>
-                  </td>
-                  <td class="py-2">
-                    <button
-                      on:click={() => handleRemoveMember(member.user?.id)}
-                      class="text-red-500"
-                      disabled={!member.user?.id}
-                    >
-                      Remove
-                    </button>
-                  </td>
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <Card className="shadow-card h-full">
+        <div class="space-y-4">
+          <h2 class="text-xl font-semibold text-surface-900 dark:text-surface-50">Members</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm text-surface-700 dark:text-surface-200">
+              <thead class="border-b border-surface-200/70 text-xs font-semibold uppercase tracking-wide text-surface-500/80 dark:border-surface-700/60 dark:text-surface-300">
+                <tr>
+                  <th class="px-3 py-2">User</th>
+                  <th class="px-3 py-2">Role</th>
+                  <th class="px-3 py-2">Actions</th>
                 </tr>
-              {/each}
-            {:else}
-              <tr>
-                <td colspan="3" class="py-2">No members found.</td>
-              </tr>
-            {/if}
-          </tbody>
-        </table>
-      </div>
-      <div>
-        <h2 class="text-xl font-bold mb-4">Tests</h2>
-        <ul>
+              </thead>
+              <tbody class="divide-y divide-surface-100/70 dark:divide-surface-800/80">
+                {#if data.pool.members?.length > 0}
+                  {#each data.pool.members as member}
+                    <tr>
+                      <td class="px-3 py-3 text-surface-800 dark:text-surface-100">{member.user?.email ?? 'Unknown user'}</td>
+                      <td class="px-3 py-3">
+                        <select
+                          class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+                          bind:value={member.roleName}
+                          on:change={() => handleRoleChange(member.user?.id, member.roleName)}
+                        >
+                          <option value="owner">Owner</option>
+                          <option value="admin">Admin</option>
+                          <option value="member">Member</option>
+                        </select>
+                      </td>
+                      <td class="px-3 py-3">
+                        <button
+                          on:click={() => handleRemoveMember(member.user?.id)}
+                          class="btn btn-sm preset-outline-error-500 hover:brightness-110 dark:hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!member.user?.id}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  {/each}
+                {:else}
+                  <tr>
+                    <td colspan="3" class="px-3 py-6 text-center text-surface-500 dark:text-surface-400">No members found.</td>
+                  </tr>
+                {/if}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Card>
+      <Card className="shadow-card h-full">
+        <div class="space-y-4">
+          <h2 class="text-xl font-semibold text-surface-900 dark:text-surface-50">Tests</h2>
           {#if data.pool.tests?.length > 0}
-            {#each data.pool.tests as test}
-              <li class="border-b py-2">
-                <p>
-                  FC: {test.freeChlorine ?? 'N/A'}, TC: {test.totalChlorine ?? 'N/A'}, pH: {test.ph ?? 'N/A'}, CC: {formatCc(test)}
-                </p>
-                <p class="text-xs text-gray-500">
-                  Tested on {new Date(test.testedAt).toLocaleString()} by {test.tester?.email ?? 'Unknown'}
-                </p>
-              </li>
-            {/each}
+            <ul class="space-y-4 text-sm text-surface-700 dark:text-surface-200">
+              {#each data.pool.tests as test}
+                <li class="rounded-lg border border-surface-200/70 bg-surface-50/40 p-4 dark:border-surface-700/60 dark:bg-surface-900/40">
+                  <p>
+                    FC: {test.freeChlorine ?? 'N/A'}, TC: {test.totalChlorine ?? 'N/A'}, pH: {test.ph ?? 'N/A'}, CC: {formatCc(test)}
+                  </p>
+                  <p class="text-xs text-surface-500 dark:text-surface-400">
+                    Tested on {new Date(test.testedAt).toLocaleString()} by {test.tester?.email ?? 'Unknown'}
+                  </p>
+                </li>
+              {/each}
+            </ul>
           {:else}
-            <p>No tests found.</p>
+            <p class="text-sm text-surface-500 dark:text-surface-400">No tests found.</p>
           {/if}
-        </ul>
-      </div>
-      <div>
-        <h2 class="text-xl font-bold mb-4">Add New Test</h2>
-        <form on:submit|preventDefault={handleSubmit}>
-          <div class="mb-4">
-            <label class="block text-gray-700 text-sm font-bold mb-2" for="fc">
-              Free Chlorine (FC)
-            </label>
-            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="fc" type="number" bind:value={fc}>
+        </div>
+      </Card>
+      <Card className="shadow-card h-full md:col-span-2">
+        <form class="grid gap-4 sm:grid-cols-2" on:submit|preventDefault={handleSubmit}>
+          <h2 class="sm:col-span-2 text-xl font-semibold text-surface-900 dark:text-surface-50">Add New Test</h2>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-surface-700 dark:text-surface-200" for="fc">Free Chlorine (FC)</label>
+            <input
+              class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+              id="fc"
+              type="number"
+              bind:value={fc}
+            >
           </div>
-          <div class="mb-4">
-            <label class="block text-gray-700 text-sm font-bold mb-2" for="tc">
-              Total Chlorine (TC)
-            </label>
-            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="tc" type="number" bind:value={tc}>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-surface-700 dark:text-surface-200" for="tc">Total Chlorine (TC)</label>
+            <input
+              class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+              id="tc"
+              type="number"
+              bind:value={tc}
+            >
           </div>
-          <div class="mb-4">
-            <label class="block text-gray-700 text-sm font-bold mb-2" for="ph">
-              pH
-            </label>
-            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="ph" type="number" bind:value={ph}>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-surface-700 dark:text-surface-200" for="ph">pH</label>
+            <input
+              class="input preset-filled-surface-50-950 ring-1 ring-surface-200/70 focus:outline-none focus:ring-2 focus:ring-primary-400 dark:ring-surface-700/60 dark:focus:ring-primary-300"
+              id="ph"
+              type="number"
+              bind:value={ph}
+            >
           </div>
-          <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
-            Add Test
-          </button>
+          <div class="sm:col-span-2 flex justify-end">
+            <button class="btn btn-base preset-filled-primary-500 shadow-card hover:brightness-110 dark:hover:brightness-95" type="submit">
+              Add Test
+            </button>
+          </div>
         </form>
-      </div>
+      </Card>
     </div>
   {:else}
-    <p>Pool not found.</p>
+    <p class="text-surface-600 dark:text-surface-400">Pool not found.</p>
   {/if}
 </div>

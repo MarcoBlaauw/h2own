@@ -63,6 +63,14 @@ type ApiClient = {
     update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
     del: (poolId: string, userId: string) => Promise<Response>;
   };
+  chemicals: {
+    list: (
+      customFetch?: FetchLike,
+      params?: { q?: string; category?: string }
+    ) => Promise<Response>;
+    create: (body: Record<string, unknown>) => Promise<Response>;
+    listCategories: (customFetch?: FetchLike) => Promise<Response>;
+  };
 };
 
 export const api: ApiClient = {
@@ -90,6 +98,18 @@ export const api: ApiClient = {
     update: (poolId, userId, body) =>
       apiFetch(`/pools/${poolId}/members/${userId}`, jsonRequest(body, { method: 'PUT' })),
     del: (poolId, userId) => apiFetch(`/pools/${poolId}/members/${userId}`, { method: 'DELETE' }),
+  },
+  chemicals: {
+    list: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.q) search.set('q', params.q);
+      if (params.category) search.set('category', params.category);
+      const query = search.toString();
+      const path = `/chemicals${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    create: (body) => apiFetch('/chemicals', jsonRequest(body, { method: 'POST' })),
+    listCategories: (customFetch) => apiFetch('/chemicals/categories', {}, customFetch),
   },
 };
 
