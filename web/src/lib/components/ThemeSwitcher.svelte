@@ -6,6 +6,9 @@
   function applyTheme(value: boolean) {
     isDark = value;
     const root = document.documentElement;
+    if (root.getAttribute('data-theme') !== 'h2own') {
+      root.setAttribute('data-theme', 'h2own');
+    }
     root.classList.toggle('dark', isDark);
     try {
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
