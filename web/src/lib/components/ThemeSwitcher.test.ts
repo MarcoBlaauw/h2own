@@ -27,7 +27,7 @@ function createMatchMedia(matches: boolean): MatchMediaMock {
 }
 
 beforeEach(() => {
-  document.documentElement.removeAttribute('data-theme');
+  document.body?.removeAttribute('data-theme');
   document.documentElement.classList.remove('dark');
   localStorage.clear();
 });
@@ -42,7 +42,7 @@ describe('ThemeSwitcher', () => {
 
     render(ThemeSwitcher);
 
-    expect(document.documentElement.getAttribute('data-theme')).toBe('h2own');
+    expect(document.body?.getAttribute('data-theme')).toBe('h2own');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
@@ -53,7 +53,7 @@ describe('ThemeSwitcher', () => {
     const { getByRole } = render(ThemeSwitcher);
 
     const toggleButton = getByRole('button', { name: 'Activate dark theme' });
-    expect(document.documentElement.getAttribute('data-theme')).toBe('h2own');
+    expect(document.body?.getAttribute('data-theme')).toBe('h2own');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(localStorage.getItem('theme')).toBe('light');
 
