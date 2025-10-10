@@ -1,11 +1,11 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
-  import { auth } from '$lib/api';
+  import { api } from '$lib/api';
   import { goto } from '$app/navigation';
 
   async function handleLogout() {
-    await auth.logout();
+    await api.auth.logout();
     await goto('/auth/login');
   }
 </script>

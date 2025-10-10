@@ -1,8 +1,8 @@
-import { getMe } from '$lib/api';
+import { api } from '$lib/api';
 
 export async function load({ fetch }) {
   try {
-    const res = await getMe(fetch);
+    const res = await api.auth.me(fetch);
     if (res.ok) {
       const { user } = await res.json();
       return { user };

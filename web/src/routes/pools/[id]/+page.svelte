@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tests, members } from '$lib/api';
+  import { api } from '$lib/api';
   import { page } from '$app/stores';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
@@ -29,21 +29,21 @@
     if (tcValue !== undefined) payload.tc = tcValue;
     if (phValue !== undefined) payload.ph = phValue;
 
-    await tests.create(poolId, payload);
+    await api.tests.create(poolId, payload);
     await invalidateAll();
   }
 
   async function handleRoleChange(userId: string | undefined, role: string) {
     const poolId = $page.params.id;
     if (!poolId || !userId) return;
-    await members.update(poolId, userId, { role });
+    await api.members.update(poolId, userId, { role });
     await invalidateAll();
   }
 
   async function handleRemoveMember(userId: string | undefined) {
     const poolId = $page.params.id;
     if (!poolId || !userId) return;
-    await members.del(poolId, userId);
+    await api.members.del(poolId, userId);
     await invalidateAll();
   }
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { auth } from '$lib/api';
+  import { api } from '$lib/api';
   import { goto } from '$app/navigation';
 
   let name = '';
@@ -8,7 +8,7 @@
   let error = '';
 
   async function handleSubmit() {
-    const res = await auth.register({ name, email, password });
+    const res = await api.auth.register({ name, email, password });
     if (res.ok) {
       await goto('/auth/login');
     } else {
