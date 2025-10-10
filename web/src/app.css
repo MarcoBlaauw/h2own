@@ -169,23 +169,9 @@
     background-color: rgb(var(--color-bg-inset) / 0.8);
   }
 
-  .surface-card[data-status='success'] {
-    @apply ring-1;
-    border-color: rgb(var(--color-success) / 0.6);
-    background-color: rgb(var(--color-success) / 0.1);
-    --tw-ring-color: rgb(var(--color-success) / 0.25);
-  }
-
   .dark .surface-card[data-status='success'] {
     border-color: rgb(var(--color-success) / 0.7);
     background-color: rgb(var(--color-success) / 0.2);
-  }
-
-  .surface-card[data-status='warning'] {
-    @apply ring-1;
-    border-color: rgb(var(--color-warning) / 0.6);
-    background-color: rgb(var(--color-warning) / 0.1);
-    --tw-ring-color: rgb(var(--color-warning) / 0.25);
   }
 
   .dark .surface-card[data-status='warning'] {
@@ -193,23 +179,9 @@
     background-color: rgb(var(--color-warning) / 0.2);
   }
 
-  .surface-card[data-status='danger'] {
-    @apply ring-1;
-    border-color: rgb(var(--color-danger) / 0.7);
-    background-color: rgb(var(--color-danger) / 0.1);
-    --tw-ring-color: rgb(var(--color-danger) / 0.25);
-  }
-
   .dark .surface-card[data-status='danger'] {
     border-color: rgb(var(--color-danger) / 0.7);
     background-color: rgb(var(--color-danger) / 0.2);
-  }
-
-  .surface-card[data-status='info'] {
-    @apply ring-1;
-    border-color: rgb(var(--color-info) / 0.6);
-    background-color: rgb(var(--color-info) / 0.1);
-    --tw-ring-color: rgb(var(--color-info) / 0.25);
   }
 
   .dark .surface-card[data-status='info'] {
@@ -236,7 +208,7 @@
 
   .form-label[data-variant='caps'] {
     @apply text-xs font-semibold uppercase tracking-wide;
-    color: rgb(var(--color-content-secondary) / 0.8);
+    color: rgb(var(--color-content-secondary));
   }
 
   .form-control {
@@ -244,25 +216,24 @@
     border-color: rgb(var(--color-border));
     background-color: rgb(var(--color-bg-subtle) / 0.8);
     color: rgb(var(--color-content-primary));
-    --tw-ring-color: rgb(var(--color-accent) / 0.4);
   }
 
   .form-control:focus {
     border-color: rgb(var(--color-accent));
+    --tw-ring-color: rgb(var(--color-accent) / 0.4);
+  }
+
+  .form-control[data-invalid='true'] {
+    border-color: rgb(var(--color-danger));
+    background-color: rgb(var(--color-danger) / 0.1);
+    color: rgb(var(--color-danger));
+    --tw-ring-color: rgb(var(--color-danger) / 0.3);
   }
 
   .form-control:disabled {
     border-color: rgb(var(--color-border) / 0.6);
     background-color: rgb(var(--color-bg-subtle) / 0.4);
     color: rgb(var(--color-content-muted) / 0.8);
-  }
-
-  .form-control[aria-invalid='true'],
-  .form-control[data-invalid='true'] {
-    border-color: rgb(var(--color-danger));
-    background-color: rgb(var(--color-danger) / 0.05);
-    color: rgb(var(--color-danger));
-    --tw-ring-color: rgb(var(--color-danger) / 0.3);
   }
 
   .dark .form-control {
@@ -276,9 +247,8 @@
     background-color: rgb(var(--color-bg-inset) / 0.5);
   }
 
-  .dark .form-control[aria-invalid='true'],
   .dark .form-control[data-invalid='true'] {
-    background-color: rgb(var(--color-danger) / 0.15);
+    background-color: rgb(var(--color-danger) / 0.2);
   }
 
   .form-select {
@@ -296,6 +266,7 @@
 
   .form-message {
     @apply text-xs font-medium;
+    color: rgb(var(--color-content-secondary));
   }
 
   .form-message[data-state='error'] {
@@ -342,7 +313,7 @@
   }
 
   .surface-panel {
-    @apply rounded-xl border px-4 py-3;
+    @apply rounded-xl border px-4 py-3 transition;
     border-color: rgb(var(--color-border) / 0.6);
     background-color: rgb(var(--color-bg-subtle) / 0.9);
   }
@@ -353,55 +324,30 @@
   }
 
   .status-chip {
-    @apply inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide transition;
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide transition;
     border-color: rgb(var(--color-border) / 0.6);
     background-color: rgb(var(--color-bg-subtle) / 0.9);
-    color: rgb(var(--color-content-secondary));
-  }
-
-  .dark .status-chip {
-    border-color: rgb(var(--color-border-strong) / 0.6);
-    background-color: rgb(var(--color-bg-inset) / 0.7);
+    color: rgb(var(--color-content-primary));
   }
 
   .status-chip[data-status='success'] {
-    border-color: rgb(var(--color-success) / 0.6);
-    background-color: rgb(var(--color-success) / 0.15);
-    color: rgb(var(--color-success));
-  }
-
-  .dark .status-chip[data-status='success'] {
-    background-color: rgb(var(--color-success) / 0.2);
+    border-color: rgb(var(--color-success) / 0.55);
+    background-color: rgb(var(--color-bg-subtle) / 0.9);
   }
 
   .status-chip[data-status='warning'] {
-    border-color: rgb(var(--color-warning) / 0.6);
-    background-color: rgb(var(--color-warning) / 0.15);
-    color: rgb(var(--color-warning));
-  }
-
-  .dark .status-chip[data-status='warning'] {
-    background-color: rgb(var(--color-warning) / 0.2);
+    border-color: rgb(var(--color-warning) / 0.55);
+    background-color: rgb(var(--color-bg-subtle) / 0.9);
   }
 
   .status-chip[data-status='danger'] {
-    border-color: rgb(var(--color-danger) / 0.7);
-    background-color: rgb(var(--color-danger) / 0.2);
-    color: rgb(var(--color-danger));
-  }
-
-  .dark .status-chip[data-status='danger'] {
-    background-color: rgb(var(--color-danger) / 0.25);
+    border-color: rgb(var(--color-danger) / 0.55);
+    background-color: rgb(var(--color-bg-subtle) / 0.9);
   }
 
   .status-chip[data-status='info'] {
-    border-color: rgb(var(--color-info) / 0.6);
-    background-color: rgb(var(--color-info) / 0.15);
-    color: rgb(var(--color-info));
-  }
-
-  .dark .status-chip[data-status='info'] {
-    background-color: rgb(var(--color-info) / 0.2);
+    border-color: rgb(var(--color-info) / 0.55);
+    background-color: rgb(var(--color-bg-subtle) / 0.9);
   }
 
   .status-chip[data-status='neutral'] {
@@ -410,9 +356,50 @@
     color: rgb(var(--color-content-secondary));
   }
 
-  .dark .status-chip[data-status='neutral'] {
+  .dark .status-chip {
     border-color: rgb(var(--color-border-strong) / 0.6);
-    background-color: rgb(var(--color-bg-inset) / 0.6);
+    background-color: rgb(var(--color-bg-inset) / 0.7);
+  }
+
+  .dark .status-chip[data-status='success'] {
+    border-color: rgb(var(--color-success) / 0.65);
+    background-color: rgb(var(--color-bg-inset) / 0.7);
+  }
+
+  .dark .status-chip[data-status='warning'] {
+    border-color: rgb(var(--color-warning) / 0.65);
+    background-color: rgb(var(--color-bg-inset) / 0.7);
+  }
+
+  .dark .status-chip[data-status='danger'] {
+    border-color: rgb(var(--color-danger) / 0.65);
+    background-color: rgb(var(--color-bg-inset) / 0.7);
+  }
+
+  .dark .status-chip[data-status='info'] {
+    border-color: rgb(var(--color-info) / 0.65);
+    background-color: rgb(var(--color-bg-inset) / 0.7);
+  }
+
+  .status-chip__indicator {
+    @apply inline-block h-2 w-2 rounded-full;
+    background-color: rgb(var(--color-border) / 0.6);
+  }
+
+  .status-chip[data-status='success'] .status-chip__indicator {
+    background-color: rgb(var(--color-success));
+  }
+
+  .status-chip[data-status='warning'] .status-chip__indicator {
+    background-color: rgb(var(--color-warning));
+  }
+
+  .status-chip[data-status='danger'] .status-chip__indicator {
+    background-color: rgb(var(--color-danger));
+  }
+
+  .status-chip[data-status='info'] .status-chip__indicator {
+    background-color: rgb(var(--color-info));
   }
 
   .skeleton-stack {
@@ -420,7 +407,7 @@
   }
 
   .skeleton-line {
-    @apply h-3 rounded-full;
+    @apply h-3 rounded-full transition;
     background-color: rgb(var(--color-bg-subtle) / 0.8);
   }
 

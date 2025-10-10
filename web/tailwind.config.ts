@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
 
 const withOpacityValue =
   (variable: string) =>
@@ -29,6 +30,13 @@ const colorTokens = {
   border: withOpacityValue('--color-border'),
   'border-strong': withOpacityValue('--color-border-strong')
 };
+
+const statusPlugin = plugin(({ addVariant }) => {
+  const statuses = ['success', 'warning', 'danger', 'info', 'neutral'] as const;
+  for (const status of statuses) {
+    addVariant(`status-${status}`, `&[data-status='${status}']`);
+  }
+});
 
 const config = {
   darkMode: 'class',
@@ -92,7 +100,8 @@ const config = {
         relaxed: 'var(--line-height-relaxed)'
       }
     }
-  }
+  },
+  plugins: [statusPlugin]
 } satisfies Config;
 
 export default config;

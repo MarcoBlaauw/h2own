@@ -20,6 +20,7 @@
     {/if}
   </div>
   <span class="status-chip" data-status={status} aria-live="polite">
+    <span class="status-chip__indicator" aria-hidden="true"></span>
     {trendLabel}
   </span>
 </div>

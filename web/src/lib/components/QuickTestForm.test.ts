@@ -17,7 +17,7 @@ describe('quick test form helpers', () => {
 
 describe('QuickTestForm component', () => {
   it('displays a meaningful validation error when the submission fails validation', async () => {
-    const { getByLabelText, findByRole } = render(QuickTestForm, {
+    const { getByLabelText, findAllByRole } = render(QuickTestForm, {
       props: { poolId: 'pool-123' },
     });
 
@@ -30,8 +30,9 @@ describe('QuickTestForm component', () => {
     expect(form).toBeTruthy();
     await fireEvent.submit(form as HTMLFormElement);
 
-    const alert = await findByRole('alert');
-    expect(alert).toBeTruthy();
-    expect(alert.textContent).toContain('Validation failed: Number must be greater than or equal to 0');
+    const alerts = await findAllByRole('alert');
+    expect(alerts.length).toBeGreaterThan(0);
+    expect(alerts.some(alert => alert.textContent?.includes('Number must be greater than or equal to 0'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: Number must be greater than or equal to 0'))).toBe(true);
   });
 });

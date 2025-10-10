@@ -18,6 +18,7 @@
     "format:check": "prettier --plugin=prettier-plugin-svelte --check src/hooks.server.ts src/lib/stores/session.ts src/lib/stores/session.test.ts src/routes/+page.svelte"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@eslint/js": "^9.17.0",
     "@opentelemetry/api": "^1.9.0",
     "@playwright/test": "^1.49.0",
