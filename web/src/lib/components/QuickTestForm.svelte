@@ -18,7 +18,10 @@
     error = '';
     const result = quickTestSchema.safeParse({ fc, tc, ph, ta, cya });
     if (!result.success) {
-      error = result.error.errors.map(e => e.message).join(', ');
+      const messages = result.error.errors.map(e => e.message).filter(Boolean);
+      error = messages.length
+        ? `Validation failed: ${messages.join('; ')}`
+        : 'Validation failed. Please review the form values and try again.';
       return;
     }
     const { payload, skipped } = buildSubmission(result.data);
@@ -28,8 +31,25 @@
         ? `Saved test results. No measurement recorded for ${skipped.join(', ')}.`
         : 'Test results saved successfully.';
     } else {
-      const data = await res.json();
-      error = data.message;
+      let message = 'Unable to save test results. Please try again.';
+      try {
+        const data = await res.json();
+        const details = Array.isArray(data?.details)
+          ? data.details.filter((detail): detail is string => typeof detail === 'string' && detail.trim() !== '')
+          : [];
+
+        if (typeof data?.message === 'string' && data.message.trim() !== '') {
+          message = data.message;
+        } else if (typeof data?.error === 'string' && data.error.trim() !== '') {
+          message = details.length ? `${data.error}: ${details.join(' ')}` : data.error;
+        } else if (details.length) {
+          message = details.join(' ');
+        }
+      } catch (parseError) {
+        // Ignore JSON parsing errors and fall back to the default message.
+      }
+
+      error = message;
     }
   }
 </script>
