@@ -1,30 +1,130 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type {} from "../types/fastify.d.ts";
+import { z } from "zod";
 import { authService } from "../services/auth.js";
+
+const registerBodySchema = z.object({
+  email: z
+    .string({ required_error: "Email is required", invalid_type_error: "Email must be a string" })
+    .email("Email must be a valid email address"),
+  password: z
+    .string({ required_error: "Password is required", invalid_type_error: "Password must be a string" })
+    .min(8, "Password must be at least 8 characters long"),
+  name: z
+    .string({ invalid_type_error: "Name must be a string" })
+    .trim()
+    .min(1, "Name must not be empty")
+    .optional(),
+});
+
+const loginBodySchema = z.object({
+  email: z
+    .string({ required_error: "Email is required", invalid_type_error: "Email must be a string" })
+    .email("Email must be a valid email address"),
+  password: z
+    .string({ required_error: "Password is required", invalid_type_error: "Password must be a string" })
+    .min(1, "Password is required"),
+});
+
+interface DomainError extends Error {
+  statusCode: number;
+  code: string;
+  details?: unknown;
+}
+
+const isDomainError = (error: unknown): error is DomainError => {
+  return (
+    error instanceof Error &&
+    typeof (error as Partial<DomainError>).statusCode === "number" &&
+    typeof (error as Partial<DomainError>).code === "string"
+  );
+};
+
+const isUniqueViolationError = (error: unknown): error is { code: string } => {
+  return typeof error === "object" && error !== null && "code" in error && (error as any).code === "23505";
+};
+
+const handleDomainError = (reply: FastifyReply, error: DomainError | { code: string }) => {
+  if (isDomainError(error)) {
+    return reply.code(error.statusCode).send({
+      error: error.code,
+      message: error.message,
+      ...(error.details ? { details: error.details } : {}),
+    });
+  }
+
+  if (isUniqueViolationError(error)) {
+    return reply.code(409).send({
+      error: "Conflict",
+      message: "An account with that email already exists",
+    });
+  }
+
+  throw error;
+};
+
+const handleValidationError = (reply: FastifyReply, error: z.ZodError) => {
+  return reply.code(400).send({
+    error: "ValidationError",
+    details: error.errors,
+  });
+};
 
 export async function authRoutes(app: FastifyInstance) {
   // POST /auth/register
   app.post("/register", async (req, reply) => {
-    const userId = await authService.createUser(req.body as any);
-    const user = await authService.getUserById(userId);
-    return reply.code(201).send(user);
+    try {
+      const body = registerBodySchema.parse(req.body);
+
+      let userId: string;
+      try {
+        userId = await authService.createUser(body);
+      } catch (error) {
+        return handleDomainError(reply, error as DomainError | { code: string });
+      }
+
+      const user = await authService.getUserById(userId);
+      return reply.code(201).send(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
   });
   // POST /auth/login  (prefix applied in app.ts)
   app.post("/login", async (req, reply) => {
-    const user = await authService.validateCredentials(req.body as any);
-    if (!user) {
-      return reply.code(401).send({
-        error: "Unauthorized",
-        message: "Invalid email or password",
+    try {
+      const body = loginBodySchema.parse(req.body);
+
+      let user;
+      try {
+        user = await authService.validateCredentials(body);
+      } catch (error) {
+        return handleDomainError(reply, error as DomainError | { code: string });
+      }
+
+      if (!user) {
+        return reply.code(401).send({
+          error: "Unauthorized",
+          message: "Invalid email or password",
+        });
+      }
+
+      // ⬇️ Create opaque server-side session + set signed 'sid' cookie
+      await app.sessions.create(reply, user.userId /*, user.role */);
+
+      return reply.code(201).send({
+        user: { id: user.userId, email: user.email, name: user.name },
       });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
     }
-
-    // ⬇️ Create opaque server-side session + set signed 'sid' cookie
-    await app.sessions.create(reply, user.userId /*, user.role */);
-
-    return reply.code(201).send({
-      user: { id: user.userId, email: user.email, name: user.name },
-    });
   });
 
   // POST /auth/logout
