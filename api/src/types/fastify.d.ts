@@ -10,7 +10,7 @@ declare module "fastify" {
       role?: string | null; // optional role, if you store it
       delete: () => Promise<void>;
     };
-    user?: { id: string; role?: string };
+    user?: { id: string; role?: string | null };
   }
   interface FastifyInstance {
     // global auth helpers
@@ -20,7 +20,7 @@ declare module "fastify" {
     };
     // session utility API used by routes (login/logout)
     sessions: {
-      create: (reply: any, userId: string, role?: string) => Promise<string>;
+      create: (reply: any, userId: string, role?: string | null) => Promise<string>;
       destroy: (reply: any, sid?: string | null) => Promise<void>;
       touch: (sid?: string | null) => Promise<void>; // optional idle-refresh if you want it
     };

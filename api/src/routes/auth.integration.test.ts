@@ -6,15 +6,23 @@ import { UserAlreadyExistsError, authService } from "../services/auth.js";
 
 describe("POST /auth/register integration", () => {
   let app: ReturnType<typeof Fastify>;
+  let createSessionMock: ReturnType<typeof vi.fn>;
+  let destroySessionMock: ReturnType<typeof vi.fn>;
+  let verifySessionMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     app = Fastify();
+    createSessionMock = vi.fn(async () => {});
+    destroySessionMock = vi.fn(async () => {});
+    verifySessionMock = vi.fn(async (req: any) => {
+      req.user = { id: "user-123", role: "admin" };
+    });
     app.decorate("sessions", {
-      create: vi.fn(async () => {}),
-      destroy: vi.fn(async () => {}),
+      create: createSessionMock,
+      destroy: destroySessionMock,
     } as any);
     app.decorate("auth", {
-      verifySession: vi.fn(async () => {}),
+      verifySession: verifySessionMock,
       requireRole: () => async () => {},
     } as any);
 
@@ -39,6 +47,7 @@ describe("POST /auth/register integration", () => {
       userId,
       email: payload.email,
       name: payload.name,
+      role: "member",
       createdAt: new Date().toISOString(),
     } as any);
 
@@ -60,6 +69,64 @@ describe("POST /auth/register integration", () => {
     expect(secondResponse.json()).toEqual({
       error: "UserAlreadyExists",
       message: "An account with that email already exists",
+    });
+  });
+
+  it("creates a session with the user's role on login", async () => {
+    const userId = "c6d26f34-8c1c-4ce3-8b18-40c1f0c5d2f6";
+    vi.spyOn(authService, "validateCredentials").mockResolvedValue({
+      userId,
+      email: "admin@example.com",
+      name: "Admin", 
+      role: "admin",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "admin@example.com", password: "password123" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    const [replyArg, sessionUserId, sessionRole] = createSessionMock.mock.calls[0];
+    expect(replyArg).toBeDefined();
+    expect(sessionUserId).toBe(userId);
+    expect(sessionRole).toBe("admin");
+    expect(response.json()).toEqual({
+      user: {
+        id: userId,
+        email: "admin@example.com",
+        name: "Admin",
+        role: "admin",
+      },
+    });
+  });
+
+  it("returns the user's role from /auth/me", async () => {
+    const userId = "5f0b3f1d-8f2f-4de7-8d32-b0a95f0f5c20";
+    vi.spyOn(authService, "getUserById").mockResolvedValue({
+      userId,
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      createdAt: new Date().toISOString(),
+    } as any);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+    });
+
+    expect(verifySessionMock).toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      user: {
+        id: userId,
+        email: "member@example.com",
+        name: "Member",
+        role: "member",
+      },
     });
   });
 });

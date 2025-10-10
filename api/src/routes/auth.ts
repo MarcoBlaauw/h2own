@@ -109,10 +109,10 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       // ⬇️ Create opaque server-side session + set signed 'sid' cookie
-      await app.sessions.create(reply, user.userId /*, user.role */);
+      await app.sessions.create(reply, user.userId, user.role ?? undefined);
 
       return reply.code(201).send({
-        user: { id: user.userId, email: user.email, name: user.name },
+        user: { id: user.userId, email: user.email, name: user.name, role: user.role },
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -132,6 +132,17 @@ export async function authRoutes(app: FastifyInstance) {
   // (optional) GET /auth/me – quick probe that auth works
   app.get("/me", { preHandler: app.auth.verifySession }, async (req) => {
     const user = await authService.getUserById(req.user!.id);
-    return { user: { id: user!.userId, email: user!.email, name: user!.name } };
+    if (!user) {
+      return { user: null };
+    }
+
+    return {
+      user: {
+        id: user.userId,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    };
   });
 }
