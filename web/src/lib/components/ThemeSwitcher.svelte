@@ -6,8 +6,10 @@
   function applyTheme(value: boolean) {
     isDark = value;
     const root = document.documentElement;
-    if (root.getAttribute('data-theme') !== 'h2own') {
-      root.setAttribute('data-theme', 'h2own');
+    const body = document.body;
+
+    if (body && body.getAttribute('data-theme') !== 'h2own') {
+      body.setAttribute('data-theme', 'h2own');
     }
     root.classList.toggle('dark', isDark);
     try {
