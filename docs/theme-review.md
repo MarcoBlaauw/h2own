@@ -22,3 +22,73 @@
 6. **Add regression coverage.** After the refactor, capture Playwright visual snapshots for light and dark themes to catch future regressions, and document the palette in the design system docs so future components stay Tailwind-first.
 
 Following these steps will centralize color and component styling inside Tailwind, give the dark theme distinct colors, and remove the dependency on Skeleton presets that currently limit how much the UI changes when the theme toggles.
+
+## Token reference
+
+The new design tokens live in `web/src/lib/styles/tokens.css` and are consumed globally via `src/app.css` and Tailwind utility extensions. Each color is expressed as an RGB tuple for Tailwind’s opacity helpers but is documented here in hex for readability.
+
+### Semantic colors
+
+| Token | Light | Dark | Notes |
+| --- | --- | --- | --- |
+| `--color-bg-surface` | `#f8fafc` | `#0f172a` | Base page background |
+| `--color-bg-subtle` | `#f1f5f9` | `#161e31` | Panels, muted surfaces |
+| `--color-bg-inset` | `#e2e8f0` | `#1e293b` | Inputs, inset areas |
+| `--color-bg-raised` | `#ffffff` | `#1e293b` | Cards, overlays |
+| `--color-content-primary` | `#0f172a` | `#e2e8f0` | Default text |
+| `--color-content-secondary` | `#475569` | `#94a3b8` | Secondary text |
+| `--color-content-muted` | `#64748b` | `#64748b` | Placeholder/help text |
+| `--color-content-inverse` | `#f8fafc` | `#0f172a` | Text on accent surfaces |
+| `--color-border` | `#cbd5e1` | `#334155` | Default border/divider |
+| `--color-border-strong` | `#94a3b8` | `#475569` | Emphasised border |
+| `--color-accent` | `#38bdf8` | `#38bdf8` | Brand accent |
+| `--color-accent-strong` | `#0ea5e9` | `#0284c7` | Hover/active accent |
+| `--color-accent-contrast` | `#0f172a` | `#0f172a` | Text on accent |
+| `--color-success` | `#22c55e` | `#22c55e` | Positive state |
+| `--color-warning` | `#f59e0b` | `#f59e0b` | Caution state |
+| `--color-danger` | `#f87171` | `#f87171` | Critical/destructive state |
+| `--color-info` | `#3b82f6` | `#60a5fa` | Informational alerts |
+
+### Typography tokens
+
+| Token | Value |
+| --- | --- |
+| `--font-family-sans` | `Inter, SF Pro Display, Segoe UI, system-ui, sans-serif` |
+| `--font-family-serif` | `Georgia, Times New Roman, serif` |
+| `--font-family-mono` | `JetBrains Mono, SFMono-Regular, Menlo, monospace` |
+| `--font-size-xs` | `0.75rem` |
+| `--font-size-sm` | `0.875rem` |
+| `--font-size-md` | `1rem` |
+| `--font-size-lg` | `1.125rem` |
+| `--font-size-xl` | `1.25rem` |
+| `--font-size-2xl` | `1.5rem` |
+| `--font-weight-regular` | `400` |
+| `--font-weight-medium` | `500` |
+| `--font-weight-semibold` | `600` |
+| `--font-weight-bold` | `700` |
+| `--line-height-tight` | `1.25` |
+| `--line-height-normal` | `1.5` |
+| `--line-height-relaxed` | `1.75` |
+
+### Radii tokens
+
+| Token | Value |
+| --- | --- |
+| `--radius-xs` | `0.25rem` |
+| `--radius-sm` | `0.5rem` |
+| `--radius-md` | `0.75rem` |
+| `--radius-lg` | `1rem` |
+| `--radius-xl` | `1.5rem` |
+| `--radius-pill` | `9999px` |
+
+### Spacing tokens
+
+| Token | Value |
+| --- | --- |
+| `--space-2xs` | `0.25rem` |
+| `--space-xs` | `0.5rem` |
+| `--space-sm` | `0.75rem` |
+| `--space-md` | `1rem` |
+| `--space-lg` | `1.5rem` |
+| `--space-xl` | `2rem` |
+| `--space-2xl` | `3rem` |

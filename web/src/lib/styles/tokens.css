@@ -1,0 +1,86 @@
+:root {
+  color-scheme: light;
+
+  /* Semantic colors (values are r g b tuples for Tailwind interoperability) */
+  --color-bg-surface: 248 250 252;
+  --color-bg-subtle: 241 245 249;
+  --color-bg-inset: 226 232 240;
+  --color-bg-raised: 255 255 255;
+  --color-content-primary: 15 23 42;
+  --color-content-secondary: 71 85 105;
+  --color-content-muted: 100 116 139;
+  --color-content-inverse: 248 250 252;
+  --color-border: 203 213 225;
+  --color-border-strong: 148 163 184;
+  --color-accent: 56 189 248;
+  --color-accent-strong: 14 165 233;
+  --color-accent-contrast: 15 23 42;
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 248 113 113;
+  --color-info: 59 130 246;
+
+  /* Shadow tokens */
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 8%), 0 12px 24px rgb(15 23 42 / 4%);
+  --shadow-raised: 0 14px 40px rgb(15 23 42 / 12%);
+
+  /* Typography */
+  --font-family-sans: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --font-family-serif: 'Georgia', 'Times New Roman', serif;
+  --font-family-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Radii */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-pill: 9999px;
+
+  /* Spacing */
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-bg-surface: 15 23 42;
+  --color-bg-subtle: 22 30 49;
+  --color-bg-inset: 30 41 59;
+  --color-bg-raised: 30 41 59;
+  --color-content-primary: 226 232 240;
+  --color-content-secondary: 148 163 184;
+  --color-content-muted: 100 116 139;
+  --color-content-inverse: 15 23 42;
+  --color-border: 51 65 85;
+  --color-border-strong: 71 85 105;
+  --color-accent: 56 189 248;
+  --color-accent-strong: 2 132 199;
+  --color-accent-contrast: 15 23 42;
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 248 113 113;
+  --color-info: 96 165 250;
+
+  --shadow-soft: 0 12px 30px rgb(2 6 23 / 45%);
+  --shadow-raised: 0 40px 70px rgb(2 6 23 / 55%);
+}
