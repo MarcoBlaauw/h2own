@@ -1,0 +1,123 @@
+import Fastify from 'fastify';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { poolsRoutes } from './pools.js';
+import { poolsService } from '../services/pools.js';
+
+describe('GET /pools/:poolId integration', () => {
+  let app: ReturnType<typeof Fastify>;
+
+  beforeEach(async () => {
+    app = Fastify();
+    app.decorate('auth', {
+      verifySession: vi.fn(async () => {}),
+      requireRole: () => async () => {},
+    } as any);
+
+    await app.register(poolsRoutes, { prefix: '/pools' });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  it('returns nested pool detail payloads', async () => {
+    const poolDetail = {
+      id: '0b75c93b-7ae5-4a08-9a69-8191355f2175',
+      ownerId: 'e2d1e52d-84f1-4a07-b71e-2dba6b6b8e90',
+      locationId: null,
+      name: 'Community Pool',
+      volumeGallons: 25000,
+      surfaceType: 'plaster',
+      sanitizerType: 'salt',
+      saltLevelPpm: 3200,
+      shadeLevel: 'partial',
+      enclosureType: null,
+      hasCover: true,
+      pumpGpm: 60,
+      filterType: 'sand',
+      hasHeater: false,
+      isActive: true,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+      owner: {
+        id: 'e2d1e52d-84f1-4a07-b71e-2dba6b6b8e90',
+        email: 'owner@example.com',
+        name: 'Owner',
+      },
+      members: [
+        {
+          poolId: '0b75c93b-7ae5-4a08-9a69-8191355f2175',
+          userId: 'e2d1e52d-84f1-4a07-b71e-2dba6b6b8e90',
+          roleName: 'owner',
+          permissions: null,
+          invitedBy: null,
+          invitedAt: new Date('2024-01-01T00:00:00.000Z'),
+          addedAt: new Date('2024-01-01T00:00:00.000Z'),
+          lastAccessAt: null,
+          user: {
+            id: 'e2d1e52d-84f1-4a07-b71e-2dba6b6b8e90',
+            email: 'owner@example.com',
+            name: 'Owner',
+          },
+        },
+      ],
+      tests: [
+        {
+          id: 'c0b6a688-5342-4d9d-a3c5-423f5fbe0cb3',
+          testedAt: new Date('2024-01-05T00:00:00.000Z'),
+          freeChlorine: 3,
+          totalChlorine: 4,
+          ph: 7.4,
+          totalAlkalinity: 90,
+          cyanuricAcid: 40,
+          calciumHardness: 220,
+          salt: 3200,
+          waterTempF: 78,
+          tester: {
+            id: 'e2d1e52d-84f1-4a07-b71e-2dba6b6b8e90',
+            email: 'owner@example.com',
+            name: 'Owner',
+          },
+        },
+      ],
+      lastTestedAt: new Date('2024-01-05T00:00:00.000Z'),
+    };
+
+    vi.spyOn(poolsService, 'getPoolById').mockResolvedValue(poolDetail as any);
+
+    const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toEqual({
+      ...poolDetail,
+      createdAt: poolDetail.createdAt.toISOString(),
+      updatedAt: poolDetail.updatedAt.toISOString(),
+      members: poolDetail.members.map((member) => ({
+        ...member,
+        invitedAt: member.invitedAt.toISOString(),
+        addedAt: member.addedAt.toISOString(),
+        lastAccessAt: member.lastAccessAt ? member.lastAccessAt.toISOString() : null,
+      })),
+      tests: poolDetail.tests.map((test) => ({
+        ...test,
+        testedAt: test.testedAt.toISOString(),
+      })),
+      lastTestedAt: poolDetail.lastTestedAt?.toISOString() ?? null,
+    });
+    expect(poolsService.getPoolById).toHaveBeenCalledWith(id);
+  });
+
+  it('returns 404 when the pool is missing', async () => {
+    vi.spyOn(poolsService, 'getPoolById').mockResolvedValue(null);
+
+    const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'Pool not found' });
+  });
+});

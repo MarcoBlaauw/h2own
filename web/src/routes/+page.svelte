@@ -5,7 +5,20 @@
   import QuickTestForm from "$lib/components/QuickTestForm.svelte";
   import RecommendationsCard from "$lib/components/RecommendationsCard.svelte";
 
-  export let data;
+  type HighlightedPool = {
+    id: string;
+    owner?: { email?: string | null } | null;
+    volumeGallons?: number | null;
+    surfaceType?: string | null;
+    sanitizerType?: string | null;
+    lastTestedAt?: string | Date | null;
+  };
+
+  export let data: {
+    session?: unknown;
+    pools: Array<{ poolId: string }>;
+    highlightedPool: HighlightedPool | null;
+  };
 
   const metrics = [
     {
@@ -60,13 +73,15 @@
     <!-- Main grid -->
     <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div class="lg:col-span-2">
-        {#if data.pools.length > 0}
-          <PoolSummaryCard pool={data.pools[0]} />
+        {#if data.highlightedPool}
+          <PoolSummaryCard pool={data.highlightedPool} />
+        {:else}
+          <p class="text-sm text-surface-600 dark:text-surface-300">No pools available yet.</p>
         {/if}
       </div>
 
-      {#if data.pools.length > 0}
-        <QuickTestForm poolId={data.pools[0].id} />
+      {#if data.highlightedPool}
+        <QuickTestForm poolId={data.highlightedPool.id} />
       {/if}
 
       <div class="lg:col-span-3">
