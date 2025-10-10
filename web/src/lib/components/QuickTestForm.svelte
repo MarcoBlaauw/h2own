@@ -1,6 +1,6 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
-  import { tests } from '$lib/api';
+  import { api } from '$lib/api';
   import { quickTestSchema, buildSubmission } from './quick-test-form-helpers.js';
 
   export let poolId: string;
@@ -22,7 +22,7 @@
       return;
     }
     const { payload, skipped } = buildSubmission(result.data);
-    const res = await tests.create(poolId, payload);
+    const res = await api.tests.create(poolId, payload);
     if (res.ok) {
       success = skipped.length
         ? `Saved test results. No measurement recorded for ${skipped.join(', ')}.`

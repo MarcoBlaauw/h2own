@@ -1,40 +1,96 @@
-const base = import.meta.env.VITE_API_URL;
+const base = (() => {
+  const configured = import.meta.env.VITE_API_URL;
+  if (configured) {
+    return configured;
+  }
 
-export async function apiFetch(path: string, opts: RequestInit = {}, customFetch = fetch) {
-  return customFetch(`${base}${path}`, {
+  if (typeof globalThis !== 'undefined' && typeof globalThis.location === 'object' && globalThis.location) {
+    const origin = (globalThis.location as Location).origin;
+    if (origin) {
+      return origin;
+    }
+  }
+
+  return '';
+})();
+
+type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+const joinUrl = (targetBase: string, path: string) => {
+  if (!targetBase) {
+    return path;
+  }
+
+  const normalizedBase = targetBase.endsWith('/') ? targetBase.slice(0, -1) : targetBase;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  return `${normalizedBase}${normalizedPath}`;
+};
+
+const apiFetch = (path: string, opts: RequestInit = {}, customFetch: FetchLike = fetch) =>
+  customFetch(joinUrl(base, path), {
     ...opts,
     credentials: 'include',
   });
-}
 
-export async function getMe(customFetch = fetch) {
-  return apiFetch('/auth/me', {}, customFetch);
-}
+const jsonRequest = (body: unknown, overrides: RequestInit = {}): RequestInit => ({
+  ...overrides,
+  body: JSON.stringify(body),
+  headers: {
+    'Content-Type': 'application/json',
+    ...overrides.headers,
+  },
+});
 
-export async function getPools({ owner = false }, customFetch = fetch) {
-  return apiFetch(`/pools${owner ? '?owner=true' : ''}`, {}, customFetch);
-}
-
-export const auth = {
-  register: async (body: any, customFetch = fetch) => apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }, customFetch),
-  login: async (body: any, customFetch = fetch) => apiFetch('/auth/login', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }, customFetch),
-  logout: async (customFetch = fetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
-  me: async (customFetch = fetch) => apiFetch('/auth/me', {}, customFetch),
+type ApiClient = {
+  auth: {
+    register: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    login: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    logout: (customFetch?: FetchLike) => Promise<Response>;
+    me: (customFetch?: FetchLike) => Promise<Response>;
+  };
+  pools: {
+    list: (customFetch?: FetchLike, owner?: boolean) => Promise<Response>;
+    create: (body: Record<string, unknown>) => Promise<Response>;
+    show: (id: string, customFetch?: FetchLike) => Promise<Response>;
+    patch: (id: string, body: Record<string, unknown>) => Promise<Response>;
+    del: (id: string) => Promise<Response>;
+  };
+  tests: {
+    create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+  };
+  members: {
+    update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
+    del: (poolId: string, userId: string) => Promise<Response>;
+  };
 };
 
-export const pools = {
-  list: async (customFetch = fetch, owner = false) => apiFetch(`/pools${owner ? '?owner=true' : ''}`, {}, customFetch),
-  create: async (body: any) => apiFetch('/pools', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
-  show: async (id: string, customFetch = fetch) => apiFetch(`/pools/${id}`, {}, customFetch),
-  patch: async (id: string, body: any) => apiFetch(`/pools/${id}`, { method: 'PATCH', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
-  del: async (id: string) => apiFetch(`/pools/${id}`, { method: 'DELETE' }),
+export const api: ApiClient = {
+  auth: {
+    register: (body, customFetch) =>
+      apiFetch('/auth/register', jsonRequest(body, { method: 'POST' }), customFetch),
+    login: (body, customFetch) =>
+      apiFetch('/auth/login', jsonRequest(body, { method: 'POST' }), customFetch),
+    logout: (customFetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
+    me: (customFetch) => apiFetch('/auth/me', {}, customFetch),
+  },
+  pools: {
+    list: (customFetch, owner = false) =>
+      apiFetch(`/pools${owner ? '?owner=true' : ''}`, {}, customFetch),
+    create: (body) => apiFetch('/pools', jsonRequest(body, { method: 'POST' })),
+    show: (id, customFetch) => apiFetch(`/pools/${id}`, {}, customFetch),
+    patch: (id, body) => apiFetch(`/pools/${id}`, jsonRequest(body, { method: 'PATCH' })),
+    del: (id) => apiFetch(`/pools/${id}`, { method: 'DELETE' }),
+  },
+  tests: {
+    create: (poolId, body) =>
+      apiFetch(`/pools/${poolId}/tests`, jsonRequest(body, { method: 'POST' })),
+  },
+  members: {
+    update: (poolId, userId, body) =>
+      apiFetch(`/pools/${poolId}/members/${userId}`, jsonRequest(body, { method: 'PUT' })),
+    del: (poolId, userId) => apiFetch(`/pools/${poolId}/members/${userId}`, { method: 'DELETE' }),
+  },
 };
 
-export const tests = {
-  create: async (poolId: string, body: any) => apiFetch(`/pools/${poolId}/tests`, { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
-};
-
-export const members = {
-  update: async (poolId: string, userId: string, body: any) => apiFetch(`/pools/${poolId}/members/${userId}`, { method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
-  del: async (poolId: string, userId: string) => apiFetch(`/pools/${poolId}/members/${userId}`, { method: 'DELETE' }),
-};
+export type { ApiClient };

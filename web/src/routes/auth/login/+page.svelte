@@ -1,5 +1,5 @@
 <script>
-  import { auth } from '$lib/api';
+  import { api } from '$lib/api';
   import { goto } from '$app/navigation';
   import { env } from '$env/dynamic/public';
   import Footer from '$lib/components/layout/Footer.svelte';
@@ -9,7 +9,7 @@
   let error = '';
 
   async function handleSubmit() {
-    const res = await auth.login({ email, password });
+    const res = await api.auth.login({ email, password });
     if (res.ok) {
       await goto('/profile');
     } else {
