@@ -1,7 +1,7 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import type {} from '../types/fastify.d.ts';
 import { z } from 'zod';
-import { poolsService } from '../services/pools.js';
+import { poolsService, PoolForbiddenError, PoolNotFoundError } from '../services/pools.js';
 import { recommenderService } from '../services/recommender.js';
 
 // Body schemas
@@ -93,6 +93,20 @@ const getTestsQuery = z
     path: ['cursorTestedAt'],
   });
 
+function handlePoolAccessError(reply: FastifyReply, err: unknown) {
+  if (err instanceof PoolNotFoundError) {
+    reply.code(404).send({ error: 'Pool not found' });
+    return true;
+  }
+
+  if (err instanceof PoolForbiddenError) {
+    reply.code(403).send({ error: 'Forbidden' });
+    return true;
+  }
+
+  return false;
+}
+
 export async function poolsRoutes(app: FastifyInstance) {
   // 🔒 All /pools/* endpoints require a valid session
   app.addHook('preHandler', app.auth.verifySession);
@@ -131,12 +145,15 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.get('/:poolId', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
-      const pool = await poolsService.getPoolById(poolId);
-      if (!pool) return reply.code(404).send({ error: 'Pool not found' });
+      const userId = req.user!.id;
+      const pool = await poolsService.getPoolById(poolId, userId);
       return reply.send(pool);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -146,12 +163,16 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.patch('/:poolId', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
       const data = updatePoolSchema.parse(req.body);
-      const pool = await poolsService.updatePool(poolId, data);
+      const pool = await poolsService.updatePool(poolId, userId, data);
       return reply.send(pool);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -161,11 +182,15 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.delete('/:poolId', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
-      await poolsService.deletePool(poolId);
+      const userId = req.user!.id;
+      await poolsService.deletePool(poolId, userId);
       return reply.code(204).send();
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -175,12 +200,16 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.post('/:poolId/members', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
+      const requestingUserId = req.user!.id;
       const { userId, role } = addMemberSchema.parse(req.body);
-      const member = await poolsService.addPoolMember(poolId, userId, role);
+      const member = await poolsService.addPoolMember(poolId, requestingUserId, userId, role);
       return reply.code(201).send(member);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -190,11 +219,15 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.get('/:poolId/members', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
-      const members = await poolsService.getPoolMembers(poolId);
+      const userId = req.user!.id;
+      const members = await poolsService.getPoolMembers(poolId, userId);
       return reply.send(members);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -204,12 +237,16 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.put('/:poolId/members/:userId', async (req, reply) => {
     try {
       const { poolId, userId } = poolMemberParams.parse(req.params);
+      const requestingUserId = req.user!.id;
       const { role } = updateMemberSchema.parse(req.body);
-      const member = await poolsService.updatePoolMember(poolId, userId, role);
+      const member = await poolsService.updatePoolMember(poolId, requestingUserId, userId, role);
       return reply.send(member);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -219,15 +256,19 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.get('/:poolId/tests', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
       const { limit, cursorTestedAt, cursorSessionId } = getTestsQuery.parse(req.query);
       const cursor = cursorTestedAt
         ? { testedAt: new Date(cursorTestedAt), sessionId: cursorSessionId }
         : undefined;
-      const tests = await poolsService.getTestsByPoolId(poolId, limit, cursor);
+      const tests = await poolsService.getTestsByPoolId(poolId, userId, limit, cursor);
       return reply.send(tests);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -244,6 +285,9 @@ export async function poolsRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -263,6 +307,9 @@ export async function poolsRoutes(app: FastifyInstance) {
       }
       if (err instanceof Error && (err.message === 'Chemical not found' || err.message === 'Test does not belong to this pool')) {
         return reply.code(400).send({ error: err.message });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
@@ -289,11 +336,15 @@ export async function poolsRoutes(app: FastifyInstance) {
   app.delete('/:poolId/members/:userId', async (req, reply) => {
     try {
       const { poolId, userId } = poolMemberParams.parse(req.params);
-      await poolsService.removePoolMember(poolId, userId);
+      const requestingUserId = req.user!.id;
+      await poolsService.removePoolMember(poolId, requestingUserId, userId);
       return reply.code(204).send();
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (handlePoolAccessError(reply, err)) {
+        return;
       }
       throw err;
     }
