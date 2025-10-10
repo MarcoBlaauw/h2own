@@ -3,6 +3,12 @@
   export let value: string | number;
   export let hint: string = '';
   export let trend: 'up' | 'down' | 'flat' = 'flat';
+
+  let status: 'success' | 'danger' | 'neutral' = 'neutral';
+  let trendLabel = 'Stable';
+
+  $: status = trend === 'up' ? 'success' : trend === 'down' ? 'danger' : 'neutral';
+  $: trendLabel = trend === 'flat' ? 'Stable' : trend === 'up' ? 'Rising' : 'Falling';
 </script>
 
 <div class="flex items-start justify-between gap-4">
@@ -13,7 +19,7 @@
       <div class="mt-1 text-xs text-content-secondary/70">{hint}</div>
     {/if}
   </div>
-  <span class={`badge ${trend === 'up' ? 'badge-success' : trend === 'down' ? 'badge-danger' : 'badge-neutral'}`} aria-live="polite">
-    {trend === 'flat' ? 'Stable' : trend === 'up' ? 'Rising' : 'Falling'}
+  <span class="status-chip" data-status={status} aria-live="polite">
+    {trendLabel}
   </span>
 </div>

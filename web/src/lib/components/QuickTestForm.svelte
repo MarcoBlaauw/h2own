@@ -54,65 +54,65 @@
   }
 </script>
 
-<Card>
+<Card status={error ? 'danger' : success ? 'success' : 'default'}>
   <h2 class="text-lg font-semibold text-content-primary">Quick Test Update</h2>
-  <form class="mt-5 grid gap-4 sm:grid-cols-2" on:submit|preventDefault={handleSubmit}>
-    <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="fc">FC</label>
+  <form class="mt-5 form-grid" on:submit|preventDefault={handleSubmit}>
+    <div class="form-field">
+      <label class="form-label" data-variant="caps" for="fc">FC</label>
       <input
         id="fc"
         type="number"
         min="0"
         bind:value={fc}
-        class="input"
+        class="form-control"
       >
     </div>
-    <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="tc">TC</label>
+    <div class="form-field">
+      <label class="form-label" data-variant="caps" for="tc">TC</label>
       <input
         id="tc"
         type="number"
         min="0"
         bind:value={tc}
-        class="input"
+        class="form-control"
       >
     </div>
-    <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="ph">pH</label>
+    <div class="form-field">
+      <label class="form-label" data-variant="caps" for="ph">pH</label>
       <input
         id="ph"
         type="number"
         min="0"
         step="0.1"
         bind:value={ph}
-        class="input"
+        class="form-control"
       >
     </div>
-    <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="ta">TA</label>
+    <div class="form-field">
+      <label class="form-label" data-variant="caps" for="ta">TA</label>
       <input
         id="ta"
         type="number"
         min="0"
         bind:value={ta}
-        class="input"
+        class="form-control"
       >
     </div>
-    <div class="space-y-1">
-      <label class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80" for="cya">CYA</label>
+    <div class="form-field">
+      <label class="form-label" data-variant="caps" for="cya">CYA</label>
       <input
         id="cya"
         type="number"
         min="0"
         bind:value={cya}
-        class="input"
+        class="form-control"
       >
     </div>
     {#if error}
-      <p class="sm:col-span-2 text-xs font-medium text-danger" role="alert" aria-live="polite">{error}</p>
+      <p class="form-message sm:col-span-2" data-state="error" role="alert" aria-live="polite">{error}</p>
     {/if}
     {#if success}
-      <p class="sm:col-span-2 text-xs font-medium text-success" role="status" aria-live="polite">{success}</p>
+      <p class="form-message sm:col-span-2" data-state="success" role="status" aria-live="polite">{success}</p>
     {/if}
     <button
       type="submit"

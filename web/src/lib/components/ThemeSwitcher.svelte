@@ -52,7 +52,8 @@
 </script>
 
 <svelte:head>
-  {@html `<script>${inlineInitializer}</script>`}
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+  {@html `<script>${inlineInitializer}<\/script>`}
 </svelte:head>
 
 <button

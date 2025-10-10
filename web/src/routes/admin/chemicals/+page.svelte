@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { PageData } from './$types';
   import { api } from '$lib/api';
+  import Card from '$lib/components/ui/Card.svelte';
+  import type { PageData } from './$types';
 
   export let data: PageData;
 
@@ -229,227 +230,229 @@
     {/if}
   </div>
 
-  <form
-    class="space-y-6 rounded-2xl border border-border bg-surface-raised p-6 shadow-card dark:border-border-strong dark:bg-surface-inset"
-    novalidate
-    on:submit|preventDefault={handleSubmit}
-  >
-    <div class="grid gap-6 md:grid-cols-2">
-      <div class="flex flex-col gap-2">
-        <label for="category" class="text-sm font-medium text-content-secondary">Category</label>
-        <select
-          id="category"
-          name="category"
-          bind:value={form.categoryId}
-          class="select"
-          required
-        >
-          <option value="" disabled>Select a category</option>
-          {#each categories as category}
-            <option value={category.categoryId}>{category.name}</option>
-          {/each}
-        </select>
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="name" class="text-sm font-medium text-content-secondary">Name</label>
-        <input
-          id="name"
-          name="name"
-          class="input"
-          type="text"
-          placeholder="Liquid Chlorine 12.5%"
-          bind:value={form.name}
-          required
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="brand" class="text-sm font-medium text-content-secondary">Brand</label>
-        <input id="brand" name="brand" class="input" type="text" bind:value={form.brand} />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="productType" class="text-sm font-medium text-content-secondary">Product type</label>
-        <input id="productType" name="productType" class="input" type="text" bind:value={form.productType} />
-      </div>
-
-      <div class="flex flex-col gap-2 md:col-span-2">
-        <label for="activeIngredients" class="text-sm font-medium text-content-secondary">
-          Active ingredients
-        </label>
-        <textarea
-          id="activeIngredients"
-          name="activeIngredients"
-          class="textarea"
-          rows="3"
-          placeholder="sodium_hypochlorite: 12.5"
-          bind:value={form.activeIngredients}
-        ></textarea>
-        <p class="text-xs text-content-secondary/80">One per line using "ingredient: percentage".</p>
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="concentrationPercent" class="text-sm font-medium text-content-secondary">Concentration (%)</label>
-        <input
-          id="concentrationPercent"
-          name="concentrationPercent"
-          class="input"
-          type="text"
-          bind:value={form.concentrationPercent}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="phEffect" class="text-sm font-medium text-content-secondary">pH effect</label>
-        <input id="phEffect" name="phEffect" class="input" type="text" bind:value={form.phEffect} />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="strengthFactor" class="text-sm font-medium text-content-secondary">Strength factor</label>
-        <input id="strengthFactor" name="strengthFactor" class="input" type="text" bind:value={form.strengthFactor} />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="dosePer10kGallons" class="text-sm font-medium text-content-secondary">Dose per 10k gallons</label>
-        <input
-          id="dosePer10kGallons"
-          name="dosePer10kGallons"
-          class="input"
-          type="text"
-          bind:value={form.dosePer10kGallons}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="doseUnit" class="text-sm font-medium text-content-secondary">Dose unit</label>
-        <input id="doseUnit" name="doseUnit" class="input" type="text" bind:value={form.doseUnit} />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="averageCostPerUnit" class="text-sm font-medium text-content-secondary">
-          Average cost per unit
-        </label>
-        <input
-          id="averageCostPerUnit"
-          name="averageCostPerUnit"
-          class="input"
-          type="text"
-          bind:value={form.averageCostPerUnit}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="fcChangePerDose" class="text-sm font-medium text-content-secondary">FC change per dose</label>
-        <input
-          id="fcChangePerDose"
-          name="fcChangePerDose"
-          class="input"
-          type="text"
-          bind:value={form.fcChangePerDose}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="phChangePerDose" class="text-sm font-medium text-content-secondary">pH change per dose</label>
-        <input
-          id="phChangePerDose"
-          name="phChangePerDose"
-          class="input"
-          type="text"
-          bind:value={form.phChangePerDose}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="taChangePerDose" class="text-sm font-medium text-content-secondary">TA change per dose</label>
-        <input
-          id="taChangePerDose"
-          name="taChangePerDose"
-          class="input"
-          type="text"
-          bind:value={form.taChangePerDose}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="cyaChangePerDose" class="text-sm font-medium text-content-secondary">CYA change per dose</label>
-        <input
-          id="cyaChangePerDose"
-          name="cyaChangePerDose"
-          class="input"
-          type="text"
-          bind:value={form.cyaChangePerDose}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label for="formType" class="text-sm font-medium text-content-secondary">Form</label>
-        <input id="formType" name="formType" class="input" type="text" bind:value={form.formType} />
-      </div>
-
-      <div class="flex flex-col gap-2 md:col-span-2">
-        <label for="packageSizes" class="text-sm font-medium text-content-secondary">Package sizes</label>
-        <textarea
-          id="packageSizes"
-          name="packageSizes"
-          class="textarea"
-          rows="3"
-          placeholder="1 gal\n2.5 gal"
-          bind:value={form.packageSizes}
-        ></textarea>
-        <p class="text-xs text-content-secondary/80">Separate values with commas or new lines.</p>
-      </div>
-    </div>
-
-    <fieldset class="grid gap-4 rounded-xl bg-surface-subtle p-4 dark:bg-surface-inset/80 sm:grid-cols-2">
-      <legend class="text-sm font-semibold text-content-secondary">Impacts</legend>
-      <label class="flex items-center gap-3 text-sm text-content-secondary">
-        <input type="checkbox" bind:checked={form.affectsFc} />
-        Affects FC
-      </label>
-      <label class="flex items-center gap-3 text-sm text-content-secondary">
-        <input type="checkbox" bind:checked={form.affectsPh} />
-        Affects pH
-      </label>
-      <label class="flex items-center gap-3 text-sm text-content-secondary">
-        <input type="checkbox" bind:checked={form.affectsTa} />
-        Affects TA
-      </label>
-      <label class="flex items-center gap-3 text-sm text-content-secondary">
-        <input type="checkbox" bind:checked={form.affectsCya} />
-        Affects CYA
-      </label>
-      <label class="flex items-center gap-3 text-sm text-content-secondary">
-        <input type="checkbox" bind:checked={form.isActive} />
-        Active
-      </label>
-    </fieldset>
-
-    {#if formErrors.length > 0}
-      <div class="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger" role="alert">
-        {#each formErrors as error}
-          <p>{error}</p>
-        {/each}
-      </div>
-    {/if}
-
-    {#if successMessage}
-      <p class="rounded-lg bg-success/10 px-3 py-2 text-sm font-medium text-success" role="status">
-        {successMessage}
-      </p>
-    {/if}
-
-    <button
-      class="btn btn-base btn-primary"
-      type="submit"
-      disabled={submitting}
+  <Card status={formErrors.length ? 'danger' : successMessage ? 'success' : 'default'}>
+    <form
+      class="space-y-6"
+      novalidate
+      on:submit|preventDefault={handleSubmit}
     >
-      {#if submitting}
-        Saving…
-      {:else}
-        Create chemical
+      <div class="form-grid md:grid-cols-2 md:gap-6">
+        <div class="form-field">
+          <label for="category" class="form-label">Category</label>
+          <select
+            id="category"
+            name="category"
+            bind:value={form.categoryId}
+            class="form-control form-select"
+            required
+          >
+            <option value="" disabled>Select a category</option>
+            {#each categories as category}
+              <option value={category.categoryId}>{category.name}</option>
+            {/each}
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="name" class="form-label">Name</label>
+          <input
+            id="name"
+            name="name"
+            class="form-control"
+            type="text"
+            placeholder="Liquid Chlorine 12.5%"
+            bind:value={form.name}
+            required
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="brand" class="form-label">Brand</label>
+          <input id="brand" name="brand" class="form-control" type="text" bind:value={form.brand} />
+        </div>
+
+        <div class="form-field">
+          <label for="productType" class="form-label">Product type</label>
+          <input id="productType" name="productType" class="form-control" type="text" bind:value={form.productType} />
+        </div>
+
+        <div class="form-field md:col-span-2">
+          <label for="activeIngredients" class="form-label">
+            Active ingredients
+          </label>
+          <textarea
+            id="activeIngredients"
+            name="activeIngredients"
+            class="form-control form-textarea"
+            rows="3"
+            placeholder="sodium_hypochlorite: 12.5"
+            bind:value={form.activeIngredients}
+          ></textarea>
+          <p class="form-helper">One per line using "ingredient: percentage".</p>
+        </div>
+
+        <div class="form-field">
+          <label for="concentrationPercent" class="form-label">Concentration (%)</label>
+          <input
+            id="concentrationPercent"
+            name="concentrationPercent"
+            class="form-control"
+            type="text"
+            bind:value={form.concentrationPercent}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="phEffect" class="form-label">pH effect</label>
+          <input id="phEffect" name="phEffect" class="form-control" type="text" bind:value={form.phEffect} />
+        </div>
+
+        <div class="form-field">
+          <label for="strengthFactor" class="form-label">Strength factor</label>
+          <input id="strengthFactor" name="strengthFactor" class="form-control" type="text" bind:value={form.strengthFactor} />
+        </div>
+
+        <div class="form-field">
+          <label for="dosePer10kGallons" class="form-label">Dose per 10k gallons</label>
+          <input
+            id="dosePer10kGallons"
+            name="dosePer10kGallons"
+            class="form-control"
+            type="text"
+            bind:value={form.dosePer10kGallons}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="doseUnit" class="form-label">Dose unit</label>
+          <input id="doseUnit" name="doseUnit" class="form-control" type="text" bind:value={form.doseUnit} />
+        </div>
+
+        <div class="form-field">
+          <label for="averageCostPerUnit" class="form-label">
+            Average cost per unit
+          </label>
+          <input
+            id="averageCostPerUnit"
+            name="averageCostPerUnit"
+            class="form-control"
+            type="text"
+            bind:value={form.averageCostPerUnit}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="fcChangePerDose" class="form-label">FC change per dose</label>
+          <input
+            id="fcChangePerDose"
+            name="fcChangePerDose"
+            class="form-control"
+            type="text"
+            bind:value={form.fcChangePerDose}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="phChangePerDose" class="form-label">pH change per dose</label>
+          <input
+            id="phChangePerDose"
+            name="phChangePerDose"
+            class="form-control"
+            type="text"
+            bind:value={form.phChangePerDose}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="taChangePerDose" class="form-label">TA change per dose</label>
+          <input
+            id="taChangePerDose"
+            name="taChangePerDose"
+            class="form-control"
+            type="text"
+            bind:value={form.taChangePerDose}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="cyaChangePerDose" class="form-label">CYA change per dose</label>
+          <input
+            id="cyaChangePerDose"
+            name="cyaChangePerDose"
+            class="form-control"
+            type="text"
+            bind:value={form.cyaChangePerDose}
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="formType" class="form-label">Form</label>
+          <input id="formType" name="formType" class="form-control" type="text" bind:value={form.formType} />
+        </div>
+
+        <div class="form-field md:col-span-2">
+          <label for="packageSizes" class="form-label">Package sizes</label>
+          <textarea
+            id="packageSizes"
+            name="packageSizes"
+            class="form-control form-textarea"
+            rows="3"
+            placeholder="1 gal&#10;2.5 gal"
+            bind:value={form.packageSizes}
+          ></textarea>
+          <p class="form-helper">Separate values with commas or new lines.</p>
+        </div>
+      </div>
+
+      <fieldset class="form-fieldset">
+        <legend class="form-legend">Impacts</legend>
+        <label class="form-option">
+          <input type="checkbox" bind:checked={form.affectsFc} />
+          Affects FC
+        </label>
+        <label class="form-option">
+          <input type="checkbox" bind:checked={form.affectsPh} />
+          Affects pH
+        </label>
+        <label class="form-option">
+          <input type="checkbox" bind:checked={form.affectsTa} />
+          Affects TA
+        </label>
+        <label class="form-option">
+          <input type="checkbox" bind:checked={form.affectsCya} />
+          Affects CYA
+        </label>
+        <label class="form-option">
+          <input type="checkbox" bind:checked={form.isActive} />
+          Active
+        </label>
+      </fieldset>
+
+      {#if formErrors.length > 0}
+        <div class="form-feedback" data-state="error" role="alert">
+          {#each formErrors as error}
+            <p>{error}</p>
+          {/each}
+        </div>
       {/if}
-    </button>
-  </form>
+
+      {#if successMessage}
+        <p class="form-feedback" data-state="success" role="status">
+          {successMessage}
+        </p>
+      {/if}
+
+      <button
+        class="btn btn-base btn-primary"
+        type="submit"
+        disabled={submitting}
+      >
+        {#if submitting}
+          Saving…
+        {:else}
+          Create chemical
+        {/if}
+      </button>
+    </form>
+  </Card>
 </section>

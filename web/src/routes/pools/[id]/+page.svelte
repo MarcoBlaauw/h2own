@@ -82,7 +82,7 @@
                       <td class="px-3 py-3 text-content-primary">{member.user?.email ?? 'Unknown user'}</td>
                       <td class="px-3 py-3">
                         <select
-                          class="input"
+                          class="form-control form-select"
                           bind:value={member.roleName}
                           on:change={() => handleRoleChange(member.user?.id, member.roleName)}
                         >
@@ -114,7 +114,7 @@
           {#if data.pool.tests?.length > 0}
             <ul class="space-y-4 text-sm text-content-secondary">
               {#each data.pool.tests as test}
-                <li class="rounded-lg border border-border/60 bg-surface-subtle/80 p-4 dark:border-border-strong/60 dark:bg-surface-inset/70">
+                <li class="surface-panel space-y-2">
                   <p>
                     FC: {test.freeChlorine ?? 'N/A'}, TC: {test.totalChlorine ?? 'N/A'}, pH: {test.ph ?? 'N/A'}, CC: {formatCc(test)}
                   </p>
@@ -130,30 +130,30 @@
         </div>
       </Card>
       <Card className="shadow-card h-full md:col-span-2">
-        <form class="grid gap-4 sm:grid-cols-2" on:submit|preventDefault={handleSubmit}>
+        <form class="form-grid" on:submit|preventDefault={handleSubmit}>
           <h2 class="sm:col-span-2 text-xl font-semibold text-content-primary">Add New Test</h2>
-          <div class="space-y-2">
-            <label class="text-sm font-medium text-content-secondary" for="fc">Free Chlorine (FC)</label>
+          <div class="form-field">
+            <label class="form-label" for="fc">Free Chlorine (FC)</label>
             <input
-              class="input"
+              class="form-control"
               id="fc"
               type="number"
               bind:value={fc}
             >
           </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium text-content-secondary" for="tc">Total Chlorine (TC)</label>
+          <div class="form-field">
+            <label class="form-label" for="tc">Total Chlorine (TC)</label>
             <input
-              class="input"
+              class="form-control"
               id="tc"
               type="number"
               bind:value={tc}
             >
           </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium text-content-secondary" for="ph">pH</label>
+          <div class="form-field">
+            <label class="form-label" for="ph">pH</label>
             <input
-              class="input"
+              class="form-control"
               id="ph"
               type="number"
               bind:value={ph}

@@ -43,7 +43,7 @@ describe('ThemeSwitcher', () => {
     const { getByRole } = render(ThemeSwitcher);
     const toggleButton = getByRole('button', { name: 'Activate light theme' });
 
-    expect(toggleButton).toHaveAttribute('aria-pressed', 'true');
+    expect(toggleButton.getAttribute('aria-pressed')).toBe('true');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 

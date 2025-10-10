@@ -2,12 +2,11 @@
   export let lines = 3;
 </script>
 
-<div class="animate-pulse space-y-2">
-  {#each Array(lines) as _, i}
+<div class="skeleton-stack" role="presentation" aria-hidden="true">
+  {#each Array.from({ length: Math.max(1, lines) }) as _, index}
     <div
-      class={`h-3 rounded bg-neutral-200 dark:bg-neutral-800 w-${
-        i === 0 ? '3/4' : i === lines - 1 ? '1/2' : 'full'
-      }`}
+      class="skeleton-line"
+      data-variant={index === 0 ? 'medium' : index === lines - 1 ? 'short' : 'full'}
     ></div>
   {/each}
 </div>

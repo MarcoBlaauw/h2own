@@ -21,36 +21,36 @@
 
 <div class="flex flex-1 items-center justify-center px-4 py-12 sm:px-6">
   <div class="w-full max-w-md">
-    <Card className="shadow-card">
+    <Card className="shadow-card" status={error ? 'danger' : 'default'}>
       <form class="space-y-6" on:submit|preventDefault={handleSubmit}>
         <div class="space-y-1">
           <h1 class="text-2xl font-semibold text-content-primary">Create your account</h1>
           <p class="text-sm text-content-secondary">Join H2Own to manage your pools</p>
         </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-content-secondary" for="name">Name</label>
+        <div class="form-field">
+          <label class="form-label" for="name">Name</label>
           <input
-            class="input"
+            class="form-control"
             id="name"
             type="text"
             placeholder="Name"
             bind:value={name}
           >
         </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-content-secondary" for="email">Email</label>
+        <div class="form-field">
+          <label class="form-label" for="email">Email</label>
           <input
-            class="input"
+            class="form-control"
             id="email"
             type="email"
             placeholder="Email"
             bind:value={email}
           >
         </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-content-secondary" for="password">Password</label>
+        <div class="form-field">
+          <label class="form-label" for="password">Password</label>
           <input
-            class="input"
+            class="form-control"
             id="password"
             type="password"
             placeholder="••••••••"
@@ -58,7 +58,7 @@
           >
         </div>
         {#if error}
-          <p class="text-sm font-medium text-danger">{error}</p>
+          <p class="form-message" data-state="error">{error}</p>
         {/if}
         <div class="flex flex-wrap items-center justify-between gap-3">
           <button
