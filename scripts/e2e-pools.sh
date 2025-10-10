@@ -32,9 +32,20 @@ print_success "Logged in as testuser2"
 
 # 3. Create a new pool
 echo "\n--- Creating a new pool ---"
-POOL_ID=$(curl -s -b "$COOKIE_JAR" -X POST "$API_BASE/pools" \
+CREATE_RESPONSE=$(curl -s -b "$COOKIE_JAR" -X POST "$API_BASE/pools" \
   -H "Content-Type: application/json" \
-  -d '{"name": "E2E Test Pool", "volumeGallons": 12000, "sanitizer": "chlorine", "surface": "pebble"}' | sed -n 's/.*"poolId":"\([^"]*\)".*/\1/p')
+  -d '{"name": "E2E Test Pool", "volumeGallons": 12000, "sanitizerType": "chlorine", "surfaceType": "pebble"}' \
+  -w '\n%{http_code}')
+CREATE_STATUS=$(echo "$CREATE_RESPONSE" | tail -n1)
+CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
+POOL_ID=$(echo "$CREATE_BODY" | sed -n 's/.*"poolId":"\([^"]*\)".*/\1/p')
+
+if [ "$CREATE_STATUS" -ne 201 ] || [ -z "${POOL_ID:-}" ]; then
+  echo "Error: Failed to create pool. Status $CREATE_STATUS"
+  echo "Response body: $CREATE_BODY"
+  exit 1
+fi
+
 echo "Created pool with ID: $POOL_ID"
 print_success "Pool created"
 
