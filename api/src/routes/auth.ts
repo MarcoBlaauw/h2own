@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type {} from "../types/fastify.d.ts";
 import { z } from "zod";
-import { authService } from "../services/auth.js";
+import { UserAlreadyExistsError, authService } from "../services/auth.js";
 
 const registerBodySchema = z.object({
   email: z
@@ -40,11 +40,7 @@ const isDomainError = (error: unknown): error is DomainError => {
   );
 };
 
-const isUniqueViolationError = (error: unknown): error is { code: string } => {
-  return typeof error === "object" && error !== null && "code" in error && (error as any).code === "23505";
-};
-
-const handleDomainError = (reply: FastifyReply, error: DomainError | { code: string }) => {
+const handleDomainError = (reply: FastifyReply, error: unknown) => {
   if (isDomainError(error)) {
     return reply.code(error.statusCode).send({
       error: error.code,
@@ -53,10 +49,10 @@ const handleDomainError = (reply: FastifyReply, error: DomainError | { code: str
     });
   }
 
-  if (isUniqueViolationError(error)) {
-    return reply.code(409).send({
-      error: "Conflict",
-      message: "An account with that email already exists",
+  if (error instanceof UserAlreadyExistsError) {
+    return reply.code(error.statusCode).send({
+      error: error.code,
+      message: error.message,
     });
   }
 
@@ -80,7 +76,7 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         userId = await authService.createUser(body);
       } catch (error) {
-        return handleDomainError(reply, error as DomainError | { code: string });
+        return handleDomainError(reply, error);
       }
 
       const user = await authService.getUserById(userId);
@@ -102,7 +98,7 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         user = await authService.validateCredentials(body);
       } catch (error) {
-        return handleDomainError(reply, error as DomainError | { code: string });
+        return handleDomainError(reply, error);
       }
 
       if (!user) {
