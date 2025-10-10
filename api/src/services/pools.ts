@@ -1,6 +1,6 @@
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-import { eq, and, desc, inArray, lt, or } from 'drizzle-orm';
+import { eq, and, desc, inArray, lt, or, asc } from 'drizzle-orm';
 
 export interface CreatePoolData {
   name: string;
@@ -77,6 +77,74 @@ function mapUpdatePoolData(data: Partial<CreatePoolData>): Partial<PoolInsert> {
   return mapped;
 }
 
+export interface PoolMemberDetail {
+  poolId: string;
+  userId: string;
+  roleName: string;
+  permissions: unknown;
+  invitedBy: string | null;
+  invitedAt: Date;
+  addedAt: Date;
+  lastAccessAt: Date | null;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+  } | null;
+}
+
+export interface PoolTestDetail {
+  id: string;
+  testedAt: Date;
+  freeChlorine: number | null;
+  totalChlorine: number | null;
+  ph: number | null;
+  totalAlkalinity: number | null;
+  cyanuricAcid: number | null;
+  calciumHardness: number | null;
+  salt: number | null;
+  waterTempF: number | null;
+  tester: {
+    id: string;
+    email: string;
+    name: string | null;
+  } | null;
+}
+
+export interface PoolDetail {
+  id: string;
+  ownerId: string;
+  locationId: string | null;
+  name: string;
+  volumeGallons: number;
+  surfaceType: string | null;
+  sanitizerType: string | null;
+  saltLevelPpm: number | null;
+  shadeLevel: string | null;
+  enclosureType: string | null;
+  hasCover: boolean | null;
+  pumpGpm: number | null;
+  filterType: string | null;
+  hasHeater: boolean | null;
+  isActive: boolean | null;
+  createdAt: Date;
+  updatedAt: Date;
+  owner: {
+    id: string;
+    email: string;
+    name: string | null;
+  } | null;
+  members: PoolMemberDetail[];
+  tests: PoolTestDetail[];
+  lastTestedAt: Date | null;
+}
+
+function toNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  return Number.isNaN(num) ? null : num;
+}
+
 export class PoolsService {
   constructor(private readonly db = dbClient) {}
 
@@ -112,9 +180,149 @@ export class PoolsService {
     return this.db.select().from(schema.pools).where(inArray(schema.pools.poolId, poolIds));
   }
 
-  async getPoolById(poolId: string) {
-    const [pool] = await this.db.select().from(schema.pools).where(eq(schema.pools.poolId, poolId));
-    return pool;
+  async getPoolById(poolId: string): Promise<PoolDetail | null> {
+    const [poolRow] = await this.db
+      .select({
+        poolId: schema.pools.poolId,
+        ownerId: schema.pools.ownerId,
+        locationId: schema.pools.locationId,
+        name: schema.pools.name,
+        volumeGallons: schema.pools.volumeGallons,
+        surfaceType: schema.pools.surfaceType,
+        sanitizerType: schema.pools.sanitizerType,
+        saltLevelPpm: schema.pools.saltLevelPpm,
+        shadeLevel: schema.pools.shadeLevel,
+        enclosureType: schema.pools.enclosureType,
+        hasCover: schema.pools.hasCover,
+        pumpGpm: schema.pools.pumpGpm,
+        filterType: schema.pools.filterType,
+        hasHeater: schema.pools.hasHeater,
+        isActive: schema.pools.isActive,
+        createdAt: schema.pools.createdAt,
+        updatedAt: schema.pools.updatedAt,
+        ownerUserId: schema.users.userId,
+        ownerEmail: schema.users.email,
+        ownerName: schema.users.name,
+      })
+      .from(schema.pools)
+      .leftJoin(schema.users, eq(schema.pools.ownerId, schema.users.userId))
+      .where(eq(schema.pools.poolId, poolId));
+
+    if (!poolRow) {
+      return null;
+    }
+
+    const [memberRows, testRows] = await Promise.all([
+      this.db
+        .select({
+          poolId: schema.poolMembers.poolId,
+          userId: schema.poolMembers.userId,
+          roleName: schema.poolMembers.roleName,
+          permissions: schema.poolMembers.permissions,
+          invitedBy: schema.poolMembers.invitedBy,
+          invitedAt: schema.poolMembers.invitedAt,
+          addedAt: schema.poolMembers.addedAt,
+          lastAccessAt: schema.poolMembers.lastAccessAt,
+          memberEmail: schema.users.email,
+          memberName: schema.users.name,
+        })
+        .from(schema.poolMembers)
+        .leftJoin(schema.users, eq(schema.poolMembers.userId, schema.users.userId))
+        .where(eq(schema.poolMembers.poolId, poolId))
+        .orderBy(asc(schema.poolMembers.addedAt)),
+      this.db
+        .select({
+          sessionId: schema.testSessions.sessionId,
+          testedAt: schema.testSessions.testedAt,
+          testedBy: schema.testSessions.testedBy,
+          freeChlorinePpm: schema.testSessions.freeChlorinePpm,
+          totalChlorinePpm: schema.testSessions.totalChlorinePpm,
+          phLevel: schema.testSessions.phLevel,
+          totalAlkalinityPpm: schema.testSessions.totalAlkalinityPpm,
+          cyanuricAcidPpm: schema.testSessions.cyanuricAcidPpm,
+          calciumHardnessPpm: schema.testSessions.calciumHardnessPpm,
+          saltPpm: schema.testSessions.saltPpm,
+          waterTempF: schema.testSessions.waterTempF,
+          testerId: schema.users.userId,
+          testerEmail: schema.users.email,
+          testerName: schema.users.name,
+        })
+        .from(schema.testSessions)
+        .leftJoin(schema.users, eq(schema.testSessions.testedBy, schema.users.userId))
+        .where(eq(schema.testSessions.poolId, poolId))
+        .orderBy(desc(schema.testSessions.testedAt))
+        .limit(10),
+    ]);
+
+    const members: PoolMemberDetail[] = memberRows.map((member) => ({
+      poolId: member.poolId,
+      userId: member.userId,
+      roleName: member.roleName,
+      permissions: member.permissions,
+      invitedBy: member.invitedBy,
+      invitedAt: member.invitedAt,
+      addedAt: member.addedAt,
+      lastAccessAt: member.lastAccessAt,
+      user: member.userId
+        ? {
+            id: member.userId,
+            email: member.memberEmail ?? '',
+            name: member.memberName ?? null,
+          }
+        : null,
+    }));
+
+    const tests: PoolTestDetail[] = testRows.map((test) => ({
+      id: test.sessionId,
+      testedAt: test.testedAt,
+      freeChlorine: toNumber(test.freeChlorinePpm),
+      totalChlorine: toNumber(test.totalChlorinePpm),
+      ph: toNumber(test.phLevel),
+      totalAlkalinity: test.totalAlkalinityPpm ?? null,
+      cyanuricAcid: test.cyanuricAcidPpm ?? null,
+      calciumHardness: test.calciumHardnessPpm ?? null,
+      salt: test.saltPpm ?? null,
+      waterTempF: test.waterTempF ?? null,
+      tester: test.testerId
+        ? {
+            id: test.testerId,
+            email: test.testerEmail ?? '',
+            name: test.testerName ?? null,
+          }
+        : null,
+    }));
+
+    const lastTestedAt = tests[0]?.testedAt ?? null;
+
+    return {
+      id: poolRow.poolId,
+      ownerId: poolRow.ownerId,
+      locationId: poolRow.locationId,
+      name: poolRow.name,
+      volumeGallons: poolRow.volumeGallons,
+      surfaceType: poolRow.surfaceType ?? null,
+      sanitizerType: poolRow.sanitizerType ?? null,
+      saltLevelPpm: poolRow.saltLevelPpm ?? null,
+      shadeLevel: poolRow.shadeLevel ?? null,
+      enclosureType: poolRow.enclosureType ?? null,
+      hasCover: poolRow.hasCover ?? null,
+      pumpGpm: poolRow.pumpGpm ?? null,
+      filterType: poolRow.filterType ?? null,
+      hasHeater: poolRow.hasHeater ?? null,
+      isActive: poolRow.isActive ?? null,
+      createdAt: poolRow.createdAt,
+      updatedAt: poolRow.updatedAt,
+      owner: poolRow.ownerUserId
+        ? {
+            id: poolRow.ownerUserId,
+            email: poolRow.ownerEmail ?? '',
+            name: poolRow.ownerName ?? null,
+          }
+        : null,
+      members,
+      tests,
+      lastTestedAt,
+    } satisfies PoolDetail;
   }
 
   async updatePool(poolId: string, data: Partial<CreatePoolData>) {

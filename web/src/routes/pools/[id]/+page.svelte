@@ -15,20 +15,30 @@
   }
 
   async function handleRoleChange(userId, role) {
+    if (!userId) return;
     await members.update($page.params.id, userId, { role });
     await invalidateAll();
   }
 
   async function handleRemoveMember(userId) {
+    if (!userId) return;
     await members.del($page.params.id, userId);
     await invalidateAll();
   }
+
+  const formatCc = (test) => {
+    if (typeof test.totalChlorine !== 'number' || typeof test.freeChlorine !== 'number') {
+      return 'N/A';
+    }
+    const value = Math.max(0, test.totalChlorine - test.freeChlorine);
+    return value.toFixed(2);
+  };
 </script>
 
 <div class="container mx-auto p-4">
   {#if data.pool}
     <h1 class="text-2xl font-bold mb-4">{data.pool.name}</h1>
-    <p class="text-lg text-gray-600 mb-4">{data.pool.volume} gallons</p>
+    <p class="text-lg text-gray-600 mb-4">{data.pool.volumeGallons} gallons</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -42,19 +52,25 @@
             </tr>
           </thead>
           <tbody>
-            {#if data.pool.members.length > 0}
+            {#if data.pool.members?.length > 0}
               {#each data.pool.members as member}
                 <tr class="border-b">
-                  <td class="py-2">{member.user.email}</td>
+                  <td class="py-2">{member.user?.email ?? 'Unknown user'}</td>
                   <td class="py-2">
-                    <select bind:value={member.role} on:change={() => handleRoleChange(member.user.id, member.role)}>
+                    <select bind:value={member.roleName} on:change={() => handleRoleChange(member.user?.id, member.roleName)}>
                       <option value="owner">Owner</option>
                       <option value="admin">Admin</option>
                       <option value="member">Member</option>
                     </select>
                   </td>
                   <td class="py-2">
-                    <button on:click={() => handleRemoveMember(member.user.id)} class="text-red-500">Remove</button>
+                    <button
+                      on:click={() => handleRemoveMember(member.user?.id)}
+                      class="text-red-500"
+                      disabled={!member.user?.id}
+                    >
+                      Remove
+                    </button>
                   </td>
                 </tr>
               {/each}
@@ -69,10 +85,15 @@
       <div>
         <h2 class="text-xl font-bold mb-4">Tests</h2>
         <ul>
-          {#if data.pool.tests.length > 0}
+          {#if data.pool.tests?.length > 0}
             {#each data.pool.tests as test}
               <li class="border-b py-2">
-                <p>FC: {test.fc}, TC: {test.tc}, pH: {test.ph}, CC: {Math.max(0, test.tc - test.fc)}</p>
+                <p>
+                  FC: {test.freeChlorine ?? 'N/A'}, TC: {test.totalChlorine ?? 'N/A'}, pH: {test.ph ?? 'N/A'}, CC: {formatCc(test)}
+                </p>
+                <p class="text-xs text-gray-500">
+                  Tested on {new Date(test.testedAt).toLocaleString()} by {test.tester?.email ?? 'Unknown'}
+                </p>
               </li>
             {/each}
           {:else}

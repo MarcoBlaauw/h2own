@@ -152,6 +152,215 @@ describe('PoolsService', () => {
     expect(selectSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('returns pool detail with nested owner, members, and tests', async () => {
+    const createdAt = new Date('2024-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2024-01-02T00:00:00.000Z');
+    const invitedAt = new Date('2024-01-03T00:00:00.000Z');
+    const addedAt = new Date('2024-01-04T00:00:00.000Z');
+    const testedAt = new Date('2024-01-05T00:00:00.000Z');
+
+    selectSpy
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: () =>
+                  Promise.resolve([
+                    {
+                      poolId: 'pool-123',
+                      ownerId: 'user-1',
+                      locationId: null,
+                      name: 'Backyard Pool',
+                      volumeGallons: 15000,
+                      surfaceType: 'plaster',
+                      sanitizerType: 'chlorine',
+                      saltLevelPpm: 3200,
+                      shadeLevel: 'partial',
+                      enclosureType: null,
+                      hasCover: true,
+                      pumpGpm: 40,
+                      filterType: 'sand',
+                      hasHeater: false,
+                      isActive: true,
+                      createdAt,
+                      updatedAt,
+                      ownerUserId: 'user-1',
+                      ownerEmail: 'owner@example.com',
+                      ownerName: 'Owner One',
+                    },
+                  ]),
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.poolMembers);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: () => ({
+                  orderBy: (orderArg: unknown) => {
+                    expect(orderArg).toBeTruthy();
+                    return Promise.resolve([
+                      {
+                        poolId: 'pool-123',
+                        userId: 'user-1',
+                        roleName: 'owner',
+                        permissions: null,
+                        invitedBy: null,
+                        invitedAt,
+                        addedAt,
+                        lastAccessAt: null,
+                        memberEmail: 'owner@example.com',
+                        memberName: 'Owner One',
+                      },
+                      {
+                        poolId: 'pool-123',
+                        userId: 'user-2',
+                        roleName: 'member',
+                        permissions: null,
+                        invitedBy: 'user-1',
+                        invitedAt,
+                        addedAt,
+                        lastAccessAt: null,
+                        memberEmail: 'friend@example.com',
+                        memberName: 'Friend',
+                      },
+                    ]);
+                  },
+                }),
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.testSessions);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: () => ({
+                  orderBy: (...orderArgs: unknown[]) => {
+                    expect(orderArgs).toHaveLength(1);
+                    return {
+                      limit: (limitValue: number) => {
+                        expect(limitValue).toBe(10);
+                        return Promise.resolve([
+                          {
+                            sessionId: 'session-1',
+                            testedAt,
+                            testedBy: 'user-1',
+                            freeChlorinePpm: '3',
+                            totalChlorinePpm: '4',
+                            phLevel: '7.5',
+                            totalAlkalinityPpm: 90,
+                            cyanuricAcidPpm: 30,
+                            calciumHardnessPpm: 200,
+                            saltPpm: 3200,
+                            waterTempF: 78,
+                            testerId: 'user-1',
+                            testerEmail: 'owner@example.com',
+                            testerName: 'Owner One',
+                          },
+                        ]);
+                      },
+                    };
+                  },
+                }),
+              };
+            },
+          };
+        },
+      }));
+
+    const detail = await service.getPoolById('pool-123');
+
+    expect(detail).toEqual({
+      id: 'pool-123',
+      ownerId: 'user-1',
+      locationId: null,
+      name: 'Backyard Pool',
+      volumeGallons: 15000,
+      surfaceType: 'plaster',
+      sanitizerType: 'chlorine',
+      saltLevelPpm: 3200,
+      shadeLevel: 'partial',
+      enclosureType: null,
+      hasCover: true,
+      pumpGpm: 40,
+      filterType: 'sand',
+      hasHeater: false,
+      isActive: true,
+      createdAt,
+      updatedAt,
+      owner: {
+        id: 'user-1',
+        email: 'owner@example.com',
+        name: 'Owner One',
+      },
+      members: [
+        {
+          poolId: 'pool-123',
+          userId: 'user-1',
+          roleName: 'owner',
+          permissions: null,
+          invitedBy: null,
+          invitedAt,
+          addedAt,
+          lastAccessAt: null,
+          user: {
+            id: 'user-1',
+            email: 'owner@example.com',
+            name: 'Owner One',
+          },
+        },
+        {
+          poolId: 'pool-123',
+          userId: 'user-2',
+          roleName: 'member',
+          permissions: null,
+          invitedBy: 'user-1',
+          invitedAt,
+          addedAt,
+          lastAccessAt: null,
+          user: {
+            id: 'user-2',
+            email: 'friend@example.com',
+            name: 'Friend',
+          },
+        },
+      ],
+      tests: [
+        {
+          id: 'session-1',
+          testedAt,
+          freeChlorine: 3,
+          totalChlorine: 4,
+          ph: 7.5,
+          totalAlkalinity: 90,
+          cyanuricAcid: 30,
+          calciumHardness: 200,
+          salt: 3200,
+          waterTempF: 78,
+          tester: {
+            id: 'user-1',
+            email: 'owner@example.com',
+            name: 'Owner One',
+          },
+        },
+      ],
+      lastTestedAt: testedAt,
+    });
+  });
+
   it('paginates tests using testedAt cursor metadata', async () => {
     const rows = [
       {
