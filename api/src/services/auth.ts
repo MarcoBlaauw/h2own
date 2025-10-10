@@ -64,7 +64,16 @@ export class AuthService {
   }
 
   async validateCredentials(data: LoginData) {
-    const [user] = await db.select().from(schema.users)
+    const [user] = await db
+      .select({
+        userId: schema.users.userId,
+        email: schema.users.email,
+        name: schema.users.name,
+        passwordHash: schema.users.passwordHash,
+        isActive: schema.users.isActive,
+        role: schema.users.role,
+      })
+      .from(schema.users)
       .where(eq(schema.users.email, data.email));
 
     if (!user || !user.isActive) {
@@ -80,6 +89,7 @@ export class AuthService {
       userId: user.userId,
       email: user.email,
       name: user.name,
+      role: user.role,
     };
   }
 
@@ -159,12 +169,15 @@ export class AuthService {
   }
 
   async getUserById(userId: string) {
-    const [user] = await db.select({
-      userId: schema.users.userId,
-      email: schema.users.email,
-      name: schema.users.name,
-      createdAt: schema.users.createdAt,
-    }).from(schema.users)
+    const [user] = await db
+      .select({
+        userId: schema.users.userId,
+        email: schema.users.email,
+        name: schema.users.name,
+        role: schema.users.role,
+        createdAt: schema.users.createdAt,
+      })
+      .from(schema.users)
       .where(eq(schema.users.userId, userId));
 
     return user;
