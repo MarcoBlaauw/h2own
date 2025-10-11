@@ -1,12 +1,17 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import Card from '$lib/components/ui/Card.svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import type { PageData } from './$types';
+  import type { Chemical } from './+page';
 
   export let data: PageData;
 
   const categories = data.categories ?? [];
+  let chemicals: Chemical[] = data.chemicals ?? [];
   let loadError = data.loadError;
+
+  const categoryLookup = new Map(categories.map((category) => [category.categoryId, category.name]));
 
   type FormState = {
     categoryId: string;
@@ -59,9 +64,15 @@
   };
 
   let form: FormState = { ...defaultFormState };
+  let formMode: 'create' | 'edit' = 'create';
+  let editingChemicalId: string | null = null;
   let submitting = false;
   let successMessage = '';
   let formErrors: string[] = [];
+
+  let tableMessage: { type: 'success' | 'error'; text: string } | null = null;
+  let toggleBusyIds = new SvelteSet<string>();
+  let deleteBusyIds = new SvelteSet<string>();
 
   const numericFieldLabels: Record<string, string> = {
     concentrationPercent: 'Concentration (%)',
@@ -72,6 +83,16 @@
     phChangePerDose: 'pH change per dose',
     averageCostPerUnit: 'Average cost per unit',
   };
+
+  function toFormValue(value: string | number | null | undefined) {
+    if (value === null || value === undefined) return '';
+    return typeof value === 'number' ? value.toString() : value;
+  }
+
+  function toBoolean(value: boolean | null | undefined, fallback = false) {
+    if (value === null || value === undefined) return fallback;
+    return value;
+  }
 
   function parseActiveIngredients(input: string) {
     if (!input.trim()) return undefined;
@@ -104,14 +125,113 @@
       .filter(Boolean);
   }
 
+  function chemicalToFormState(chemical: Chemical): FormState {
+    const activeIngredients = chemical.activeIngredients ?? undefined;
+    const packageSizes = chemical.packageSizes ?? undefined;
+
+    return {
+      categoryId: chemical.categoryId ?? '',
+      name: chemical.name ?? '',
+      brand: chemical.brand ?? '',
+      productType: chemical.productType ?? '',
+      activeIngredients: activeIngredients
+        ? Object.entries(activeIngredients)
+            .map(([ingredient, amount]) => `${ingredient}: ${amount}`)
+            .join('\n')
+        : '',
+      concentrationPercent: toFormValue(chemical.concentrationPercent),
+      phEffect: toFormValue(chemical.phEffect),
+      strengthFactor: toFormValue(chemical.strengthFactor),
+      dosePer10kGallons: toFormValue(chemical.dosePer10kGallons),
+      doseUnit: chemical.doseUnit ?? '',
+      affectsFc: toBoolean(chemical.affectsFc),
+      affectsPh: toBoolean(chemical.affectsPh),
+      affectsTa: toBoolean(chemical.affectsTa),
+      affectsCya: toBoolean(chemical.affectsCya),
+      fcChangePerDose: toFormValue(chemical.fcChangePerDose),
+      phChangePerDose: toFormValue(chemical.phChangePerDose),
+      taChangePerDose: toFormValue(chemical.taChangePerDose),
+      cyaChangePerDose: toFormValue(chemical.cyaChangePerDose),
+      formType: chemical.form ?? '',
+      packageSizes: packageSizes ? packageSizes.join('\n') : '',
+      isActive: toBoolean(chemical.isActive, true),
+      averageCostPerUnit: toFormValue(chemical.averageCostPerUnit),
+    };
+  }
+
   function resetForm() {
     form = { ...defaultFormState, categoryId: form.categoryId };
+    formErrors = [];
+  }
+
+  function startCreateMode() {
+    formMode = 'create';
+    editingChemicalId = null;
+    successMessage = '';
+    resetForm();
+  }
+
+  function beginEdit(chemical: Chemical) {
+    formMode = 'edit';
+    editingChemicalId = chemical.productId;
+    form = chemicalToFormState(chemical);
+    successMessage = '';
+    formErrors = [];
+  }
+
+  function setToggleBusy(id: string, busy: boolean) {
+    if (busy) {
+      toggleBusyIds.add(id);
+    } else {
+      toggleBusyIds.delete(id);
+    }
+  }
+
+  function setDeleteBusy(id: string, busy: boolean) {
+    if (busy) {
+      deleteBusyIds.add(id);
+    } else {
+      deleteBusyIds.delete(id);
+    }
+  }
+
+  function replaceChemical(updated: Chemical) {
+    chemicals = chemicals.map((chemical) =>
+      chemical.productId === updated.productId ? { ...chemical, ...updated } : chemical
+    );
+    if (editingChemicalId === updated.productId) {
+      form = chemicalToFormState(updated);
+    }
+  }
+
+  function addChemical(chemical: Chemical) {
+    chemicals = [chemical, ...chemicals];
+  }
+
+  function removeChemical(productId: string) {
+    chemicals = chemicals.filter((chemical) => chemical.productId !== productId);
+  }
+
+  function extractErrorsFromResponse(response: Response, fallbackMessage: string) {
+    return response
+      .json()
+      .then((body) => {
+        if (body?.message) {
+          return [body.message];
+        }
+        if (Array.isArray(body?.details) && body.details.length > 0) {
+          return body.details.map((detail: any) => detail.message ?? detail);
+        }
+        return [fallbackMessage];
+      })
+      .catch(() => [fallbackMessage]);
   }
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
     formErrors = [];
     successMessage = '';
+    tableMessage = null;
     loadError = null;
 
     if (!form.categoryId) {
@@ -172,7 +292,10 @@
         payload.activeIngredients = activeIngredients;
       }
     } catch (error) {
-      formErrors = [...formErrors, error instanceof Error ? error.message : 'Invalid active ingredient format.'];
+      formErrors = [
+        ...formErrors,
+        error instanceof Error ? error.message : 'Invalid active ingredient format.',
+      ];
     }
 
     const packageSizes = parsePackageSizes(form.packageSizes);
@@ -186,29 +309,112 @@
 
     submitting = true;
     try {
-      const response = await api.chemicals.create(payload);
+      let response: Response;
+      if (formMode === 'create') {
+        response = await api.chemicals.create(payload);
+      } else if (editingChemicalId) {
+        response = await api.chemicals.update(editingChemicalId, payload);
+      } else {
+        throw new Error('No chemical selected for editing.');
+      }
+
       if (!response.ok) {
-        let message = `Failed to create chemical (${response.status})`;
-        try {
-          const body = await response.json();
-          if (body?.message) {
-            message = body.message;
-          } else if (Array.isArray(body?.details) && body.details.length > 0) {
-            message = body.details.map((detail: any) => detail.message ?? detail).join('\n');
-          }
-        } catch (err) {
-          // ignore JSON parse errors and use default message
-        }
-        formErrors = [message];
+        const fallback =
+          formMode === 'create'
+            ? `Failed to create chemical (${response.status})`
+            : `Failed to update chemical (${response.status})`;
+        formErrors = await extractErrorsFromResponse(response, fallback);
         return;
       }
 
-      successMessage = 'Chemical created successfully.';
-      resetForm();
+      const chemical = (await response.json()) as Chemical;
+
+      if (formMode === 'create') {
+        addChemical(chemical);
+        successMessage = 'Chemical created successfully.';
+        resetForm();
+      } else {
+        replaceChemical(chemical);
+        successMessage = 'Chemical updated successfully.';
+        startCreateMode();
+      }
     } catch (error) {
-      formErrors = ['An unexpected error occurred while creating the chemical.'];
+      formErrors = [
+        formMode === 'create'
+          ? 'An unexpected error occurred while creating the chemical.'
+          : 'An unexpected error occurred while updating the chemical.',
+      ];
+      console.error(error);
     } finally {
       submitting = false;
+    }
+  }
+
+  async function handleToggle(chemical: Chemical) {
+    tableMessage = null;
+    setToggleBusy(chemical.productId, true);
+    try {
+      const response = await api.chemicals.update(chemical.productId, {
+        isActive: !toBoolean(chemical.isActive, true),
+      });
+      if (!response.ok) {
+        const errors = await extractErrorsFromResponse(
+          response,
+          `Failed to update ${chemical.name} (${response.status})`
+        );
+        tableMessage = { type: 'error', text: errors.join('\n') };
+        return;
+      }
+
+      const updated = (await response.json()) as Chemical;
+      replaceChemical(updated);
+      tableMessage = {
+        type: 'success',
+        text: `${updated.name} is now ${updated.isActive ? 'active' : 'inactive'}.`,
+      };
+    } catch (error) {
+      console.error(error);
+      tableMessage = {
+        type: 'error',
+        text: `An unexpected error occurred while updating ${chemical.name}.`,
+      };
+    } finally {
+      setToggleBusy(chemical.productId, false);
+    }
+  }
+
+  async function handleDelete(chemical: Chemical) {
+    tableMessage = null;
+    if (typeof window !== 'undefined' && !window.confirm(`Delete ${chemical.name}?`)) {
+      return;
+    }
+
+    setDeleteBusy(chemical.productId, true);
+    try {
+      const response = await api.chemicals.del(chemical.productId);
+      if (!response.ok) {
+        const errors = await extractErrorsFromResponse(
+          response,
+          `Failed to delete ${chemical.name} (${response.status})`
+        );
+        tableMessage = { type: 'error', text: errors.join('\n') };
+        return;
+      }
+
+      removeChemical(chemical.productId);
+      if (editingChemicalId === chemical.productId) {
+        startCreateMode();
+      }
+      successMessage = '';
+      tableMessage = { type: 'success', text: `${chemical.name} was deleted.` };
+    } catch (error) {
+      console.error(error);
+      tableMessage = {
+        type: 'error',
+        text: `An unexpected error occurred while deleting ${chemical.name}.`,
+      };
+    } finally {
+      setDeleteBusy(chemical.productId, false);
     }
   }
 </script>
@@ -230,12 +436,108 @@
     {/if}
   </div>
 
-  <Card status={formErrors.length ? 'danger' : successMessage ? 'success' : 'default'}>
-    <form
-      class="space-y-6"
-      novalidate
-      on:submit|preventDefault={handleSubmit}
-    >
+  <Card className="shadow-card">
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-xl font-semibold text-content-primary">Catalog</h2>
+        {#if formMode === 'edit'}
+          <button class="btn btn-sm btn-outline" type="button" on:click={startCreateMode}>
+            Cancel editing
+          </button>
+        {/if}
+      </div>
+      {#if tableMessage}
+        <p
+          class={`rounded-lg px-3 py-2 text-sm font-medium ${
+            tableMessage.type === 'success'
+              ? 'bg-success/10 text-success'
+              : 'bg-danger/10 text-danger'
+          }`}
+          role={tableMessage.type === 'success' ? 'status' : 'alert'}
+        >
+          {tableMessage.text}
+        </p>
+      {/if}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm text-content-secondary">
+          <thead class="border-b border-border/60 text-xs font-semibold uppercase tracking-wide text-content-secondary/80 dark:border-border-strong/60">
+            <tr>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2">Category</th>
+              <th class="px-3 py-2">Brand</th>
+              <th class="px-3 py-2">Type</th>
+              <th class="px-3 py-2">Status</th>
+              <th class="px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border/40">
+            {#if chemicals.length > 0}
+              {#each chemicals as chemical}
+                <tr class={editingChemicalId === chemical.productId ? 'bg-surface/40' : ''}>
+                  <td class="px-3 py-3 text-content-primary">{chemical.name}</td>
+                  <td class="px-3 py-3">{categoryLookup.get(chemical.categoryId) ?? 'Unknown'}</td>
+                  <td class="px-3 py-3">{chemical.brand ?? '—'}</td>
+                  <td class="px-3 py-3">{chemical.productType ?? '—'}</td>
+                  <td class="px-3 py-3">
+                    <span
+                      class={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${
+                        chemical.isActive ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
+                      }`}
+                    >
+                      <span class={`h-2 w-2 rounded-full ${chemical.isActive ? 'bg-success' : 'bg-warning'}`}></span>
+                      {chemical.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td class="px-3 py-3 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button class="btn btn-xs btn-outline" type="button" on:click={() => beginEdit(chemical)}>
+                        Edit
+                      </button>
+                      <button
+                        class="btn btn-xs btn-outline"
+                        type="button"
+                        disabled={toggleBusyIds.has(chemical.productId)}
+                        on:click={() => handleToggle(chemical)}
+                      >
+                        {toggleBusyIds.has(chemical.productId)
+                          ? 'Saving…'
+                          : chemical.isActive
+                            ? 'Deactivate'
+                            : 'Activate'}
+                      </button>
+                      <button
+                        class="btn btn-xs btn-outline-danger"
+                        type="button"
+                        disabled={deleteBusyIds.has(chemical.productId)}
+                        on:click={() => handleDelete(chemical)}
+                      >
+                        {deleteBusyIds.has(chemical.productId) ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {/each}
+            {:else}
+              <tr>
+                <td colspan="6" class="px-3 py-6 text-center text-content-secondary/80">No chemicals found.</td>
+              </tr>
+            {/if}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </Card>
+
+  <Card className="shadow-card" status={formErrors.length ? 'danger' : successMessage ? 'success' : 'default'}>
+    <form class="space-y-6" novalidate on:submit|preventDefault={handleSubmit}>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 class="text-xl font-semibold text-content-primary">
+          {formMode === 'create' ? 'Add chemical' : 'Edit chemical'}
+        </h2>
+        {#if formMode === 'edit'}
+          <span class="text-sm text-content-secondary">Editing existing record</span>
+        {/if}
+      </div>
       <div class="form-grid md:grid-cols-2 md:gap-6">
         <div class="form-field">
           <label for="category" class="form-label">Category</label>
@@ -273,7 +575,13 @@
 
         <div class="form-field">
           <label for="productType" class="form-label">Product type</label>
-          <input id="productType" name="productType" class="form-control" type="text" bind:value={form.productType} />
+          <input
+            id="productType"
+            name="productType"
+            class="form-control"
+            type="text"
+            bind:value={form.productType}
+          />
         </div>
 
         <div class="form-field md:col-span-2">
@@ -309,7 +617,13 @@
 
         <div class="form-field">
           <label for="strengthFactor" class="form-label">Strength factor</label>
-          <input id="strengthFactor" name="strengthFactor" class="form-control" type="text" bind:value={form.strengthFactor} />
+          <input
+            id="strengthFactor"
+            name="strengthFactor"
+            class="form-control"
+            type="text"
+            bind:value={form.strengthFactor}
+          />
         </div>
 
         <div class="form-field">
@@ -442,17 +756,22 @@
         </p>
       {/if}
 
-      <button
-        class="btn btn-base btn-primary"
-        type="submit"
-        disabled={submitting}
-      >
-        {#if submitting}
-          Saving…
-        {:else}
-          Create chemical
+      <div class="flex flex-wrap items-center gap-3">
+        <button class="btn btn-base btn-primary" type="submit" disabled={submitting}>
+          {#if submitting}
+            Saving…
+          {:else if formMode === 'create'}
+            Create chemical
+          {:else}
+            Save changes
+          {/if}
+        </button>
+        {#if formMode === 'edit'}
+          <button class="btn btn-base btn-outline" type="button" on:click={startCreateMode}>
+            Cancel
+          </button>
         {/if}
-      </button>
+      </div>
     </form>
   </Card>
 </section>
