@@ -70,6 +70,8 @@ type ApiClient = {
     ) => Promise<Response>;
     create: (body: Record<string, unknown>) => Promise<Response>;
     listCategories: (customFetch?: FetchLike) => Promise<Response>;
+    update: (id: string, body: Record<string, unknown>) => Promise<Response>;
+    del: (id: string) => Promise<Response>;
   };
 };
 
@@ -110,6 +112,8 @@ export const api: ApiClient = {
     },
     create: (body) => apiFetch('/chemicals', jsonRequest(body, { method: 'POST' })),
     listCategories: (customFetch) => apiFetch('/chemicals/categories', {}, customFetch),
+    update: (id, body) => apiFetch(`/chemicals/${id}`, jsonRequest(body, { method: 'PATCH' })),
+    del: (id) => apiFetch(`/chemicals/${id}`, { method: 'DELETE' }),
   },
 };
 

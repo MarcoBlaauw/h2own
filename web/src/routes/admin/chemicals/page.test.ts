@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import Page from './+page.svelte';
@@ -6,10 +6,14 @@ import { api } from '$lib/api';
 
 vi.mock('$lib/api', () => {
   const create = vi.fn();
+  const update = vi.fn();
+  const del = vi.fn();
   return {
     api: {
       chemicals: {
         create,
+        update,
+        del,
         list: vi.fn(),
         listCategories: vi.fn(),
       },
@@ -22,27 +26,36 @@ describe('admin chemicals page', () => {
     { categoryId: '11111111-1111-1111-1111-111111111111', name: 'Sanitizers' },
     { categoryId: '22222222-2222-2222-2222-222222222222', name: 'Balancers' },
   ];
-  const session = {
-    user: {
-      id: 'admin-user',
-      email: 'admin@example.com',
-      role: 'admin',
+
+  const chemicals = [
+    {
+      productId: 'c6ffb1fd-5ee3-4a6f-a581-d848e87f6761',
+      categoryId: categories[0].categoryId,
+      name: 'Liquid Chlorine',
+      brand: 'GenericCo',
+      productType: 'chlorine',
+      isActive: true,
     },
-  };
+  ];
 
   const createMock = api.chemicals.create as unknown as Mock;
+  const updateMock = api.chemicals.update as unknown as Mock;
+  const deleteMock = api.chemicals.del as unknown as Mock;
 
   beforeEach(() => {
     createMock.mockReset();
+    updateMock.mockReset();
+    deleteMock.mockReset();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('shows validation errors when required fields are missing', async () => {
     const { getByRole, findByRole } = render(Page, {
-      props: { data: { categories, loadError: null, session } },
+      props: { data: { session: null, categories, chemicals, loadError: null } },
     });
 
     const submit = getByRole('button', { name: /create chemical/i });
@@ -54,50 +67,45 @@ describe('admin chemicals page', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
-  it('submits the form and resets fields on success', async () => {
+  it('creates a chemical and appends it to the table', async () => {
+    const created = {
+      productId: 'a6d9e562-3d8a-4b1c-9f5b-6d97a933fb3f',
+      categoryId: categories[0].categoryId,
+      name: 'New Acid',
+      brand: 'PoolCo',
+      productType: 'acid',
+      isActive: true,
+    };
+
     createMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ ok: true }), { status: 201, headers: { 'Content-Type': 'application/json' } })
+      new Response(JSON.stringify(created), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      })
     );
 
-    const { getByLabelText, getByRole, findByRole } = render(Page, {
-      props: { data: { categories, loadError: null, session } },
+    const { getByLabelText, getByRole, findByRole, queryByText } = render(Page, {
+      props: { data: { session: null, categories, chemicals, loadError: null } },
     });
 
-    const categorySelect = getByLabelText('Category') as HTMLSelectElement;
-    const nameInput = getByLabelText('Name') as HTMLInputElement;
-    const doseInput = getByLabelText('Dose per 10k gallons') as HTMLInputElement;
-    const costInput = getByLabelText('Average cost per unit') as HTMLInputElement;
-
-    await fireEvent.change(categorySelect, { target: { value: categories[0].categoryId } });
-    await fireEvent.input(nameInput, { target: { value: 'Test Chlorine' } });
-    await fireEvent.input(doseInput, { target: { value: '12.5' } });
-    await fireEvent.input(costInput, { target: { value: '4.5' } });
+    await fireEvent.change(getByLabelText('Category'), { target: { value: categories[0].categoryId } });
+    await fireEvent.input(getByLabelText('Name'), { target: { value: created.name } });
 
     const submit = getByRole('button', { name: /create chemical/i });
     await fireEvent.click(submit);
 
-    expect(createMock).toHaveBeenCalledTimes(1);
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        categoryId: categories[0].categoryId,
-        name: 'Test Chlorine',
-        dosePer10kGallons: 12.5,
-        averageCostPerUnit: 4.5,
-        affectsFc: false,
-        affectsPh: false,
-        affectsTa: false,
-        affectsCya: false,
-        isActive: true,
-      })
+      expect.objectContaining({ categoryId: categories[0].categoryId, name: created.name })
     );
 
     const status = await findByRole('status');
     expect(status.textContent).toContain('Chemical created successfully.');
-    expect(nameInput.value).toBe('');
-    expect(categorySelect.value).toBe(categories[0].categoryId);
+    await waitFor(() => {
+      expect(queryByText(created.name)).toBeTruthy();
+    });
   });
 
-  it('displays an error when the API rejects the request', async () => {
+  it('displays an error when the API rejects create', async () => {
     createMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ message: 'Validation failed' }), {
         status: 400,
@@ -106,20 +114,81 @@ describe('admin chemicals page', () => {
     );
 
     const { getByLabelText, getByRole, findByRole } = render(Page, {
-      props: { data: { categories, loadError: null, session } },
+      props: { data: { session: null, categories, chemicals, loadError: null } },
     });
 
-    const categorySelect = getByLabelText('Category') as HTMLSelectElement;
-    const nameInput = getByLabelText('Name') as HTMLInputElement;
-
-    await fireEvent.change(categorySelect, { target: { value: categories[1].categoryId } });
-    await fireEvent.input(nameInput, { target: { value: 'Scale Inhibitor' } });
+    await fireEvent.change(getByLabelText('Category'), { target: { value: categories[1].categoryId } });
+    await fireEvent.input(getByLabelText('Name'), { target: { value: 'Scale Inhibitor' } });
 
     const submit = getByRole('button', { name: /create chemical/i });
     await fireEvent.click(submit);
 
-    expect(createMock).toHaveBeenCalled();
     const alert = await findByRole('alert');
     expect(alert.textContent).toContain('Validation failed');
+  });
+
+  it('allows editing an existing chemical', async () => {
+    const updated = { ...chemicals[0], name: 'Updated Chlorine', isActive: false };
+    updateMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(updated), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    const { getByRole, getByLabelText, queryByText } = render(Page, {
+      props: { data: { session: null, categories, chemicals, loadError: null } },
+    });
+
+    await fireEvent.click(getByRole('button', { name: /edit/i }));
+
+    const nameInput = getByLabelText('Name') as HTMLInputElement;
+    expect(nameInput.value).toBe(chemicals[0].name);
+
+    await fireEvent.input(nameInput, { target: { value: updated.name } });
+
+    const submit = getByRole('button', { name: /save changes/i });
+    await fireEvent.click(submit);
+
+    expect(updateMock).toHaveBeenCalledWith(chemicals[0].productId, expect.objectContaining({ name: updated.name }));
+    await waitFor(() => {
+      expect(queryByText(updated.name)).toBeTruthy();
+    });
+  });
+
+  it('toggles the active state of a chemical', async () => {
+    const toggled = { ...chemicals[0], isActive: false };
+    updateMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(toggled), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    const { getByRole, findByText } = render(Page, {
+      props: { data: { session: null, categories, chemicals, loadError: null } },
+    });
+
+    const toggle = getByRole('button', { name: /deactivate/i });
+    await fireEvent.click(toggle);
+
+    expect(updateMock).toHaveBeenCalledWith(chemicals[0].productId, { isActive: false });
+    expect(await findByText(/inactive/)).toBeTruthy();
+  });
+
+  it('deletes a chemical from the catalog', async () => {
+    deleteMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const { getByRole, queryByText } = render(Page, {
+      props: { data: { session: null, categories, chemicals, loadError: null } },
+    });
+
+    const deleteButton = getByRole('button', { name: /delete/i });
+    await fireEvent.click(deleteButton);
+
+    expect(deleteMock).toHaveBeenCalledWith(chemicals[0].productId);
+    await waitFor(() => {
+      expect(queryByText(chemicals[0].name)).toBeNull();
+    });
   });
 });

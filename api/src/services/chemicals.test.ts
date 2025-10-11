@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ChemicalsService, CreateChemicalData } from './chemicals.js';
+import { eq } from 'drizzle-orm';
+import { ChemicalsService, CreateChemicalData, UpdateChemicalData } from './chemicals.js';
 import * as schema from '../db/schema/index.js';
 
 describe('ChemicalsService', () => {
@@ -97,6 +98,79 @@ describe('ChemicalsService', () => {
       });
       expect(returningMock).toHaveBeenCalled();
       expect(result).toEqual(persisted);
+    });
+  });
+
+  describe('updateChemical', () => {
+    it('updates with mapped values and returns the updated record', async () => {
+      const updateMock = vi.fn();
+      const setMock = vi.fn();
+      const whereMock = vi.fn();
+      const returningMock = vi.fn();
+
+      updateMock.mockReturnValue({ set: setMock });
+      setMock.mockReturnValue({ where: whereMock });
+      whereMock.mockReturnValue({ returning: returningMock });
+
+      const persisted = {
+        productId: 'df6e9a66-4c72-4b0a-9a8e-8f8a1c8f3a1a',
+        categoryId: '55b24041-49df-4f4f-b3e1-59d30e97e4c8',
+        name: 'Updated Chemical',
+        brand: 'PoolCo',
+        concentrationPercent: '10.50',
+        isActive: false,
+      } as const;
+
+      returningMock.mockResolvedValue([persisted]);
+
+      const service = new ChemicalsService({ update: updateMock } as any);
+
+      const data: UpdateChemicalData = {
+        name: persisted.name,
+        brand: persisted.brand!,
+        concentrationPercent: 10.5,
+        isActive: false,
+      };
+
+      const result = await service.updateChemical(persisted.productId, data);
+
+      expect(updateMock).toHaveBeenCalledWith(schema.products);
+      expect(setMock).toHaveBeenCalledWith({
+        name: data.name,
+        brand: data.brand,
+        concentrationPercent: '10.5',
+        isActive: false,
+      });
+      expect(whereMock).toHaveBeenCalledWith(eq(schema.products.productId, persisted.productId));
+      expect(returningMock).toHaveBeenCalled();
+      expect(result).toEqual(persisted);
+    });
+  });
+
+  describe('deleteChemical', () => {
+    it('deletes a chemical and returns the removed record', async () => {
+      const deleteMock = vi.fn();
+      const whereMock = vi.fn();
+      const returningMock = vi.fn();
+
+      deleteMock.mockReturnValue({ where: whereMock });
+      whereMock.mockReturnValue({ returning: returningMock });
+
+      const deleted = {
+        productId: '84b73d0c-36ac-4b10-b92f-d0ea1f5cbfef',
+        name: 'Old Chemical',
+      } as const;
+
+      returningMock.mockResolvedValue([deleted]);
+
+      const service = new ChemicalsService({ delete: deleteMock } as any);
+
+      const result = await service.deleteChemical(deleted.productId);
+
+      expect(deleteMock).toHaveBeenCalledWith(schema.products);
+      expect(whereMock).toHaveBeenCalledWith(eq(schema.products.productId, deleted.productId));
+      expect(returningMock).toHaveBeenCalled();
+      expect(result).toEqual(deleted);
     });
   });
 });

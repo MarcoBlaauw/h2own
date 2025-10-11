@@ -61,6 +61,43 @@ function mapCreateChemicalData(data: CreateChemicalData): ProductInsert {
   } satisfies ProductInsert;
 }
 
+export type UpdateChemicalData = Partial<CreateChemicalData>;
+
+function mapUpdateChemicalData(data: UpdateChemicalData): Partial<ProductInsert> {
+  const mapped: Partial<ProductInsert> = {};
+
+  if (data.categoryId !== undefined) mapped.categoryId = data.categoryId;
+  if (data.name !== undefined) mapped.name = data.name;
+  if (data.brand !== undefined) mapped.brand = data.brand;
+  if (data.productType !== undefined) mapped.productType = data.productType;
+  if (data.activeIngredients !== undefined) mapped.activeIngredients = data.activeIngredients;
+  if (data.concentrationPercent !== undefined)
+    mapped.concentrationPercent = toOptionalDecimal(data.concentrationPercent);
+  if (data.phEffect !== undefined) mapped.phEffect = toOptionalDecimal(data.phEffect);
+  if (data.strengthFactor !== undefined)
+    mapped.strengthFactor = toOptionalDecimal(data.strengthFactor);
+  if (data.dosePer10kGallons !== undefined)
+    mapped.dosePer10kGallons = toOptionalDecimal(data.dosePer10kGallons);
+  if (data.doseUnit !== undefined) mapped.doseUnit = data.doseUnit;
+  if (data.affectsFc !== undefined) mapped.affectsFc = data.affectsFc;
+  if (data.affectsPh !== undefined) mapped.affectsPh = data.affectsPh;
+  if (data.affectsTa !== undefined) mapped.affectsTa = data.affectsTa;
+  if (data.affectsCya !== undefined) mapped.affectsCya = data.affectsCya;
+  if (data.fcChangePerDose !== undefined)
+    mapped.fcChangePerDose = toOptionalDecimal(data.fcChangePerDose);
+  if (data.phChangePerDose !== undefined)
+    mapped.phChangePerDose = toOptionalDecimal(data.phChangePerDose);
+  if (data.taChangePerDose !== undefined) mapped.taChangePerDose = data.taChangePerDose;
+  if (data.cyaChangePerDose !== undefined) mapped.cyaChangePerDose = data.cyaChangePerDose;
+  if (data.form !== undefined) mapped.form = data.form;
+  if (data.packageSizes !== undefined) mapped.packageSizes = data.packageSizes;
+  if (data.isActive !== undefined) mapped.isActive = data.isActive;
+  if (data.averageCostPerUnit !== undefined)
+    mapped.averageCostPerUnit = toOptionalDecimal(data.averageCostPerUnit);
+
+  return mapped;
+}
+
 export class ChemicalsService {
   constructor(private readonly db = dbClient) {}
 
@@ -101,6 +138,25 @@ export class ChemicalsService {
     const [chemical] = await this.db
       .insert(schema.products)
       .values(mapCreateChemicalData(data))
+      .returning();
+
+    return chemical;
+  }
+
+  async updateChemical(id: string, data: UpdateChemicalData) {
+    const [chemical] = await this.db
+      .update(schema.products)
+      .set(mapUpdateChemicalData(data))
+      .where(eq(schema.products.productId, id))
+      .returning();
+
+    return chemical;
+  }
+
+  async deleteChemical(id: string) {
+    const [chemical] = await this.db
+      .delete(schema.products)
+      .where(eq(schema.products.productId, id))
       .returning();
 
     return chemical;

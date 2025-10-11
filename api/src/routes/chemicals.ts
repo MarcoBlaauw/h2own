@@ -46,6 +46,15 @@ const createChemicalBody = z.object({
   averageCostPerUnit: optionalNumber,
 });
 
+const updateChemicalBody = createChemicalBody.partial().refine(
+  (body) => Object.keys(body).length > 0,
+  { message: 'At least one property must be provided.' }
+);
+
+const chemicalIdParam = z.object({
+  id: z.string().uuid(),
+});
+
 export async function chemicalsRoutes(app: FastifyInstance) {
   app.get('/', async (req, reply) => {
     try {
@@ -70,6 +79,55 @@ export async function chemicalsRoutes(app: FastifyInstance) {
         const body = createChemicalBody.parse(req.body);
         const chemical = await chemicalsService.createChemical(body);
         return reply.code(201).send(chemical);
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+        }
+        throw err;
+      }
+    }
+  );
+
+  app.patch(
+    '/:id',
+    {
+      preHandler: [app.auth.verifySession, app.auth.requireRole('admin')],
+    },
+    async (req, reply) => {
+      try {
+        const { id } = chemicalIdParam.parse(req.params);
+        const body = updateChemicalBody.parse(req.body ?? {});
+
+        const chemical = await chemicalsService.updateChemical(id, body);
+        if (!chemical) {
+          return reply.code(404).send({ error: 'NotFound' });
+        }
+
+        return reply.send(chemical);
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+        }
+        throw err;
+      }
+    }
+  );
+
+  app.delete(
+    '/:id',
+    {
+      preHandler: [app.auth.verifySession, app.auth.requireRole('admin')],
+    },
+    async (req, reply) => {
+      try {
+        const { id } = chemicalIdParam.parse(req.params);
+        const deleted = await chemicalsService.deleteChemical(id);
+
+        if (!deleted) {
+          return reply.code(404).send({ error: 'NotFound' });
+        }
+
+        return reply.code(204).send();
       } catch (err) {
         if (err instanceof z.ZodError) {
           return reply.code(400).send({ error: 'ValidationError', details: err.errors });

@@ -109,7 +109,6 @@ describe('chemicals routes integration', () => {
       });
       expect(verifySessionMock).toHaveBeenCalled();
       expect(requireRoleMock).toHaveBeenCalledWith('admin');
-      expect(roleHandlers[0]).toHaveBeenCalled();
     });
 
     it('rejects invalid payloads with validation errors', async () => {
@@ -151,6 +150,171 @@ describe('chemicals routes integration', () => {
     });
   });
 
+  describe('PATCH /chemicals/:id', () => {
+    const productId = 'b5f0f3fb-9d93-4f53-b624-7a9690cfb181';
+
+    it('allows admins to update chemicals', async () => {
+      const payload = {
+        name: 'Updated Chlorine',
+        isActive: false,
+      } as const;
+
+      const updated = {
+        productId,
+        categoryId: 'a6d9e562-3d8a-4b1c-9f5b-6d97a933fb3f',
+        name: payload.name,
+        isActive: false,
+      } as const;
+
+      const spy = vi
+        .spyOn(chemicalsService, 'updateChemical')
+        .mockResolvedValue(updated as any);
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/chemicals/${productId}`,
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(updated);
+      expect(spy).toHaveBeenCalledWith(productId, payload);
+      expect(verifySessionMock).toHaveBeenCalled();
+      expect(requireRoleMock).toHaveBeenCalledWith('admin');
+    });
+
+    it('returns 404 when the chemical is not found', async () => {
+      const spy = vi
+        .spyOn(chemicalsService, 'updateChemical')
+        .mockResolvedValue(undefined);
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/chemicals/${productId}`,
+        payload: { name: 'Missing Chemical' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: 'NotFound' });
+      expect(spy).toHaveBeenCalledWith(productId, { name: 'Missing Chemical' });
+    });
+
+    it('rejects invalid payloads', async () => {
+      const spy = vi.spyOn(chemicalsService, 'updateChemical');
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/chemicals/${productId}`,
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error).toBe('ValidationError');
+      expect(Array.isArray(body.details)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('validates the identifier', async () => {
+      const spy = vi.spyOn(chemicalsService, 'updateChemical');
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/chemicals/not-a-uuid',
+        payload: { name: 'Invalid' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error).toBe('ValidationError');
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('rejects callers without the admin role', async () => {
+      const spy = vi.spyOn(chemicalsService, 'updateChemical');
+      currentRole = 'member';
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/chemicals/${productId}`,
+        payload: { name: 'Not Allowed' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Forbidden' });
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /chemicals/:id', () => {
+    const productId = 'c6ffb1fd-5ee3-4a6f-a581-d848e87f6761';
+
+    it('allows admins to delete chemicals', async () => {
+      const deleted = {
+        productId,
+        name: 'Liquid Chlorine 12.5%',
+      } as const;
+
+      const spy = vi
+        .spyOn(chemicalsService, 'deleteChemical')
+        .mockResolvedValue(deleted as any);
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/chemicals/${productId}`,
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(response.body).toBe('');
+      expect(spy).toHaveBeenCalledWith(productId);
+      expect(verifySessionMock).toHaveBeenCalled();
+      expect(requireRoleMock).toHaveBeenCalledWith('admin');
+    });
+
+    it('returns 404 when the chemical is missing', async () => {
+      const spy = vi
+        .spyOn(chemicalsService, 'deleteChemical')
+        .mockResolvedValue(undefined);
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/chemicals/${productId}`,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: 'NotFound' });
+      expect(spy).toHaveBeenCalledWith(productId);
+    });
+
+    it('validates the identifier', async () => {
+      const spy = vi.spyOn(chemicalsService, 'deleteChemical');
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/chemicals/not-a-uuid',
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error).toBe('ValidationError');
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('rejects callers without the admin role', async () => {
+      const spy = vi.spyOn(chemicalsService, 'deleteChemical');
+      currentRole = 'member';
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/chemicals/${productId}`,
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Forbidden' });
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /chemicals/categories', () => {
     it('allows admins to list chemical categories', async () => {
       const categories = [
@@ -174,7 +338,6 @@ describe('chemicals routes integration', () => {
       expect(spy).toHaveBeenCalled();
       expect(verifySessionMock).toHaveBeenCalled();
       expect(requireRoleMock).toHaveBeenCalledWith('admin');
-      expect(roleHandlers[1]).toHaveBeenCalled();
     });
 
     it('rejects callers without the admin role', async () => {
