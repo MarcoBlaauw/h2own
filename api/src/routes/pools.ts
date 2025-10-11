@@ -2,46 +2,17 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import type {} from '../types/fastify.d.ts';
 import { z } from 'zod';
 import {
+  optionalPoolFields,
+  parseCreateLocationId,
+  parseUpdateLocationId,
+} from './pools.schemas.js';
+import {
   poolsService,
   PoolForbiddenError,
   PoolNotFoundError,
   PoolLocationAccessError,
 } from '../services/pools.js';
 import { recommenderService } from '../services/recommender.js';
-
-// Body schemas
-const parseCreateLocationId = z.preprocess(
-  (value) => {
-    if (value === '' || value === null || value === undefined) {
-      return undefined;
-    }
-    return value;
-  },
-  z.string().uuid().optional()
-);
-
-const parseUpdateLocationId = z.preprocess(
-  (value) => {
-    if (value === '' || value === undefined) {
-      return undefined;
-    }
-    if (value === null) {
-      return null;
-    }
-    return value;
-  },
-  z.union([z.string().uuid(), z.null()]).optional()
-);
-
-const optionalPoolFields = {
-  saltLevelPpm: z.coerce.number().optional(),
-  shadeLevel: z.string().optional(),
-  enclosureType: z.string().optional(),
-  hasCover: z.coerce.boolean().optional(),
-  pumpGpm: z.coerce.number().optional(),
-  filterType: z.string().optional(),
-  hasHeater: z.coerce.boolean().optional(),
-} as const;
 
 const createPoolSchema = z.object({
   name: z.string(),
