@@ -105,6 +105,17 @@ export class ChemicalsService {
 
     return chemical;
   }
+
+  async listCategories() {
+    return this.db
+      .select({
+        categoryId: schema.productCategories.categoryId,
+        name: schema.productCategories.name,
+        description: schema.productCategories.description,
+        isActive: schema.productCategories.isActive,
+      })
+      .from(schema.productCategories);
+  }
 }
 
 export const chemicalsService = new ChemicalsService();
