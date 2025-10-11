@@ -49,6 +49,14 @@ type ApiClient = {
     logout: (customFetch?: FetchLike) => Promise<Response>;
     me: (customFetch?: FetchLike) => Promise<Response>;
   };
+  apiTokens: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    create: (
+      body: { name: string; permissions?: Record<string, unknown> },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    revoke: (tokenId: string, customFetch?: FetchLike) => Promise<Response>;
+  };
   users: {
     list: (
       customFetch?: FetchLike,
@@ -106,6 +114,13 @@ export const api: ApiClient = {
       apiFetch('/auth/login', jsonRequest(body, { method: 'POST' }), customFetch),
     logout: (customFetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
     me: (customFetch) => apiFetch('/auth/me', {}, customFetch),
+  },
+  apiTokens: {
+    list: (customFetch) => apiFetch('/admin/api-tokens', {}, customFetch),
+    create: (body, customFetch) =>
+      apiFetch('/admin/api-tokens', jsonRequest(body, { method: 'POST' }), customFetch),
+    revoke: (tokenId, customFetch) =>
+      apiFetch(`/admin/api-tokens/${tokenId}`, { method: 'DELETE' }, customFetch),
   },
   users: {
     list: (customFetch, params = {}) => {
