@@ -9,5 +9,6 @@ export const userLocations = pgTable('user_locations', {
   longitude: decimal('longitude', { precision: 11, scale: 8 }),
   timezone: varchar('timezone', { length: 50 }).default('UTC'),
   isPrimary: boolean('is_primary').default(false),
+  isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

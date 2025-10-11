@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS user_locations (
   longitude DECIMAL(11,8),
   timezone VARCHAR(50) DEFAULT 'UTC',
   is_primary BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

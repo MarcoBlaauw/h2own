@@ -21,7 +21,7 @@ export interface CreatePoolData {
   volumeGallons: number;
   sanitizerType: string;
   surfaceType: string;
-  locationId?: string;
+  locationId?: string | null;
   saltLevelPpm?: number;
   shadeLevel?: string;
   enclosureType?: string;
@@ -30,6 +30,10 @@ export interface CreatePoolData {
   filterType?: string;
   hasHeater?: boolean;
 }
+
+export type UpdatePoolData = Partial<CreatePoolData> & {
+  locationId?: string | null;
+};
 
 export interface CreateTestData {
   fc?: number;
@@ -54,14 +58,13 @@ export interface CreateDosingData {
 type PoolInsert = typeof schema.pools.$inferInsert;
 
 function mapCreatePoolData(userId: string, data: CreatePoolData): PoolInsert {
-  return {
+  const mapped: PoolInsert = {
     ownerId: userId,
     isActive: true,
     name: data.name,
     volumeGallons: data.volumeGallons,
     sanitizerType: data.sanitizerType,
     surfaceType: data.surfaceType,
-    locationId: data.locationId,
     saltLevelPpm: data.saltLevelPpm,
     shadeLevel: data.shadeLevel,
     enclosureType: data.enclosureType,
@@ -70,9 +73,15 @@ function mapCreatePoolData(userId: string, data: CreatePoolData): PoolInsert {
     filterType: data.filterType,
     hasHeater: data.hasHeater,
   } satisfies PoolInsert;
+
+  if (data.locationId !== undefined) {
+    mapped.locationId = data.locationId;
+  }
+
+  return mapped;
 }
 
-function mapUpdatePoolData(data: Partial<CreatePoolData>): Partial<PoolInsert> {
+function mapUpdatePoolData(data: UpdatePoolData): Partial<PoolInsert> {
   const mapped: Partial<PoolInsert> = {};
 
   if (data.name !== undefined) mapped.name = data.name;
@@ -159,6 +168,13 @@ function toNumber(value: string | number | null | undefined) {
   return Number.isNaN(num) ? null : num;
 }
 
+export class PoolLocationAccessError extends Error {
+  constructor(public readonly locationId: string) {
+    super(`Location ${locationId} is not accessible for this pool`);
+    this.name = 'PoolLocationAccessError';
+  }
+}
+
 export class PoolsService {
   constructor(private readonly db = dbClient) {}
 
@@ -189,7 +205,26 @@ export class PoolsService {
     return pool;
   }
 
+  private async ensureLocationAccessible(locationId: string, userId: string) {
+    const [location] = await this.db
+      .select({
+        userId: schema.userLocations.userId,
+        isActive: schema.userLocations.isActive,
+      })
+      .from(schema.userLocations)
+      .where(eq(schema.userLocations.locationId, locationId))
+      .limit(1);
+
+    if (!location || location.isActive === false || location.userId !== userId) {
+      throw new PoolLocationAccessError(locationId);
+    }
+  }
+
   async createPool(userId: string, data: CreatePoolData) {
+    if (data.locationId) {
+      await this.ensureLocationAccessible(data.locationId, userId);
+    }
+
     const [pool] = await this.db
       .insert(schema.pools)
       .values(mapCreatePoolData(userId, data))
@@ -368,8 +403,12 @@ export class PoolsService {
     } satisfies PoolDetail;
   }
 
-  async updatePool(poolId: string, requestingUserId: string, data: Partial<CreatePoolData>) {
+  async updatePool(poolId: string, requestingUserId: string, data: UpdatePoolData) {
     await this.ensurePoolAccess(poolId, requestingUserId);
+
+    if (data.locationId && typeof data.locationId === 'string') {
+      await this.ensureLocationAccessible(data.locationId, requestingUserId);
+    }
 
     const [pool] = await this.db
       .update(schema.pools)

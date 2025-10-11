@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PoolsService, type CreatePoolData } from './pools.js';
+import { PoolsService, type CreatePoolData, PoolLocationAccessError } from './pools.js';
 import * as schema from '../db/schema/index.js';
 
 describe('PoolsService', () => {
@@ -119,6 +119,63 @@ describe('PoolsService', () => {
     });
   });
 
+  it('validates location ownership when creating a pool', async () => {
+    selectSpy.mockImplementationOnce(() => ({
+      from: (table: unknown) => {
+        expect(table).toBe(schema.userLocations);
+        return {
+          where: (condition: unknown) => {
+            expect(condition).toBeDefined();
+            return {
+              limit: (count: number) => {
+                expect(count).toBe(1);
+                return Promise.resolve([{ userId, isActive: true }]);
+              },
+            };
+          },
+        };
+      },
+    }));
+
+    const payload: CreatePoolData = {
+      name: 'Club Pool',
+      volumeGallons: 20000,
+      sanitizerType: 'salt',
+      surfaceType: 'fiberglass',
+      locationId: 'loc-1',
+    };
+
+    await service.createPool(userId, payload);
+    expect(selectSpy).toHaveBeenCalled();
+  });
+
+  it('throws when assigning an inaccessible location', async () => {
+    selectSpy.mockImplementationOnce(() => ({
+      from: (table: unknown) => {
+        expect(table).toBe(schema.userLocations);
+        return {
+          where: () => ({
+            limit: (count: number) => {
+              expect(count).toBe(1);
+              return Promise.resolve([]);
+            },
+          }),
+        };
+      },
+    }));
+
+    await expect(
+      service.createPool(userId, {
+        name: 'Club Pool',
+        volumeGallons: 20000,
+        sanitizerType: 'salt',
+        surfaceType: 'fiberglass',
+        locationId: 'loc-1',
+      })
+    ).rejects.toBeInstanceOf(PoolLocationAccessError);
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
   it('maps update payloads to database column names', async () => {
     const pool = await service.updatePool('pool-123', userId, {
       sanitizerType: 'bromine',
@@ -137,6 +194,42 @@ describe('PoolsService', () => {
     expect(capturedUpdate).not.toHaveProperty('sanitizer');
     expect(capturedUpdate).not.toHaveProperty('surface');
     expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
+  });
+
+  it('validates location when updating a pool', async () => {
+    selectSpy.mockImplementationOnce(() => ({
+      from: (table: unknown) => {
+        expect(table).toBe(schema.userLocations);
+        return {
+          where: () => ({
+            limit: (count: number) => {
+              expect(count).toBe(1);
+              return Promise.resolve([{ userId, isActive: true }]);
+            },
+          }),
+        };
+      },
+    }));
+
+    await service.updatePool('pool-123', userId, { locationId: 'loc-2' });
+    expect(selectSpy).toHaveBeenCalled();
+  });
+
+  it('throws when updating with an inaccessible location', async () => {
+    selectSpy.mockImplementationOnce(() => ({
+      from: () => ({
+        where: () => ({
+          limit: (count: number) => {
+            expect(count).toBe(1);
+            return Promise.resolve([]);
+          },
+        }),
+      }),
+    }));
+
+    await expect(
+      service.updatePool('pool-123', userId, { locationId: 'loc-9' })
+    ).rejects.toBeInstanceOf(PoolLocationAccessError);
   });
 
   it('returns pools for memberships', async () => {

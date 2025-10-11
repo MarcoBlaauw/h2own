@@ -60,6 +60,12 @@ type ApiClient = {
       body?: { newPassword?: string }
     ) => Promise<Response>;
   };
+  locations: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    create: (body: Record<string, unknown>) => Promise<Response>;
+    update: (locationId: string, body: Record<string, unknown>) => Promise<Response>;
+    deactivate: (locationId: string, body?: Record<string, unknown>) => Promise<Response>;
+  };
   pools: {
     list: (customFetch?: FetchLike, owner?: boolean) => Promise<Response>;
     create: (body: Record<string, unknown>) => Promise<Response>;
@@ -112,6 +118,17 @@ export const api: ApiClient = {
     resetPassword: (userId, body) =>
       apiFetch(
         `/admin/users/${userId}/reset-password`,
+        jsonRequest(body ?? {}, { method: 'POST' })
+      ),
+  },
+  locations: {
+    list: (customFetch) => apiFetch('/admin/locations', {}, customFetch),
+    create: (body) => apiFetch('/admin/locations', jsonRequest(body, { method: 'POST' })),
+    update: (locationId, body) =>
+      apiFetch(`/admin/locations/${locationId}`, jsonRequest(body, { method: 'PATCH' })),
+    deactivate: (locationId, body) =>
+      apiFetch(
+        `/admin/locations/${locationId}/deactivate`,
         jsonRequest(body ?? {}, { method: 'POST' })
       ),
   },
