@@ -9,7 +9,7 @@ import { env } from "./env.js";
 import { healthCheck } from "./db/index.js";
 
 // ⬇️ Import route GROUPS directly (no fp wrappers) so prefixes work automatically
-import { authRoutes } from "./routes/auth";
+import { authRoutes, adminApiTokenRoutes } from "./routes/auth";
 import { poolsRoutes } from "./routes/pools";
 import { testsRoutes } from "./routes/tests";
 import { chemicalsRoutes } from "./routes/chemicals";
@@ -191,6 +191,7 @@ async function buildApp() {
 
   // --- Route groups (plain plugins so prefixes & per-scope hooks work) ---
   await app.register(authRoutes, { prefix: "/auth" }); // public login/logout
+  await app.register(adminApiTokenRoutes, { prefix: "/admin/api-tokens" });
   await app.register(poolsRoutes, { prefix: "/pools" }); // secure these inside the module with app.auth.verifySession
   await app.register(testsRoutes, { prefix: "/tests" });
   await app.register(chemicalsRoutes, { prefix: "/chemicals" });

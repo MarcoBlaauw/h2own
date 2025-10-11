@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 import * as schema from '../db/schema/index.js';
-import { eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -140,23 +140,58 @@ export class AuthService {
   async createApiToken(userId: string, name: string, permissions?: any) {
     const token = `tok_${randomBytes(32).toString('hex')}`;
     const tokenHash = await hash(token, AuthService.HASH_OPTIONS);
-    
-    const [apiToken] = await db.insert(schema.apiTokens).values({
-      userId,
-      name,
-      tokenHash,
-      permissions: permissions || {},
-      lastUsedAt: null,
-    }).returning({
-      tokenId: schema.apiTokens.tokenId,
-      name: schema.apiTokens.name,
-      createdAt: schema.apiTokens.createdAt,
-    });
+
+    const [apiToken] = await db
+      .insert(schema.apiTokens)
+      .values({
+        userId,
+        name,
+        tokenHash,
+        permissions: permissions || {},
+        lastUsedAt: null,
+      })
+      .returning({
+        tokenId: schema.apiTokens.tokenId,
+        name: schema.apiTokens.name,
+        createdAt: schema.apiTokens.createdAt,
+      });
 
     return {
       ...apiToken,
       preview: token, // Only returned once
     };
+  }
+
+  async listApiTokens(userId: string) {
+    const tokens = await db
+      .select({
+        tokenId: schema.apiTokens.tokenId,
+        name: schema.apiTokens.name,
+        createdAt: schema.apiTokens.createdAt,
+        lastUsedAt: schema.apiTokens.lastUsedAt,
+        revoked: schema.apiTokens.revoked,
+        permissions: schema.apiTokens.permissions,
+      })
+      .from(schema.apiTokens)
+      .where(eq(schema.apiTokens.userId, userId))
+      .orderBy(desc(schema.apiTokens.createdAt));
+
+    return tokens;
+  }
+
+  async revokeApiToken(userId: string, tokenId: string) {
+    const [updated] = await db
+      .update(schema.apiTokens)
+      .set({ revoked: true })
+      .where(
+        and(
+          eq(schema.apiTokens.tokenId, tokenId),
+          eq(schema.apiTokens.userId, userId)
+        )
+      )
+      .returning({ tokenId: schema.apiTokens.tokenId });
+
+    return Boolean(updated);
   }
 
   async validateApiToken(token: string) {

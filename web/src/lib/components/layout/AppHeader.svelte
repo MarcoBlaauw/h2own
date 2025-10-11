@@ -10,6 +10,7 @@
     { href: '/admin/pools', label: 'Pools' },
     { href: '/admin/chemicals', label: 'Chemicals' },
     { href: '/admin/users', label: 'Users' },
+    { href: '/admin/api-tokens', label: 'API tokens' },
   ];
 
   function isActive(href: string) {

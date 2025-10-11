@@ -146,3 +146,64 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 }
+
+const apiTokenBodySchema = z.object({
+  name: z
+    .string({ required_error: "Name is required", invalid_type_error: "Name must be a string" })
+    .trim()
+    .min(1, "Name must not be empty")
+    .max(120, "Name must be at most 120 characters"),
+  permissions: z.record(z.any()).optional(),
+});
+
+const apiTokenParamsSchema = z.object({
+  tokenId: z
+    .string({ required_error: "Token ID is required", invalid_type_error: "Token ID must be a string" })
+    .uuid("Token ID must be a valid UUID"),
+});
+
+export async function adminApiTokenRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", app.auth.verifySession);
+  app.addHook("preHandler", app.auth.requireRole("admin"));
+
+  app.get("/", async (req) => {
+    const userId = req.user!.id;
+    const tokens = await authService.listApiTokens(userId);
+    return tokens;
+  });
+
+  app.post("/", async (req, reply) => {
+    try {
+      const payload = apiTokenBodySchema.parse(req.body);
+      const userId = req.user!.id;
+      const token = await authService.createApiToken(userId, payload.name, payload.permissions);
+      return reply.code(201).send(token);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
+  });
+
+  app.delete("/:tokenId", async (req, reply) => {
+    try {
+      const { tokenId } = apiTokenParamsSchema.parse(req.params);
+      const userId = req.user!.id;
+      const revoked = await authService.revokeApiToken(userId, tokenId);
+
+      if (!revoked) {
+        return reply.code(404).send({ error: "NotFound", message: "Token not found" });
+      }
+
+      return reply.status(204).send();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
+  });
+}
