@@ -13,6 +13,7 @@ import { authRoutes } from "./routes/auth";
 import { poolsRoutes } from "./routes/pools";
 import { testsRoutes } from "./routes/tests";
 import { chemicalsRoutes } from "./routes/chemicals";
+import { adminUsersRoutes } from "./routes/admin-users";
 import { createRedisSessionStore } from "./services/session-store.js";
 
 async function buildApp() {
@@ -191,6 +192,7 @@ async function buildApp() {
   await app.register(poolsRoutes, { prefix: "/pools" }); // secure these inside the module with app.auth.verifySession
   await app.register(testsRoutes, { prefix: "/tests" });
   await app.register(chemicalsRoutes, { prefix: "/chemicals" });
+  await app.register(adminUsersRoutes, { prefix: "/admin/users" });
 
   // --- Dev convenience route ---
   app.get("/test", async () => ({ ok: true, message: "test route" }));

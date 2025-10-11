@@ -49,6 +49,17 @@ type ApiClient = {
     logout: (customFetch?: FetchLike) => Promise<Response>;
     me: (customFetch?: FetchLike) => Promise<Response>;
   };
+  users: {
+    list: (
+      customFetch?: FetchLike,
+      params?: { search?: string; role?: string; isActive?: boolean }
+    ) => Promise<Response>;
+    update: (userId: string, body: Record<string, unknown>) => Promise<Response>;
+    resetPassword: (
+      userId: string,
+      body?: { newPassword?: string }
+    ) => Promise<Response>;
+  };
   pools: {
     list: (customFetch?: FetchLike, owner?: boolean) => Promise<Response>;
     create: (body: Record<string, unknown>) => Promise<Response>;
@@ -83,6 +94,26 @@ export const api: ApiClient = {
       apiFetch('/auth/login', jsonRequest(body, { method: 'POST' }), customFetch),
     logout: (customFetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
     me: (customFetch) => apiFetch('/auth/me', {}, customFetch),
+  },
+  users: {
+    list: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.search) search.set('search', params.search);
+      if (params.role) search.set('role', params.role);
+      if (typeof params.isActive === 'boolean') {
+        search.set('isActive', params.isActive ? 'true' : 'false');
+      }
+      const query = search.toString();
+      const path = `/admin/users${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    update: (userId, body) =>
+      apiFetch(`/admin/users/${userId}`, jsonRequest(body, { method: 'PATCH' })),
+    resetPassword: (userId, body) =>
+      apiFetch(
+        `/admin/users/${userId}/reset-password`,
+        jsonRequest(body ?? {}, { method: 'POST' })
+      ),
   },
   pools: {
     list: (customFetch, owner = false) =>
