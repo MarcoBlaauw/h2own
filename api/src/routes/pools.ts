@@ -1,16 +1,39 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import type {} from '../types/fastify.d.ts';
 import { z } from 'zod';
-import { poolsService, PoolForbiddenError, PoolNotFoundError } from '../services/pools.js';
+import {
+  poolsService,
+  PoolForbiddenError,
+  PoolNotFoundError,
+  PoolLocationAccessError,
+} from '../services/pools.js';
 import { recommenderService } from '../services/recommender.js';
 
 // Body schemas
-const createPoolSchema = z.object({
-  name: z.string(),
-  volumeGallons: z.coerce.number(), // accepts "123" or 123
-  sanitizerType: z.string(),
-  surfaceType: z.string(),
-  locationId: z.string().optional(),
+const parseCreateLocationId = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    return value;
+  },
+  z.string().uuid().optional()
+);
+
+const parseUpdateLocationId = z.preprocess(
+  (value) => {
+    if (value === '' || value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    return value;
+  },
+  z.union([z.string().uuid(), z.null()]).optional()
+);
+
+const optionalPoolFields = {
   saltLevelPpm: z.coerce.number().optional(),
   shadeLevel: z.string().optional(),
   enclosureType: z.string().optional(),
@@ -18,8 +41,25 @@ const createPoolSchema = z.object({
   pumpGpm: z.coerce.number().optional(),
   filterType: z.string().optional(),
   hasHeater: z.coerce.boolean().optional(),
+} as const;
+
+const createPoolSchema = z.object({
+  name: z.string(),
+  volumeGallons: z.coerce.number(), // accepts "123" or 123
+  sanitizerType: z.string(),
+  surfaceType: z.string(),
+  locationId: parseCreateLocationId,
+  ...optionalPoolFields,
 });
-const updatePoolSchema = createPoolSchema.partial();
+
+const updatePoolSchema = z.object({
+  name: z.string().optional(),
+  volumeGallons: z.coerce.number().optional(),
+  sanitizerType: z.string().optional(),
+  surfaceType: z.string().optional(),
+  locationId: parseUpdateLocationId,
+  ...optionalPoolFields,
+});
 
 const updateMemberSchema = z.object({
   role: z.string(),
@@ -122,6 +162,11 @@ export async function poolsRoutes(app: FastifyInstance) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
       }
+      if (err instanceof PoolLocationAccessError) {
+        return reply
+          .code(400)
+          .send({ error: 'InvalidLocation', locationId: err.locationId, message: err.message });
+      }
       throw err;
     }
   });
@@ -170,6 +215,11 @@ export async function poolsRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (err instanceof PoolLocationAccessError) {
+        return reply
+          .code(400)
+          .send({ error: 'InvalidLocation', locationId: err.locationId, message: err.message });
       }
       if (handlePoolAccessError(reply, err)) {
         return;

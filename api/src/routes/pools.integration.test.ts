@@ -1,7 +1,12 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { poolsRoutes } from './pools.js';
-import { poolsService, PoolForbiddenError, PoolNotFoundError } from '../services/pools.js';
+import {
+  poolsService,
+  PoolForbiddenError,
+  PoolNotFoundError,
+  PoolLocationAccessError,
+} from '../services/pools.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
@@ -149,5 +154,31 @@ describe('GET /pools/:poolId integration', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'Forbidden' });
     expect(poolsService.updatePool).toHaveBeenCalledWith(id, currentUserId, { name: 'Updated' });
+  });
+
+  it('returns 400 when pool location is invalid', async () => {
+    const invalidLocationId = '4b9f9c10-1c1c-4aa3-a123-6df1b3e894d9';
+    vi.spyOn(poolsService, 'createPool').mockRejectedValue(
+      new PoolLocationAccessError(invalidLocationId)
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/pools',
+      payload: {
+        name: 'New Pool',
+        volumeGallons: 15000,
+        sanitizerType: 'chlorine',
+        surfaceType: 'plaster',
+        locationId: invalidLocationId,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'InvalidLocation',
+      locationId: invalidLocationId,
+      message: expect.stringContaining(invalidLocationId),
+    });
   });
 });
