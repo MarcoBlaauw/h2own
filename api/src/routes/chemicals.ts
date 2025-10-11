@@ -78,4 +78,15 @@ export async function chemicalsRoutes(app: FastifyInstance) {
       }
     }
   );
+
+  app.get(
+    '/categories',
+    {
+      preHandler: [app.auth.verifySession, app.auth.requireRole('admin')],
+    },
+    async (_req, reply) => {
+      const categories = await chemicalsService.listCategories();
+      return reply.send(categories);
+    }
+  );
 }
