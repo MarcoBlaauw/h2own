@@ -1,34 +1,40 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminPoolsRoutes } from './admin-pools.js';
-import { poolsService } from '../services/pools.js';
+import { poolAdminService, poolCoreService } from '../services/pools/index.js';
 
-vi.mock('../services/pools.js', async (importOriginal) => {
+vi.mock('../services/pools/index.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    poolsService: {
-      ...actual.poolsService,
+    poolAdminService: {
+      ...actual.poolAdminService,
       listAllPools: vi.fn(),
-      getPoolById: vi.fn(),
       forceUpdatePool: vi.fn(),
       transferOwnership: vi.fn(),
+    },
+    poolCoreService: {
+      ...actual.poolCoreService,
+      getPoolById: vi.fn(),
     },
   };
 });
 
 describe('admin pools routes', () => {
-  const mockedPoolsService = poolsService as unknown as {
+  const mockedAdminService = poolAdminService as unknown as {
     listAllPools: ReturnType<typeof vi.fn>;
-    getPoolById: ReturnType<typeof vi.fn>;
     forceUpdatePool: ReturnType<typeof vi.fn>;
     transferOwnership: ReturnType<typeof vi.fn>;
   };
 
-  const listAllPoolsMock = mockedPoolsService.listAllPools as ReturnType<typeof vi.fn>;
-  const getPoolByIdMock = mockedPoolsService.getPoolById as ReturnType<typeof vi.fn>;
-  const forceUpdatePoolMock = mockedPoolsService.forceUpdatePool as ReturnType<typeof vi.fn>;
-  const transferOwnershipMock = mockedPoolsService.transferOwnership as ReturnType<typeof vi.fn>;
+  const mockedCoreService = poolCoreService as unknown as {
+    getPoolById: ReturnType<typeof vi.fn>;
+  };
+
+  const listAllPoolsMock = mockedAdminService.listAllPools as ReturnType<typeof vi.fn>;
+  const getPoolByIdMock = mockedCoreService.getPoolById as ReturnType<typeof vi.fn>;
+  const forceUpdatePoolMock = mockedAdminService.forceUpdatePool as ReturnType<typeof vi.fn>;
+  const transferOwnershipMock = mockedAdminService.transferOwnership as ReturnType<typeof vi.fn>;
 
   let app: ReturnType<typeof Fastify>;
   let requireRoleMock: ReturnType<typeof vi.fn>;

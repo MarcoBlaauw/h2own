@@ -2,11 +2,11 @@ import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { poolsRoutes } from './pools.js';
 import {
-  poolsService,
+  poolCoreService,
   PoolForbiddenError,
   PoolNotFoundError,
   PoolLocationAccessError,
-} from '../services/pools.js';
+} from '../services/pools/index.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
@@ -93,7 +93,7 @@ describe('GET /pools/:poolId integration', () => {
       lastTestedAt: new Date('2024-01-05T00:00:00.000Z'),
     };
 
-    vi.spyOn(poolsService, 'getPoolById').mockResolvedValue(poolDetail as any);
+    vi.spyOn(poolCoreService, 'getPoolById').mockResolvedValue(poolDetail as any);
 
     const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
@@ -116,33 +116,33 @@ describe('GET /pools/:poolId integration', () => {
       })),
       lastTestedAt: poolDetail.lastTestedAt?.toISOString() ?? null,
     });
-    expect(poolsService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
+    expect(poolCoreService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
   });
 
   it('returns 404 when the pool is missing', async () => {
-    vi.spyOn(poolsService, 'getPoolById').mockRejectedValue(new PoolNotFoundError('missing'));
+    vi.spyOn(poolCoreService, 'getPoolById').mockRejectedValue(new PoolNotFoundError('missing'));
 
     const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Pool not found' });
-    expect(poolsService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
+    expect(poolCoreService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
   });
 
   it('returns 403 when the user is not a member of the pool', async () => {
-    vi.spyOn(poolsService, 'getPoolById').mockRejectedValue(new PoolForbiddenError('nope'));
+    vi.spyOn(poolCoreService, 'getPoolById').mockRejectedValue(new PoolForbiddenError('nope'));
 
     const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const response = await app.inject({ method: 'GET', url: `/pools/${id}` });
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'Forbidden' });
-    expect(poolsService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
+    expect(poolCoreService.getPoolById).toHaveBeenCalledWith(id, currentUserId);
   });
 
   it('returns 403 when updating a pool without access', async () => {
-    vi.spyOn(poolsService, 'updatePool').mockRejectedValue(new PoolForbiddenError('nope'));
+    vi.spyOn(poolCoreService, 'updatePool').mockRejectedValue(new PoolForbiddenError('nope'));
 
     const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const response = await app.inject({
@@ -153,12 +153,12 @@ describe('GET /pools/:poolId integration', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'Forbidden' });
-    expect(poolsService.updatePool).toHaveBeenCalledWith(id, currentUserId, { name: 'Updated' });
+    expect(poolCoreService.updatePool).toHaveBeenCalledWith(id, currentUserId, { name: 'Updated' });
   });
 
   it('returns 400 when pool location is invalid', async () => {
     const invalidLocationId = '4b9f9c10-1c1c-4aa3-a123-6df1b3e894d9';
-    vi.spyOn(poolsService, 'createPool').mockRejectedValue(
+    vi.spyOn(poolCoreService, 'createPool').mockRejectedValue(
       new PoolLocationAccessError(invalidLocationId)
     );
 

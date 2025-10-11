@@ -3,11 +3,12 @@ import type {} from '../types/fastify.d.ts';
 import { z } from 'zod';
 import { optionalPoolFields, parseUpdateLocationId } from './pools.schemas.js';
 import {
-  poolsService,
+  poolCoreService,
+  poolAdminService,
   PoolNotFoundError,
   PoolLocationAccessError,
   type AdminPoolSummary,
-} from '../services/pools.js';
+} from '../services/pools/index.js';
 
 const updatePoolSchema = z
   .object({
@@ -38,7 +39,7 @@ function serializeSummary(summary: AdminPoolSummary) {
   };
 }
 
-function serializeDetail(detail: Awaited<ReturnType<typeof poolsService.getPoolById>>) {
+function serializeDetail(detail: Awaited<ReturnType<typeof poolCoreService.getPoolById>>) {
   if (!detail) return detail;
   return {
     ...detail,
@@ -63,14 +64,14 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.auth.requireRole('admin'));
 
   app.get('/', async (_req, reply) => {
-    const pools = await poolsService.listAllPools();
+    const pools = await poolAdminService.listAllPools();
     return reply.send(pools.map(serializeSummary));
   });
 
   app.get('/:poolId', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
-      const detail = await poolsService.getPoolById(poolId, null, { asAdmin: true });
+      const detail = await poolCoreService.getPoolById(poolId, null, { asAdmin: true });
       if (!detail) {
         return reply.code(404).send({ error: 'NotFound' });
       }
@@ -90,7 +91,7 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
     try {
       const { poolId } = poolIdParams.parse(req.params);
       const payload = updatePoolSchema.parse(req.body ?? {});
-      const pool = await poolsService.forceUpdatePool(poolId, payload);
+      const pool = await poolAdminService.forceUpdatePool(poolId, payload);
       return reply.send(pool);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -112,7 +113,7 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
     try {
       const { poolId } = poolIdParams.parse(req.params);
       const { newOwnerId } = transferSchema.parse(req.body ?? {});
-      const result = await poolsService.transferOwnership(poolId, newOwnerId);
+      const result = await poolAdminService.transferOwnership(poolId, newOwnerId);
       return reply.send(result);
     } catch (error) {
       if (error instanceof z.ZodError) {
