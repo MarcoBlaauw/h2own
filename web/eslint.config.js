@@ -29,10 +29,13 @@ export default tseslint.config(
       '.svelte-kit',
       'dist',
       'node_modules',
+      '.storybook',
+      '**/*.stories.ts',
       'postcss.config.cjs',
       'svelte.config.js',
       'tailwind.config.ts',
       'playwright.config.ts',
+      'playwright.visual.config.ts',
       'eslint.config.js'
     ]
   },

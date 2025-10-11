@@ -48,6 +48,17 @@ Common workflows are available through pnpm scripts from the repository root:
 
 > ℹ️ Playwright requires browser binaries. Install them once with `pnpm --dir web exec playwright install --with-deps`.
 
+## 🚀 Frontend Onboarding Cheatsheet
+
+The web app’s theme is powered by CSS custom properties in [`web/src/lib/styles/tokens.css`](web/src/lib/styles/tokens.css) and Tailwind component utilities in [`web/src/app.css`](web/src/app.css). When you need to extend the design system:
+
+1. **Add or tweak a semantic token.** Update `tokens.css` with a light and dark value for the new `--color-*`, `--shadow-*`, or typography variable. Tokens are stored as RGB tuples so Tailwind’s `withOpacityValue` helper can apply opacity modifiers.
+2. **Expose the token in Tailwind.** Register the variable in [`tailwind.config.ts`](web/tailwind.config.ts) under the matching `theme.extend` section (for example, append to the `colorTokens` map or `spacing`). This enables `bg-{token}`/`text-{token}` utilities and keeps both modes in sync.
+3. **Promote shared component styles.** If the change affects multiple components, create or update a utility class inside the `@layer components` block of `app.css` using `@apply`. These classes should consume tokens (e.g., `rgb(var(--color-accent))`) instead of hard-coded values so dark mode and future palette changes remain automatic.
+4. **Document the addition.** Add a quick blurb to the relevant design or engineering doc (see [`docs/theme-review.md`](docs/theme-review.md)) so the next teammate knows which component class or token to reuse.
+
+> ✅ Tip: After adding tokens or component classes, run `pnpm --filter web lint` to pick up Tailwind usage errors and `pnpm --filter web test:visual` to refresh Playwright visual baselines before opening a PR.
+
 ## ✅ Continuous Integration
 
 GitHub Actions automatically runs linting, formatting, unit tests, and the Docker-based smoke test workflow for every pull request and pushes to the `main` branch. The workflow definition lives at [`.github/workflows/ci.yml`](.github/workflows/ci.yml).

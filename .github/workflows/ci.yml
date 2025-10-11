@@ -47,11 +47,34 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile=false
 
-      - name: Lint
-        run: pnpm lint
+      - name: Install Playwright browsers
+        working-directory: web
+        run: pnpm exec playwright install --with-deps
 
-      - name: Check formatting
-        run: pnpm format:check
+      - name: npm run lint
+        run: npm run lint
+
+      - name: npm run check
+        run: npm run check
+
+      - name: npm run test:visual
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+        run: npm run test:visual
+
+      - name: Prepare npm lockfiles for audit
+        run: |
+          npm install --package-lock-only
+          cd api && npm install --package-lock-only && cd ..
+          cd web && npm install --package-lock-only && cd ..
+
+      - name: npm audit (api)
+        working-directory: api
+        run: npm audit --omit=dev
+
+      - name: npm audit (web)
+        working-directory: web
+        run: npm audit --omit=dev
 
       - name: Run API unit tests
         run: pnpm test
