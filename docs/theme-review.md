@@ -23,6 +23,13 @@
 
 Following these steps will centralize color and component styling inside Tailwind, give the dark theme distinct colors, and remove the dependency on Skeleton presets that currently limit how much the UI changes when the theme toggles.
 
+## Extending semantic tokens and component utilities
+
+1. **Start with the tokens.** Introduce new CSS variables in [`src/lib/styles/tokens.css`](../web/src/lib/styles/tokens.css) with matching light/dark values. Keep using RGB tuples so the Tailwind opacity helpers continue to work. For radii/spacing/typography additions, prefer semantic names (e.g., `--radius-2xl`) over raw pixel counts.
+2. **Wire them into Tailwind.** Update [`tailwind.config.ts`](../web/tailwind.config.ts) by appending to the `colorTokens` map or the relevant `theme.extend` block. Reuse the `withOpacityValue` helper for color-like tokens so new utilities such as `bg-accent-strong` behave consistently.
+3. **Codify reusable component classes.** When multiple features need the same pattern (buttons, surfaces, inputs), add an entry inside the `@layer components` block of [`src/app.css`](../web/src/app.css) that composes Tailwind utilities with the new tokens. Avoid duplicating literal color codes in Svelte components; instead, reference the shared class.
+4. **Validate both themes.** Run `pnpm --filter web lint` followed by `pnpm --filter web test:visual` (with `--update-snapshots` if intentionally changing the UI) so the lint rule coverage and Playwright baseline screenshots reflect the new styles.
+
 ## Token reference
 
 The new design tokens live in `web/src/lib/styles/tokens.css` and are consumed globally via `src/app.css` and Tailwind utility extensions. Each color is expressed as an RGB tuple for Tailwind’s opacity helpers but is documented here in hex for readability.
