@@ -5,7 +5,16 @@
   import { goto } from '$app/navigation';
 
   let isAdmin = false;
-  let adminChemicalsActive = false;
+
+  const adminLinks = [
+    { href: '/admin/chemicals', label: 'Chemicals' },
+    { href: '/admin/users', label: 'Users' },
+  ];
+
+  function isActive(href: string) {
+    const path = $page.url.pathname;
+    return path === href || path.startsWith(`${href}/`);
+  }
 
   async function handleLogout() {
     await api.auth.logout();
@@ -13,7 +22,6 @@
   }
 
   $: isAdmin = $page.data.session?.user?.role === 'admin';
-  $: adminChemicalsActive = $page.url.pathname.startsWith('/admin/chemicals');
 </script>
 
 <header class="sticky top-0 z-40 border-b border-border/60 bg-surface/90 backdrop-blur supports-[backdrop-filter]:bg-surface/75 dark:border-border-strong/60">
@@ -25,27 +33,35 @@
       </a>
       {#if isAdmin}
         <nav class="hidden items-center gap-4 text-sm font-medium text-content-secondary sm:flex">
-          <a
-            href="/admin/chemicals"
-            class={`transition-colors ${
-              adminChemicalsActive
-                ? 'text-accent-strong dark:text-accent-strong'
-                : 'text-content-secondary hover:text-content-primary'
-            }`}
-          >
-            Chemicals
-          </a>
+          {#each adminLinks as link}
+            <a
+              href={link.href}
+              class={`transition-colors ${
+                isActive(link.href)
+                  ? 'text-accent-strong dark:text-accent-strong'
+                  : 'text-content-secondary hover:text-content-primary'
+              }`}
+            >
+              {link.label}
+            </a>
+          {/each}
         </nav>
       {/if}
     </div>
     <div class="flex items-center gap-3 text-sm text-content-secondary">
       {#if isAdmin}
-        <a
-          href="/admin/chemicals"
-          class={`sm:hidden btn btn-sm btn-tonal ${adminChemicalsActive ? 'font-semibold text-accent-strong' : ''}`}
-        >
-          Chemicals
-        </a>
+        <div class="flex gap-2 sm:hidden">
+          {#each adminLinks as link}
+            <a
+              href={link.href}
+              class={`btn btn-sm btn-tonal ${
+                isActive(link.href) ? 'font-semibold text-accent-strong' : ''
+              }`}
+            >
+              {link.label}
+            </a>
+          {/each}
+        </div>
       {/if}
       <ThemeSwitcher />
       {#if $page.data.session}
