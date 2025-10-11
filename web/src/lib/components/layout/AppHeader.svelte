@@ -11,6 +11,7 @@
     { href: '/admin/chemicals', label: 'Chemicals' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/api-tokens', label: 'API tokens' },
+    { href: '/admin/audit-log', label: 'Audit log' },
   ];
 
   function isActive(href: string) {

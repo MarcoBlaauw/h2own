@@ -104,6 +104,12 @@ type ApiClient = {
     update: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
     transfer: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
   };
+  auditLog: {
+    list: (
+      customFetch?: FetchLike,
+      params?: { page?: number; pageSize?: number; user?: string; action?: string; entity?: string }
+    ) => Promise<Response>;
+  };
 };
 
 export const api: ApiClient = {
@@ -190,6 +196,19 @@ export const api: ApiClient = {
     update: (poolId, body) => apiFetch(`/admin/pools/${poolId}`, jsonRequest(body, { method: 'PATCH' })),
     transfer: (poolId, body) =>
       apiFetch(`/admin/pools/${poolId}/transfer`, jsonRequest(body, { method: 'POST' })),
+  },
+  auditLog: {
+    list: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.page === 'number') search.set('page', String(params.page));
+      if (typeof params.pageSize === 'number') search.set('pageSize', String(params.pageSize));
+      if (params.user) search.set('user', params.user);
+      if (params.action) search.set('action', params.action);
+      if (params.entity) search.set('entity', params.entity);
+      const query = search.toString();
+      const path = `/admin/audit-log${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
   },
 };
 
