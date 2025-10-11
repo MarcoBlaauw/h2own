@@ -1,6 +1,10 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { poolsService, PoolForbiddenError, PoolNotFoundError } from '../services/pools.js';
+import {
+  poolTestingService,
+  PoolForbiddenError,
+  PoolNotFoundError,
+} from '../services/pools/index.js';
 
 const sessionIdParams = z.object({ sessionId: z.string().uuid() });
 
@@ -25,7 +29,7 @@ export async function testsRoutes(app: FastifyInstance) {
     try {
       const { sessionId } = sessionIdParams.parse(req.params);
       const userId = req.user!.id;
-      const test = await poolsService.getTestById(sessionId, userId);
+      const test = await poolTestingService.getTestById(sessionId, userId);
       if (!test) {
         return reply.code(404).send({ error: 'Test not found' });
       }

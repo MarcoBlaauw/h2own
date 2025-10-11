@@ -7,11 +7,13 @@ import {
   parseUpdateLocationId,
 } from './pools.schemas.js';
 import {
-  poolsService,
+  poolCoreService,
+  poolMembershipService,
+  poolTestingService,
   PoolForbiddenError,
   PoolNotFoundError,
   PoolLocationAccessError,
-} from '../services/pools.js';
+} from '../services/pools/index.js';
 import { recommenderService } from '../services/recommender.js';
 
 const createPoolSchema = z.object({
@@ -127,7 +129,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     try {
       const userId = req.user!.id; // set by verifySession
       const data = createPoolSchema.parse(req.body);
-      const pool = await poolsService.createPool(userId, data);
+      const pool = await poolCoreService.createPool(userId, data);
       return reply.code(201).send(pool);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -147,7 +149,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     try {
       const userId = req.user!.id;
       const { owner = false } = getPoolsQuery.parse(req.query);
-      const pools = await poolsService.getPools(userId, owner);
+      const pools = await poolCoreService.getPools(userId, owner);
       return reply.send(pools);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -162,7 +164,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     try {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
-      const pool = await poolsService.getPoolById(poolId, userId);
+      const pool = await poolCoreService.getPoolById(poolId, userId);
       return reply.send(pool);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -181,7 +183,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
       const data = updatePoolSchema.parse(req.body);
-      const pool = await poolsService.updatePool(poolId, userId, data);
+      const pool = await poolCoreService.updatePool(poolId, userId, data);
       return reply.send(pool);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -204,7 +206,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     try {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
-      await poolsService.deletePool(poolId, userId);
+      await poolCoreService.deletePool(poolId, userId);
       return reply.code(204).send();
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -223,7 +225,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const requestingUserId = req.user!.id;
       const { userId, role } = addMemberSchema.parse(req.body);
-      const member = await poolsService.addPoolMember(poolId, requestingUserId, userId, role);
+      const member = await poolMembershipService.addPoolMember(poolId, requestingUserId, userId, role);
       return reply.code(201).send(member);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -241,7 +243,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     try {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
-      const members = await poolsService.getPoolMembers(poolId, userId);
+      const members = await poolMembershipService.getPoolMembers(poolId, userId);
       return reply.send(members);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -260,7 +262,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId, userId } = poolMemberParams.parse(req.params);
       const requestingUserId = req.user!.id;
       const { role } = updateMemberSchema.parse(req.body);
-      const member = await poolsService.updatePoolMember(poolId, requestingUserId, userId, role);
+      const member = await poolMembershipService.updatePoolMember(poolId, requestingUserId, userId, role);
       return reply.send(member);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -282,7 +284,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const cursor = cursorTestedAt
         ? { testedAt: new Date(cursorTestedAt), sessionId: cursorSessionId }
         : undefined;
-      const tests = await poolsService.getTestsByPoolId(poolId, userId, limit, cursor);
+      const tests = await poolTestingService.getTestsByPoolId(poolId, userId, limit, cursor);
       return reply.send(tests);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -301,7 +303,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
       const data = createTestSchema.parse(req.body);
-      const test = await poolsService.createTest(poolId, userId, data);
+      const test = await poolTestingService.createTest(poolId, userId, data);
       return reply.code(201).send(test);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -320,7 +322,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
       const data = createDosingSchema.parse(req.body);
-      const dosingEvent = await poolsService.createDosingEvent(poolId, userId, data);
+      const dosingEvent = await poolTestingService.createDosingEvent(poolId, userId, data);
       return reply.code(201).send(dosingEvent);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -358,7 +360,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     try {
       const { poolId, userId } = poolMemberParams.parse(req.params);
       const requestingUserId = req.user!.id;
-      await poolsService.removePoolMember(poolId, requestingUserId, userId);
+      await poolMembershipService.removePoolMember(poolId, requestingUserId, userId);
       return reply.code(204).send();
     } catch (err) {
       if (err instanceof z.ZodError) {
