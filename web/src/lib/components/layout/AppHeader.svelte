@@ -7,6 +7,7 @@
   let isAdmin = false;
 
   const adminLinks = [
+    { href: '/admin/pools', label: 'Pools' },
     { href: '/admin/chemicals', label: 'Chemicals' },
     { href: '/admin/users', label: 'Users' },
   ];

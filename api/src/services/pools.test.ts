@@ -12,6 +12,7 @@ describe('PoolsService', () => {
   let capturedUpdate: any;
   let capturedTestInsert: any;
   let ensurePoolAccessMock: ReturnType<typeof vi.fn>;
+  let transactionSpy: ReturnType<typeof vi.fn>;
   let service: PoolsService;
 
   beforeEach(() => {
@@ -73,12 +74,21 @@ describe('PoolsService', () => {
     }));
 
     selectSpy = vi.fn();
+    transactionSpy = vi.fn(async (callback: any) =>
+      callback({
+        insert: insertSpy,
+        update: updateSpy,
+        delete: vi.fn(),
+        select: selectSpy,
+      })
+    );
 
     const mockDb = {
       insert: insertSpy,
       update: updateSpy,
       delete: vi.fn(),
       select: selectSpy,
+      transaction: transactionSpy,
     } as unknown as typeof import('../db/index.js')['db'];
 
     service = new PoolsService(mockDb);
@@ -476,6 +486,401 @@ describe('PoolsService', () => {
       lastTestedAt: testedAt,
     });
     expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
+  });
+
+  it('allows admins to bypass membership checks when fetching pool detail', async () => {
+    const createdAt = new Date('2024-02-01T00:00:00.000Z');
+    const updatedAt = new Date('2024-02-02T00:00:00.000Z');
+    const invitedAt = new Date('2024-02-03T00:00:00.000Z');
+    const addedAt = new Date('2024-02-04T00:00:00.000Z');
+    const testedAt = new Date('2024-02-05T00:00:00.000Z');
+
+    selectSpy
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            where: (condition: unknown) => {
+              expect(condition).toBeDefined();
+              return {
+                limit: (value: number) => {
+                  expect(value).toBe(1);
+                  return Promise.resolve([{ poolId: 'pool-123' }]);
+                },
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: () =>
+                  Promise.resolve([
+                    {
+                      poolId: 'pool-123',
+                      ownerId: 'admin-owner',
+                      locationId: null,
+                      name: 'Community Pool',
+                      volumeGallons: 25000,
+                      surfaceType: 'plaster',
+                      sanitizerType: 'salt',
+                      saltLevelPpm: 3200,
+                      shadeLevel: 'partial',
+                      enclosureType: null,
+                      hasCover: true,
+                      pumpGpm: 60,
+                      filterType: 'sand',
+                      hasHeater: false,
+                      isActive: true,
+                      createdAt,
+                      updatedAt,
+                      ownerUserId: 'admin-owner',
+                      ownerEmail: 'owner@example.com',
+                      ownerName: 'Owner Admin',
+                    },
+                  ]),
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.poolMembers);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: () => ({
+                  orderBy: () =>
+                    Promise.resolve([
+                      {
+                        poolId: 'pool-123',
+                        userId: 'admin-owner',
+                        roleName: 'owner',
+                        permissions: null,
+                        invitedBy: null,
+                        invitedAt,
+                        addedAt,
+                        lastAccessAt: null,
+                        memberEmail: 'owner@example.com',
+                        memberName: 'Owner Admin',
+                      },
+                    ]),
+                }),
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.testSessions);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: () => ({
+                  orderBy: () => ({
+                    limit: (limitValue: number) => {
+                      expect(limitValue).toBe(10);
+                      return Promise.resolve([
+                        {
+                          sessionId: 'session-2',
+                          testedAt,
+                          testedBy: 'admin-owner',
+                          freeChlorinePpm: '2',
+                          totalChlorinePpm: '3',
+                          phLevel: '7.3',
+                          totalAlkalinityPpm: 90,
+                          cyanuricAcidPpm: 30,
+                          calciumHardnessPpm: 200,
+                          saltPpm: 3300,
+                          waterTempF: 78,
+                          testerId: 'admin-owner',
+                          testerEmail: 'owner@example.com',
+                          testerName: 'Owner Admin',
+                        },
+                      ]);
+                    },
+                  }),
+                }),
+              };
+            },
+          };
+        },
+      }));
+
+    const detail = await service.getPoolById('pool-123', null, { asAdmin: true });
+
+    expect(detail?.id).toBe('pool-123');
+    expect(detail?.owner?.id).toBe('admin-owner');
+    expect(ensurePoolAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('force updates pools with admin overrides', async () => {
+    const result = await service.forceUpdatePool('pool-123', {
+      name: 'Admin Update',
+      isActive: false,
+    });
+
+    expect(result).toMatchObject({
+      poolId: 'pool-123',
+      name: 'Admin Update',
+      isActive: false,
+    });
+    expect(capturedUpdate).toEqual({ name: 'Admin Update', isActive: false });
+    expect(ensurePoolAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('lists all pools with membership summaries for admins', async () => {
+    const createdAt = new Date('2024-03-01T00:00:00.000Z');
+    const updatedAt = new Date('2024-03-02T00:00:00.000Z');
+    const lastTestedAt = new Date('2024-03-05T00:00:00.000Z');
+
+    selectSpy
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                orderBy: (orderArg: unknown) => {
+                  expect(orderArg).toBeTruthy();
+                  return Promise.resolve([
+                    {
+                      poolId: 'pool-123',
+                      ownerId: 'owner-1',
+                      name: 'Central Pool',
+                      volumeGallons: 20000,
+                      surfaceType: 'plaster',
+                      sanitizerType: 'chlorine',
+                      isActive: true,
+                      createdAt,
+                      updatedAt,
+                      ownerEmail: 'owner@example.com',
+                      ownerName: 'Owner One',
+                    },
+                  ]);
+                },
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.poolMembers);
+          return {
+            where: (condition: unknown) => {
+              expect(condition).toBeDefined();
+              return {
+                groupBy: () =>
+                  Promise.resolve([
+                    {
+                      poolId: 'pool-123',
+                      total: 2,
+                    },
+                  ]),
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.testSessions);
+          return {
+            where: (condition: unknown) => {
+              expect(condition).toBeDefined();
+              return {
+                groupBy: () =>
+                  Promise.resolve([
+                    {
+                      poolId: 'pool-123',
+                      lastTestedAt,
+                    },
+                  ]),
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.poolMembers);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: (condition: unknown) => {
+                  expect(condition).toBeDefined();
+                  return {
+                    orderBy: () =>
+                      Promise.resolve([
+                        {
+                          poolId: 'pool-123',
+                          userId: 'owner-1',
+                          roleName: 'owner',
+                          email: 'owner@example.com',
+                          name: 'Owner One',
+                        },
+                        {
+                          poolId: 'pool-123',
+                          userId: 'member-2',
+                          roleName: 'member',
+                          email: 'member@example.com',
+                          name: 'Member Two',
+                        },
+                      ]),
+                  };
+                },
+              };
+            },
+          };
+        },
+      }));
+
+    const pools = await service.listAllPools();
+
+    expect(pools).toEqual([
+      {
+        id: 'pool-123',
+        ownerId: 'owner-1',
+        name: 'Central Pool',
+        volumeGallons: 20000,
+        surfaceType: 'plaster',
+        sanitizerType: 'chlorine',
+        isActive: true,
+        createdAt,
+        updatedAt,
+        owner: {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          name: 'Owner One',
+        },
+        memberCount: 2,
+        lastTestedAt,
+        members: [
+          {
+            poolId: 'pool-123',
+            userId: 'owner-1',
+            roleName: 'owner',
+            email: 'owner@example.com',
+            name: 'Owner One',
+          },
+          {
+            poolId: 'pool-123',
+            userId: 'member-2',
+            roleName: 'member',
+            email: 'member@example.com',
+            name: 'Member Two',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('transfers ownership and updates memberships atomically', async () => {
+    let recordedPoolUpdate: any;
+    let recordedOldOwnerUpdate: any;
+    let recordedInsert: any;
+
+    const txSelect = vi
+      .fn()
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            where: (condition: unknown) => {
+              expect(condition).toBeDefined();
+              return {
+                limit: (value: number) => {
+                  expect(value).toBe(1);
+                  return Promise.resolve([{ ownerId: 'owner-1' }]);
+                },
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.poolMembers);
+          return {
+            where: (condition: unknown) => {
+              expect(condition).toBeDefined();
+              return {
+                limit: (value: number) => {
+                  expect(value).toBe(1);
+                  return Promise.resolve([]);
+                },
+              };
+            },
+          };
+        },
+      }));
+
+    const txUpdate = vi.fn((table: unknown) => {
+      if (table === schema.pools) {
+        return {
+          set: (value: any) => {
+            recordedPoolUpdate = value;
+            return {
+              where: (condition: unknown) => {
+                expect(condition).toBeDefined();
+                return Promise.resolve([]);
+              },
+            };
+          },
+        };
+      }
+
+      if (table === schema.poolMembers) {
+        return {
+          set: (value: any) => {
+            recordedOldOwnerUpdate = value;
+            return {
+              where: (condition: unknown) => {
+                expect(condition).toBeDefined();
+                return Promise.resolve([]);
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error('Unexpected update table');
+    });
+
+    const txInsert = vi.fn(() => ({
+      values: (value: any) => {
+        recordedInsert = value;
+        return Promise.resolve([]);
+      },
+    }));
+
+    transactionSpy.mockImplementationOnce(async (callback: any) =>
+      callback({
+        select: txSelect,
+        update: txUpdate,
+        insert: txInsert,
+        delete: vi.fn(),
+      })
+    );
+
+    const result = await service.transferOwnership('pool-123', 'new-owner');
+
+    expect(result).toEqual({ poolId: 'pool-123', ownerId: 'new-owner' });
+    expect(recordedPoolUpdate).toEqual({ ownerId: 'new-owner' });
+    expect(recordedInsert).toEqual({ poolId: 'pool-123', userId: 'new-owner', roleName: 'owner' });
+    expect(recordedOldOwnerUpdate).toEqual({ roleName: 'manager' });
   });
 
   it('paginates tests using testedAt cursor metadata', async () => {

@@ -90,6 +90,12 @@ type ApiClient = {
     update: (id: string, body: Record<string, unknown>) => Promise<Response>;
     del: (id: string) => Promise<Response>;
   };
+  adminPools: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    show: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    update: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+    transfer: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+  };
 };
 
 export const api: ApiClient = {
@@ -162,6 +168,13 @@ export const api: ApiClient = {
     listCategories: (customFetch) => apiFetch('/chemicals/categories', {}, customFetch),
     update: (id, body) => apiFetch(`/chemicals/${id}`, jsonRequest(body, { method: 'PATCH' })),
     del: (id) => apiFetch(`/chemicals/${id}`, { method: 'DELETE' }),
+  },
+  adminPools: {
+    list: (customFetch) => apiFetch('/admin/pools', {}, customFetch),
+    show: (poolId, customFetch) => apiFetch(`/admin/pools/${poolId}`, {}, customFetch),
+    update: (poolId, body) => apiFetch(`/admin/pools/${poolId}`, jsonRequest(body, { method: 'PATCH' })),
+    transfer: (poolId, body) =>
+      apiFetch(`/admin/pools/${poolId}/transfer`, jsonRequest(body, { method: 'POST' })),
   },
 };
 
