@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 import * as schema from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -44,16 +44,31 @@ export class AuthService {
     const passwordHash = await hash(data.password, AuthService.HASH_OPTIONS);
     
     try {
-      const [user] = await db.insert(schema.users).values({
-        email: data.email,
-        passwordHash,
-        name: data.name || null,
-        isActive: true,
-      }).returning({
-        userId: schema.users.userId,
-      });
+      return await db.transaction(async (tx) => {
+        const userCountResult = await tx
+          .select({
+            count: sql<number>`count(*)::int`,
+          })
+          .from(schema.users);
 
-      return user.userId;
+        const userCount = Number(userCountResult[0]?.count ?? 0);
+        const isFirstUser = userCount === 0;
+
+        const [user] = await tx
+          .insert(schema.users)
+          .values({
+            email: data.email,
+            passwordHash,
+            name: data.name || null,
+            isActive: true,
+            ...(isFirstUser ? { role: 'admin' } : {}),
+          })
+          .returning({
+            userId: schema.users.userId,
+          });
+
+        return user.userId;
+      });
     } catch (error) {
       if (isPostgresError(error) && error.code === POSTGRES_UNIQUE_VIOLATION) {
         throw new UserAlreadyExistsError();
