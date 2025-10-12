@@ -35,6 +35,35 @@ describe("POST /auth/register integration", () => {
     vi.restoreAllMocks();
   });
 
+  it("returns 201 with the created user's profile", async () => {
+    const userId = "3e3b618f-61c1-44d5-91a9-7e9c1cc8ae0b";
+    const payload = { email: "new-user@example.com", password: "password123", name: "New User" };
+
+    vi.spyOn(authService, "createUser").mockResolvedValueOnce(userId);
+    vi.spyOn(authService, "getUserById").mockResolvedValueOnce({
+      userId,
+      email: payload.email,
+      name: payload.name,
+      role: "member",
+      createdAt: new Date("2024-06-01T12:34:56.000Z"),
+    } as any);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload,
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      userId,
+      email: payload.email,
+      name: payload.name,
+      role: "member",
+      createdAt: "2024-06-01T12:34:56.000Z",
+    });
+  });
+
   it("returns 409 when registering with an existing email", async () => {
     const userId = "8b16a54d-1b3c-4d55-97f5-395d8fd9c3d2";
     const payload = { email: "user@example.com", password: "password123", name: "User" };
@@ -103,6 +132,23 @@ describe("POST /auth/register integration", () => {
     });
   });
 
+  it("returns 401 when credentials are invalid", async () => {
+    vi.spyOn(authService, "validateCredentials").mockResolvedValueOnce(null);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "admin@example.com", password: "wrong" },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: "Unauthorized",
+      message: "Invalid email or password",
+    });
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
   it("returns the user's role from /auth/me", async () => {
     const userId = "5f0b3f1d-8f2f-4de7-8d32-b0a95f0f5c20";
     vi.spyOn(authService, "getUserById").mockResolvedValue({
@@ -128,6 +174,20 @@ describe("POST /auth/register integration", () => {
         role: "member",
       },
     });
+  });
+
+  it("destroys the active session on logout", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/logout",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true });
+    expect(destroySessionMock).toHaveBeenCalledTimes(1);
+    const [replyArg, sessionIdArg] = destroySessionMock.mock.calls[0];
+    expect(replyArg).toBeDefined();
+    expect(sessionIdArg).toBeNull();
   });
 });
 
