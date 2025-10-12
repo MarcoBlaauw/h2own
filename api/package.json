@@ -10,7 +10,9 @@
     "test": "vitest run",
     "format": "prettier --write src/app.ts src/env.ts src/routes/auth.ts src/services/session-store.ts src/services/session-store.test.ts src/types/fastify.d.ts",
     "format:check": "prettier --check src/app.ts src/env.ts src/routes/auth.ts src/services/session-store.ts src/services/session-store.test.ts src/types/fastify.d.ts",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "user:create-admin": "tsx scripts/create-admin.ts",
+    "user:set-password": "tsx scripts/set-password.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.1",
@@ -37,7 +39,8 @@
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "postcss": "^8.4.41"
   },
   "packageManager": "pnpm@10.18.2"
 }

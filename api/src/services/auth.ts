@@ -1,9 +1,9 @@
-import { hash, verify } from 'argon2';
 import { randomBytes } from 'crypto';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 import * as schema from '../db/schema/index.js';
 import { and, desc, eq, sql } from 'drizzle-orm';
+import { hashPassword, verifyPassword } from './passwords.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -33,15 +33,8 @@ export interface LoginData {
 }
 
 export class AuthService {
-  private static readonly HASH_OPTIONS = {
-    type: 2, // argon2id
-    memoryCost: 19456,
-    timeCost: 2,
-    parallelism: 1,
-  } as const;
-
   async createUser(data: CreateUserData) {
-    const passwordHash = await hash(data.password, AuthService.HASH_OPTIONS);
+    const passwordHash = await hashPassword(data.password);
     
     try {
       return await db.transaction(async (tx) => {
@@ -95,7 +88,7 @@ export class AuthService {
       return null;
     }
 
-    const isValid = await verify(user.passwordHash, data.password);
+    const isValid = await verifyPassword(user.passwordHash, data.password);
     if (!isValid) {
       return null;
     }
@@ -139,7 +132,7 @@ export class AuthService {
 
   async createApiToken(userId: string, name: string, permissions?: any) {
     const token = `tok_${randomBytes(32).toString('hex')}`;
-    const tokenHash = await hash(token, AuthService.HASH_OPTIONS);
+    const tokenHash = await hashPassword(token);
 
     const [apiToken] = await db
       .insert(schema.apiTokens)
@@ -200,7 +193,7 @@ export class AuthService {
       .where(eq(schema.apiTokens.revoked, false));
 
     for (const apiToken of tokens) {
-      const isValid = await verify(apiToken.tokenHash, token);
+      const isValid = await verifyPassword(apiToken.tokenHash, token);
       if (isValid) {
         // Update last used timestamp
         await db.update(schema.apiTokens)

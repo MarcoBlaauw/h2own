@@ -18,9 +18,9 @@ vi.mock('../db/index.js', () => ({
   },
 }));
 
-vi.mock('argon2', () => ({
-  hash: hashMock,
-  verify: verifyMock,
+vi.mock('./passwords.js', () => ({
+  hashPassword: hashMock,
+  verifyPassword: verifyMock,
 }));
 
 describe('AuthService', () => {
@@ -113,7 +113,7 @@ describe('AuthService', () => {
     });
 
     expect(userId).toBe('user-1');
-    expect(hashMock).toHaveBeenCalledWith('sup3rsecret', expect.any(Object));
+    expect(hashMock).toHaveBeenCalledWith('sup3rsecret');
     expect(selectSpy).toHaveBeenCalled();
     expect(valuesSpy).toHaveBeenCalledTimes(1);
     expect(valuesSpy).toHaveBeenCalledWith({

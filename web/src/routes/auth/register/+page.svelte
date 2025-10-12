@@ -11,7 +11,7 @@
   async function handleSubmit() {
     const res = await api.auth.register({ name, email, password });
     if (res.ok) {
-      await goto('/auth/login');
+      await goto('/auth/login?registered=1', { replaceState: true });
     } else {
       const data = await res.json();
       error = data.message;

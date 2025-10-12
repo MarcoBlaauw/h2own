@@ -1,15 +1,7 @@
-import { randomBytes } from 'crypto';
-import { hash } from 'argon2';
 import { and, eq, ilike, or, SQL, asc } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-
-const HASH_OPTIONS = {
-  type: 2,
-  memoryCost: 19456,
-  timeCost: 2,
-  parallelism: 1,
-} as const;
+import { generatePassword, hashPassword } from './passwords.js';
 
 export class UsersForbiddenError extends Error {
   readonly statusCode = 403;
@@ -69,10 +61,6 @@ function buildFilters(filters: UsersServiceFilters): SQL | undefined {
   }
 
   return and(...conditions);
-}
-
-function generatePassword() {
-  return randomBytes(12).toString('base64url').slice(0, 18);
 }
 
 export class UsersService {
@@ -148,7 +136,7 @@ export class UsersService {
     this.ensureAdmin(role);
 
     const password = newPassword?.trim() ? newPassword.trim() : generatePassword();
-    const passwordHash = await hash(password, HASH_OPTIONS);
+    const passwordHash = await hashPassword(password);
 
     const [user] = await this.db
       .update(schema.users)

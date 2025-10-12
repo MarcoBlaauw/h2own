@@ -13,8 +13,8 @@ vi.mock('../db/index.js', () => ({
 
 const hashMock = vi.hoisted(() => vi.fn());
 
-vi.mock('argon2', () => ({
-  hash: hashMock,
+vi.mock('./passwords.js', () => ({
+  hashPassword: hashMock,
 }));
 
 describe('UsersService', () => {
@@ -104,7 +104,7 @@ describe('UsersService', () => {
 
     const result = await service.resetPassword('admin', 'user-2');
 
-    expect(hashMock).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
+    expect(hashMock).toHaveBeenCalledWith(expect.any(String));
     expect(result).toEqual({ userId: 'user-2', temporaryPassword: expect.any(String) });
   });
 
