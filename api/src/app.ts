@@ -40,6 +40,11 @@ async function buildApp() {
     },
   });
 
+  const maskSid = (sid?: string | null) => {
+    if (!sid) return null;
+    return `${sid.slice(0, 8)}…${sid.slice(-4)}`;
+  };
+
   // If you run behind a proxy/ingress that terminates TLS, uncomment:
   // app.setTrustProxy(true);
 
@@ -78,6 +83,10 @@ async function buildApp() {
         role: role ?? null,
         expiresAt,
       });
+      app.log.info(
+        { event: "session.create", sid: maskSid(sid), userId, role: role ?? null, expiresAt },
+        "created session and persisted to store",
+      );
 
       reply.setCookie("sid", sid, {
         path: "/",
@@ -94,6 +103,7 @@ async function buildApp() {
       if (sid) {
         try {
           await sessionStore.delete(sid);
+          app.log.info({ event: "session.destroy", sid: maskSid(sid) }, "removed session from store");
         } catch (error) {
           app.log.error({ err: error, sid }, "failed to remove session");
         }
@@ -104,6 +114,7 @@ async function buildApp() {
       if (!sid) return;
       try {
         await sessionStore.touch(sid);
+        app.log.debug({ event: "session.touch", sid: maskSid(sid) }, "refreshed session ttl");
       } catch (error) {
         app.log.error({ err: error, sid }, "failed to refresh session ttl");
       }
@@ -124,6 +135,10 @@ async function buildApp() {
     const raw = req.cookies.sid;
     if (raw) {
       const res = req.server.unsignCookie(raw);
+      app.log.info(
+        { event: "session.cookie.unsign", valid: res.valid, renew: res.renew ?? false },
+        "processed signed sid cookie",
+      );
       if (res.valid) {
         sid = res.value;
         if (sid) {
@@ -133,8 +148,16 @@ async function buildApp() {
               userId = record.userId ?? null;
               role = (record.role as string | null) ?? null;
               await app.sessions.touch(sid);
+              app.log.info(
+                { event: "session.load", sid: maskSid(sid), userId, role },
+                "loaded session from store",
+              );
             } else {
               reply.clearCookie("sid", { path: "/" });
+              app.log.warn(
+                { event: "session.missing", sid: maskSid(sid) },
+                "no session found for sid, clearing cookie",
+              );
               sid = null;
             }
           } catch (error) {
@@ -145,7 +168,10 @@ async function buildApp() {
         }
       } else {
         reply.clearCookie("sid", { path: "/" });
+        app.log.warn({ event: "session.cookie.invalid" }, "received invalid signed sid cookie");
       }
+    } else {
+      app.log.debug({ event: "session.cookie.absent" }, "request without sid cookie");
     }
 
     req.session = {
