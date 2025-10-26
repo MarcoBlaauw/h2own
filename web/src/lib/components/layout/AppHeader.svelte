@@ -6,6 +6,13 @@
 
   let isAdmin = false;
 
+  const marketingLinks = [
+    { href: '/#smart', label: 'Smart' },
+    { href: '/#how-we-do', label: 'How We Do Things' },
+    { href: '/#who-we-are', label: 'Who We Are' },
+    { href: '/#contact', label: 'Contact' },
+  ];
+
   const adminLinks = [
     { href: '/admin/pools', label: 'Pools' },
     { href: '/admin/chemicals', label: 'Chemicals' },
@@ -31,40 +38,58 @@
   <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
     <div class="flex items-center gap-6">
       <a href="/" class="flex items-center gap-3">
-        <div class="h-9 w-9 rounded-xl bg-accent shadow-card"></div>
-        <span class="text-lg font-semibold tracking-tight text-content-primary dark:text-content-primary">H2Own</span>
+        <img
+          src="https://www.compliancetechnologygroup.com/wp-content/uploads/2015/11/index.png"
+          alt="Compliance Technology Group logo"
+          class="h-10 w-auto"
+          loading="lazy"
+          decoding="async"
+        />
+        <span class="hidden text-lg font-semibold tracking-tight text-content-primary dark:text-content-primary sm:inline">
+          Compliance Technology Group
+        </span>
       </a>
-      {#if isAdmin}
-        <nav class="hidden items-center gap-4 text-sm font-medium text-content-secondary sm:flex">
-          {#each adminLinks as link}
-            <a
-              href={link.href}
-              class={`transition-colors ${
-                isActive(link.href)
-                  ? 'text-accent-strong dark:text-accent-strong'
-                  : 'text-content-secondary hover:text-content-primary'
-              }`}
-            >
-              {link.label}
-            </a>
+      {#if $page.data.session}
+        {#if isAdmin}
+          <nav class="hidden items-center gap-4 text-sm font-medium text-content-secondary sm:flex">
+            {#each adminLinks as link}
+              <a
+                href={link.href}
+                class={`transition-colors ${
+                  isActive(link.href)
+                    ? 'text-accent-strong dark:text-accent-strong'
+                    : 'text-content-secondary hover:text-content-primary'
+                }`}
+              >
+                {link.label}
+              </a>
+            {/each}
+          </nav>
+        {/if}
+      {:else}
+        <nav class="hidden items-center gap-6 text-sm font-medium text-content-secondary sm:flex">
+          {#each marketingLinks as link}
+            <a href={link.href} class="transition-colors hover:text-content-primary">{link.label}</a>
           {/each}
         </nav>
       {/if}
     </div>
     <div class="flex items-center gap-3 text-sm text-content-secondary">
-      {#if isAdmin}
-        <div class="flex gap-2 sm:hidden">
-          {#each adminLinks as link}
-            <a
-              href={link.href}
-              class={`btn btn-sm btn-tonal ${
-                isActive(link.href) ? 'font-semibold text-accent-strong' : ''
-              }`}
-            >
-              {link.label}
-            </a>
-          {/each}
-        </div>
+      {#if $page.data.session}
+        {#if isAdmin}
+          <div class="flex gap-2 sm:hidden">
+            {#each adminLinks as link}
+              <a
+                href={link.href}
+                class={`btn btn-sm btn-tonal ${
+                  isActive(link.href) ? 'font-semibold text-accent-strong' : ''
+                }`}
+              >
+                {link.label}
+              </a>
+            {/each}
+          </div>
+        {/if}
       {/if}
       <ThemeSwitcher />
       {#if $page.data.session}
