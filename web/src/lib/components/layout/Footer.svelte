@@ -1,37 +1,49 @@
-<footer class="bg-surface-subtle/95 text-content-secondary backdrop-blur-sm dark:bg-surface-inset/85 dark:text-content-secondary">
+<footer
+  class="bg-surface-subtle/95 text-content-secondary backdrop-blur-sm dark:bg-surface-inset/85 dark:text-content-secondary"
+>
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-    <div class="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
+    <div class="grid gap-10 md:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]">
       <div class="space-y-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide text-content-secondary/80 dark:text-content-secondary">Company</h3>
-        <ul class="space-y-2 text-sm">
-          <li><a href="/about" class="transition hover:text-content-primary">About</a></li>
-          <li><a href="/contact" class="transition hover:text-content-primary">Contact</a></li>
-          <li><a href="/staff" class="transition hover:text-content-primary">Staff</a></li>
-        </ul>
+        <img
+          src="https://www.compliancetechnologygroup.com/wp-content/uploads/2015/11/index.png"
+          alt="Compliance Technology Group logo"
+          class="h-10 w-auto"
+          loading="lazy"
+          decoding="async"
+        />
+        <p class="max-w-sm text-sm text-content-secondary/80">
+          Compliance Technology Group delivers SMART compliance solutions so water system teams can stay audit-ready and focused on
+          the communities they serve.
+        </p>
       </div>
       <div class="space-y-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide text-content-secondary/80 dark:text-content-secondary">Legal</h3>
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-content-secondary/80 dark:text-content-secondary">
+          Navigation
+        </h3>
         <ul class="space-y-2 text-sm">
-          <li><a href="/privacy" class="transition hover:text-content-primary">Privacy Policy</a></li>
-          <li><a href="/terms" class="transition hover:text-content-primary">Terms of Service</a></li>
-        </ul>
-      </div>
-      <div class="space-y-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide text-content-secondary/80 dark:text-content-secondary">Connect</h3>
-        <ul class="space-y-2 text-sm">
-          <li><a href="https://twitter.com" class="transition hover:text-content-primary">Twitter</a></li>
-          <li><a href="https://facebook.com" class="transition hover:text-content-primary">Facebook</a></li>
-          <li><a href="https://instagram.com" class="transition hover:text-content-primary">Instagram</a></li>
+          <li><a href="/#smart" class="transition hover:text-content-primary">Smart</a></li>
+          <li><a href="/#how-we-do" class="transition hover:text-content-primary">How We Do Things</a></li>
+          <li><a href="/#who-we-are" class="transition hover:text-content-primary">Who We Are</a></li>
+          <li><a href="/#contact" class="transition hover:text-content-primary">Contact</a></li>
         </ul>
       </div>
       <div class="space-y-4 text-sm">
-        <h3 class="text-sm font-semibold uppercase tracking-wide text-content-secondary/80 dark:text-content-secondary">Address</h3>
-        <p>123 Pool St.</p>
-        <p>Austin, TX 78701</p>
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-content-secondary/80 dark:text-content-secondary">
+          Contact
+        </h3>
+        <p class="text-content-secondary/80">
+          <span class="block font-semibold text-content-primary">Home Office</span>
+          3233 Florida Ave<br />
+          Kenner, LA 70065
+        </p>
+        <a href="tel:18664942841" class="transition hover:text-content-primary">Toll Free: 1-866-494-2841</a>
       </div>
     </div>
     <div class="mt-10 border-t border-border/60 pt-8 text-center text-sm dark:border-border-strong/60">
-      <p class="text-content-secondary/80">&copy; {new Date().getFullYear()} H2Own. All rights reserved.</p>
+      <p class="text-content-secondary/80">
+        Compliance Technology Group, LLC © {new Date().getFullYear()} |
+        <a href="/sitemap" class="transition hover:text-content-primary">Sitemap</a>
+      </p>
     </div>
   </div>
 </footer>
