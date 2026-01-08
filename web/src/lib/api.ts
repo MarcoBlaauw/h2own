@@ -83,6 +83,14 @@ type ApiClient = {
   };
   tests: {
     create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+    list: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { limit?: number }
+    ) => Promise<Response>;
+  };
+  recommendations: {
+    preview: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
   };
   members: {
     update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -170,6 +178,17 @@ export const api: ApiClient = {
   tests: {
     create: (poolId, body) =>
       apiFetch(`/pools/${poolId}/tests`, jsonRequest(body, { method: 'POST' })),
+    list: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      const path = `/pools/${poolId}/tests${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+  },
+  recommendations: {
+    preview: (poolId, customFetch) =>
+      apiFetch(`/pools/${poolId}/recommendations/preview`, {}, customFetch),
   },
   members: {
     update: (poolId, userId, body) =>
