@@ -27,6 +27,7 @@ export class RecommenderService {
 
     const recommendations: {
       chemicalId: string;
+      chemicalName: string;
       amount: number;
       unit: string | null;
       reason: string;
@@ -50,6 +51,7 @@ export class RecommenderService {
           const amount = numDoses * parseFloat(product.dosePer10kGallons!) * (pool.volumeGallons / 10000);
           recommendations.push({
             chemicalId: product.productId,
+            chemicalName: product.name,
             amount: parseFloat(amount.toFixed(2)),
             unit: product.doseUnit,
             reason: `Free chlorine is low at ${latestTest.freeChlorinePpm} ppm.`,
@@ -76,6 +78,7 @@ export class RecommenderService {
           const amount = numDoses * parseFloat(product.dosePer10kGallons!) * (pool.volumeGallons / 10000);
           recommendations.push({
             chemicalId: product.productId,
+            chemicalName: product.name,
             amount: parseFloat(amount.toFixed(2)),
             unit: product.doseUnit,
             reason: `pH is high at ${latestTest.phLevel}.`,
