@@ -34,11 +34,11 @@ Capture the current feature state and outline the next implementation steps to r
 - Fetch and render recommendations preview data. ✅
 - Surface empty states when the pool has no tests. ✅
 
-### 2) Complete recommendation workflow (In progress)
+### 2) Complete recommendation workflow (Completed)
 - [x] Add endpoint to persist recommendations.
 - [x] Add endpoint to update recommendation status and feedback.
-- [ ] Extend the web UI to apply/track recommendations.
-- [ ] Add list/detail endpoints to view recommendation history per pool.
+- [x] Extend the web UI to apply/track recommendations.
+- [x] Add list/detail endpoints to view recommendation history per pool.
 
 ### 3) Dosing and history (Not started)
 - Add `GET /pools/:poolId/dosing` endpoint.

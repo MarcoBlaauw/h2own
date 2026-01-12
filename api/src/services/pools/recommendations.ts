@@ -1,6 +1,6 @@
 import { db as dbClient } from '../../db/index.js';
 import * as schema from '../../db/schema/index.js';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { PoolCoreService } from './core.js';
 
 export type RecommendationStatus = 'pending' | 'saved' | 'applied' | 'dismissed';
@@ -100,6 +100,44 @@ export class PoolRecommendationsService {
       .returning();
 
     return updated;
+  }
+
+  async getRecommendationsByPoolId(
+    poolId: string,
+    userId: string,
+    limit: number,
+    status?: RecommendationStatus
+  ) {
+    await this.core.ensurePoolAccess(poolId, userId);
+
+    const whereClause = status
+      ? and(eq(schema.recommendations.poolId, poolId), eq(schema.recommendations.status, status))
+      : eq(schema.recommendations.poolId, poolId);
+
+    const items = await this.db
+      .select()
+      .from(schema.recommendations)
+      .where(whereClause)
+      .orderBy(desc(schema.recommendations.createdAt), desc(schema.recommendations.recommendationId))
+      .limit(limit);
+
+    return { items };
+  }
+
+  async getRecommendationById(poolId: string, recommendationId: string, userId: string) {
+    await this.core.ensurePoolAccess(poolId, userId);
+
+    const [recommendation] = await this.db
+      .select()
+      .from(schema.recommendations)
+      .where(
+        and(
+          eq(schema.recommendations.poolId, poolId),
+          eq(schema.recommendations.recommendationId, recommendationId)
+        )
+      );
+
+    return recommendation ?? null;
   }
 }
 

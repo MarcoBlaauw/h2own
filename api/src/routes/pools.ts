@@ -134,6 +134,10 @@ const getTestsQuery = z
     message: 'cursorTestedAt is required when cursorSessionId is provided',
     path: ['cursorTestedAt'],
   });
+const getRecommendationsQuery = z.object({
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  status: recommendationStatusSchema.optional(),
+});
 
 export async function poolsRoutes(app: FastifyInstance) {
   // 🔒 All /pools/* endpoints require a valid session
@@ -321,6 +325,41 @@ export async function poolsRoutes(app: FastifyInstance) {
         },
       }
     )
+  );
+
+  // GET /pools/:poolId/recommendations
+  app.get(
+    '/:poolId/recommendations',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const { limit, status } = getRecommendationsQuery.parse(req.query);
+      const recommendations = await poolRecommendationsService.getRecommendationsByPoolId(
+        poolId,
+        userId,
+        limit,
+        status
+      );
+      return reply.send(recommendations);
+    })
+  );
+
+  // GET /pools/:poolId/recommendations/:recommendationId
+  app.get(
+    '/:poolId/recommendations/:recommendationId',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, recommendationId } = poolRecommendationParams.parse(req.params);
+      const userId = req.user!.id;
+      const recommendation = await poolRecommendationsService.getRecommendationById(
+        poolId,
+        recommendationId,
+        userId
+      );
+      if (!recommendation) {
+        return reply.code(404).send({ error: 'Recommendation not found' });
+      }
+      return reply.send(recommendation);
+    })
   );
 
   // PATCH /pools/:poolId/recommendations/:recommendationId

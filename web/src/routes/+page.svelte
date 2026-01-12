@@ -44,6 +44,21 @@
         predictedOutcome: string;
       }>;
     } | null;
+    recommendationHistory: Array<{
+      recommendationId: string;
+      type: string;
+      title: string;
+      description?: string | null;
+      status: string;
+      payload?: {
+        chemicalId?: string;
+        chemicalName?: string;
+        amount?: number;
+        unit?: string | null;
+        predictedOutcome?: string;
+      } | null;
+      createdAt: string;
+    }>;
   };
 
   const formatMeasurement = (
@@ -159,6 +174,8 @@
         <RecommendationsCard
           recommendations={data.recommendations}
           hasTest={Boolean(data.latestTest)}
+          poolId={data.highlightedPool?.id}
+          recommendationHistory={data.recommendationHistory}
         />
       </div>
     </div>

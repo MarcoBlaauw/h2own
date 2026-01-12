@@ -97,6 +97,12 @@ type ApiClient = {
       recommendationId: string,
       body: Record<string, unknown>
     ) => Promise<Response>;
+    list: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { limit?: number; status?: string }
+    ) => Promise<Response>;
+    show: (poolId: string, recommendationId: string, customFetch?: FetchLike) => Promise<Response>;
   };
   members: {
     update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -202,6 +208,16 @@ export const api: ApiClient = {
         `/pools/${poolId}/recommendations/${recommendationId}`,
         jsonRequest(body, { method: 'PATCH' })
       ),
+    list: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      if (params.status) search.set('status', params.status);
+      const query = search.toString();
+      const path = `/pools/${poolId}/recommendations${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    show: (poolId, recommendationId, customFetch) =>
+      apiFetch(`/pools/${poolId}/recommendations/${recommendationId}`, {}, customFetch),
   },
   members: {
     update: (poolId, userId, body) =>
