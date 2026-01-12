@@ -11,9 +11,21 @@ import baseConfig from './vite.config';
 const dirname =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
+const basePlugins = 'plugins' in baseConfig ? baseConfig.plugins : [];
+
+const unitTestConfig = defineConfig({
+  plugins: basePlugins,
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    setupFiles: [path.join(dirname, 'src/vitest.setup.ts')],
+  },
+});
+
 const baseForStorybook = {
-  ...baseConfig,
-  test: baseConfig.test ? { ...baseConfig.test } : undefined,
+  ...unitTestConfig,
+  test: unitTestConfig.test ? { ...unitTestConfig.test } : undefined,
 };
 
 if (baseForStorybook?.test && 'include' in baseForStorybook.test) {
@@ -35,7 +47,7 @@ const storybookConfig = mergeConfig(
               provider: playwright({}),
               instances: [{ browser: 'chromium' }],
             },
-            setupFiles: ['.storybook/vitest.setup.ts'],
+            setupFiles: [path.join(dirname, '.storybook/vitest.setup.ts')],
           },
         },
       ],
@@ -43,4 +55,4 @@ const storybookConfig = mergeConfig(
   }),
 );
 
-export default process.env.VITEST_STORYBOOK === 'true' ? storybookConfig : baseConfig;
+export default process.env.VITEST_STORYBOOK === 'true' ? storybookConfig : unitTestConfig;

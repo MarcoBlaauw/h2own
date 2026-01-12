@@ -54,5 +54,6 @@ const decodeBaseline = (name: ThemeVisualBaselineName) => {
     throw new Error(`Unknown visual baseline: ${name}`);
   }
 
-  return Buffer.from(base64, 'base64');
+  const serialized = base64.join('');
+  return Buffer.from(serialized, 'base64');
 };

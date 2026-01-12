@@ -22,7 +22,10 @@
     "postcss.config.cjs",
     "tailwind.config.ts",
     "playwright.config.ts",
-    "playwright.visual.config.ts"
+    "playwright.visual.config.ts",
+    "vitest.config.ts",
+    "vitest.storybook.config.ts",
+    "scripts/**/*.mjs"
   ],
   "exclude": ["**/*.stories.ts", ".storybook"]
 }

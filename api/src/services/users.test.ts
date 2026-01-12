@@ -12,9 +12,11 @@ vi.mock('../db/index.js', () => ({
 }));
 
 const hashMock = vi.hoisted(() => vi.fn());
+const generatePasswordMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./passwords.js', () => ({
   hashPassword: hashMock,
+  generatePassword: generatePasswordMock,
 }));
 
 describe('UsersService', () => {
@@ -24,7 +26,9 @@ describe('UsersService', () => {
     selectMock.mockReset();
     updateMock.mockReset();
     hashMock.mockReset();
+    generatePasswordMock.mockReset();
     hashMock.mockResolvedValue('argon-hash');
+    generatePasswordMock.mockReturnValue('temp-pass');
   });
 
   it('rejects list attempts for non-admins', async () => {
