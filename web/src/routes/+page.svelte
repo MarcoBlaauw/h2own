@@ -19,6 +19,7 @@
     pools: Array<{ poolId: string }>;
     highlightedPool: HighlightedPool | null;
     latestTest: {
+      sessionId?: string;
       freeChlorinePpm?: string | null;
       phLevel?: string | null;
       totalAlkalinityPpm?: number | null;
@@ -44,6 +45,16 @@
         predictedOutcome: string;
       }>;
     } | null;
+    savedRecommendations: Array<{
+      recommendationId: string;
+      type: string;
+      title: string;
+      description?: string | null;
+      payload?: Record<string, unknown> | null;
+      status: string;
+      createdAt: string;
+      userFeedback?: string | null;
+    }>;
   };
 
   const formatMeasurement = (value: string | number | null | undefined, suffix: string, decimals = 1) => {
@@ -135,7 +146,17 @@
       {/if}
 
       <div class="lg:col-span-3">
-        <RecommendationsCard recommendations={data.recommendations} hasTest={Boolean(data.latestTest)} />
+        {#if data.highlightedPool}
+          <RecommendationsCard
+            poolId={data.highlightedPool.id}
+            latestTestId={data.latestTest?.sessionId}
+            recommendations={data.recommendations}
+            savedRecommendations={data.savedRecommendations}
+            hasTest={Boolean(data.latestTest)}
+          />
+        {:else}
+          <p class="text-sm text-content-secondary">Add a pool to see recommendations.</p>
+        {/if}
       </div>
     </div>
   {:else}

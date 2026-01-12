@@ -12,9 +12,11 @@ vi.mock('../db/index.js', () => ({
 }));
 
 const hashMock = vi.hoisted(() => vi.fn());
+const generateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./passwords.js', () => ({
   hashPassword: hashMock,
+  generatePassword: generateMock,
 }));
 
 describe('UsersService', () => {
@@ -25,6 +27,8 @@ describe('UsersService', () => {
     updateMock.mockReset();
     hashMock.mockReset();
     hashMock.mockResolvedValue('argon-hash');
+    generateMock.mockReset();
+    generateMock.mockReturnValue('temporary-password');
   });
 
   it('rejects list attempts for non-admins', async () => {
@@ -105,7 +109,7 @@ describe('UsersService', () => {
     const result = await service.resetPassword('admin', 'user-2');
 
     expect(hashMock).toHaveBeenCalledWith(expect.any(String));
-    expect(result).toEqual({ userId: 'user-2', temporaryPassword: expect.any(String) });
+    expect(result).toEqual({ userId: 'user-2', temporaryPassword: 'temporary-password' });
   });
 
   it('rejects password resets from non-admins', async () => {

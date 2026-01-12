@@ -160,7 +160,7 @@ describe('admin locations page', () => {
       });
     });
 
-    expect(await findByText('New Spot')).toBeInTheDocument();
+    expect(await findByText('New Spot')).toBeTruthy();
   });
 
   it('updates metadata for a selected location', async () => {
@@ -205,7 +205,7 @@ describe('admin locations page', () => {
       });
     });
 
-    expect(await findByText('Renamed Location')).toBeInTheDocument();
+    expect(await findByText('Renamed Location')).toBeTruthy();
   });
 
   it('reassigns pools to a new location', async () => {

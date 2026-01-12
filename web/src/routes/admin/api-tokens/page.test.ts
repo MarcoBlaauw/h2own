@@ -57,8 +57,8 @@ describe('admin api tokens page', () => {
       },
     });
 
-    expect(getByText('Staging deployer')).toBeInTheDocument();
-    expect(getByText(baseTokens[0].tokenId)).toBeInTheDocument();
+    expect(getByText('Staging deployer')).toBeTruthy();
+    expect(getByText(baseTokens[0].tokenId)).toBeTruthy();
   });
 
   it('creates a token and shows a single-use preview while keeping listings secret', async () => {
@@ -109,8 +109,8 @@ describe('admin api tokens page', () => {
     expect(createMock).toHaveBeenCalledWith({ name: 'Integration key' });
 
     const preview = await findByText(/Token created: Integration key/i);
-    expect(preview).toBeInTheDocument();
-    expect(await findByText('tok_super_secret')).toBeInTheDocument();
+    expect(preview).toBeTruthy();
+    expect(await findByText('tok_super_secret')).toBeTruthy();
 
     await waitFor(() => {
       expect(listMock).toHaveBeenCalledTimes(1);

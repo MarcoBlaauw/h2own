@@ -91,6 +91,13 @@ type ApiClient = {
   };
   recommendations: {
     preview: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    list: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { status?: 'pending' | 'applied' | 'dismissed' }
+    ) => Promise<Response>;
+    create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+    update: (poolId: string, recommendationId: string, body: Record<string, unknown>) => Promise<Response>;
   };
   members: {
     update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -189,6 +196,20 @@ export const api: ApiClient = {
   recommendations: {
     preview: (poolId, customFetch) =>
       apiFetch(`/pools/${poolId}/recommendations/preview`, {}, customFetch),
+    list: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.status) search.set('status', params.status);
+      const query = search.toString();
+      const path = `/pools/${poolId}/recommendations${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    create: (poolId, body) =>
+      apiFetch(`/pools/${poolId}/recommendations`, jsonRequest(body, { method: 'POST' })),
+    update: (poolId, recommendationId, body) =>
+      apiFetch(
+        `/pools/${poolId}/recommendations/${recommendationId}`,
+        jsonRequest(body, { method: 'PATCH' })
+      ),
   },
   members: {
     update: (poolId, userId, body) =>

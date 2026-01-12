@@ -136,7 +136,7 @@ describe('admin pools page', () => {
     await waitFor(() => {
       const poolList = getByRole('list');
       const updatedEntry = within(poolList).getByRole('button', { name: /Updated Community Pool/i });
-      expect(updatedEntry).toBeInTheDocument();
+      expect(updatedEntry).toBeTruthy();
     });
   });
 
@@ -187,6 +187,6 @@ describe('admin pools page', () => {
       expect(adminPoolsApi.list).toHaveBeenCalled();
     });
 
-    expect(await findByText('member@example.com')).toBeInTheDocument();
+    expect(await findByText('member@example.com')).toBeTruthy();
   });
 });
