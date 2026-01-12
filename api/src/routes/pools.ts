@@ -6,7 +6,12 @@ import {
   parseCreateLocationId,
   parseUpdateLocationId,
 } from './pools.schemas.js';
-import { poolCoreService, poolMembershipService, poolTestingService } from '../services/pools/index.js';
+import {
+  poolCoreService,
+  poolMembershipService,
+  poolRecommendationsService,
+  poolTestingService,
+} from '../services/pools/index.js';
 import { recommenderService } from '../services/recommender.js';
 import { wrapPoolRoute } from './route-utils.js';
 
@@ -85,9 +90,39 @@ const createDosingSchema = z.object({
   notes: z.string().optional(),
 });
 
+const recommendationStatusSchema = z.enum(['pending', 'saved', 'applied', 'dismissed']);
+
+const createRecommendationSchema = z.object({
+  type: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  payload: z.unknown().optional(),
+  priorityScore: z.number().int().min(1).max(10).optional(),
+  confidenceScore: z.number().min(0).max(1).optional(),
+  factorsConsidered: z.unknown().optional(),
+  expiresAt: z.string().datetime().optional(),
+  linkedTestId: z.string().uuid().optional(),
+  status: recommendationStatusSchema.optional(),
+  userAction: z.unknown().optional(),
+});
+
+const updateRecommendationSchema = z
+  .object({
+    status: recommendationStatusSchema.optional(),
+    userFeedback: z.string().optional(),
+    userAction: z.unknown().optional(),
+  })
+  .refine((data) => data.status || data.userFeedback || data.userAction, {
+    message: 'At least one field is required',
+  });
+
 // Params / Query schemas
 const poolIdParams = z.object({ poolId: z.string().uuid() });
 const poolMemberParams = z.object({ poolId: z.string().uuid(), userId: z.string().uuid() });
+const poolRecommendationParams = z.object({
+  poolId: z.string().uuid(),
+  recommendationId: z.string().uuid(),
+});
 const getPoolsQuery = z.object({ owner: z.coerce.boolean().optional() });
 const getTestsQuery = z
   .object({
@@ -258,6 +293,53 @@ export async function poolsRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Pool not found' });
       }
       return reply.send(recommendations);
+    })
+  );
+
+  // POST /pools/:poolId/recommendations
+  app.post(
+    '/:poolId/recommendations',
+    wrapPoolRoute(
+      async (req, reply) => {
+        const { poolId } = poolIdParams.parse(req.params);
+        const userId = req.user!.id;
+        const data = createRecommendationSchema.parse(req.body);
+        const recommendation = await poolRecommendationsService.createRecommendation(
+          poolId,
+          userId,
+          data
+        );
+        return reply.code(201).send(recommendation);
+      },
+      {
+        onError: (err, _req, reply) => {
+          if (err instanceof Error && err.message === 'Test does not belong to this pool') {
+            reply.code(400).send({ error: err.message });
+            return true;
+          }
+          return false;
+        },
+      }
+    )
+  );
+
+  // PATCH /pools/:poolId/recommendations/:recommendationId
+  app.patch(
+    '/:poolId/recommendations/:recommendationId',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, recommendationId } = poolRecommendationParams.parse(req.params);
+      const userId = req.user!.id;
+      const data = updateRecommendationSchema.parse(req.body);
+      const recommendation = await poolRecommendationsService.updateRecommendation(
+        poolId,
+        recommendationId,
+        userId,
+        data
+      );
+      if (!recommendation) {
+        return reply.code(404).send({ error: 'Recommendation not found' });
+      }
+      return reply.send(recommendation);
     })
   );
 

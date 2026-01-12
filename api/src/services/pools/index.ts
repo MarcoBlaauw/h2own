@@ -17,12 +17,17 @@ import {
 import { PoolAdminService, poolAdminService as defaultAdminService } from './admin.js';
 import { PoolMembershipService, poolMembershipService as defaultMembershipService } from './members.js';
 import { PoolTestingService, poolTestingService as defaultTestingService } from './tests.js';
+import {
+  PoolRecommendationsService,
+  poolRecommendationsService as defaultRecommendationsService,
+} from './recommendations.js';
 
 export const poolsService = {
   core: defaultCoreService,
   admin: defaultAdminService,
   members: defaultMembershipService,
   tests: defaultTestingService,
+  recommendations: defaultRecommendationsService,
 };
 
 export {
@@ -30,6 +35,7 @@ export {
   PoolAdminService,
   PoolMembershipService,
   PoolTestingService,
+  PoolRecommendationsService,
   PoolNotFoundError,
   PoolForbiddenError,
   PoolLocationAccessError,
@@ -47,17 +53,20 @@ export type {
 };
 
 export { type CreateTestData, type CreateDosingData } from './tests.js';
+export type { RecommendationStatus, CreateRecommendationData, UpdateRecommendationData } from './recommendations.js';
 
 export const poolCoreService = defaultCoreService;
 export const poolAdminService = defaultAdminService;
 export const poolMembershipService = defaultMembershipService;
 export const poolTestingService = defaultTestingService;
+export const poolRecommendationsService = defaultRecommendationsService;
 
 export function createPoolsOrchestrator(db = dbClient) {
   const core = new PoolCoreService(db);
   const admin = new PoolAdminService(db, core);
   const members = new PoolMembershipService(db, core);
   const tests = new PoolTestingService(db, core);
+  const recommendations = new PoolRecommendationsService(db, core);
 
-  return { core, admin, members, tests };
+  return { core, admin, members, tests, recommendations };
 }
