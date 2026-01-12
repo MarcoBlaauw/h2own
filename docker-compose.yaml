@@ -17,32 +17,6 @@ services:
     networks:
       - internal
 
-  api:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
-    container_name: h2own-api
-    environment:
-      NODE_ENV: development
-      PORT: ${API_PORT:-3001}
-      LOG_LEVEL: debug
-      DATABASE_URL: postgres://${POSTGRES_USER:-h2own}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-h2own}
-      SESSION_SECRET: ${SESSION_SECRET:-dev-secret-please-change-this-to-32plus-chars}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-604800}
-      SESSION_PREFIX: ${SESSION_PREFIX:-session}
-      COOKIE_SECURE: "false"
-      CORS_ORIGIN: http://localhost:${WEB_PORT:-3000}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    ports:
-      - "${API_PORT:-3001}:3001"
-    networks:
-      - internal
-
   redis:
     image: redis:7-alpine
     container_name: h2own-redis
@@ -56,22 +30,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    networks:
-      - internal
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    container_name: h2own-web
-    environment:
-      # The web app should call the API through the host port in local dev
-      PUBLIC_API_BASE: http://localhost:${API_PORT:-3001}
-      PUBLIC_APP_NAME: H2Own
-    depends_on:
-      - api
-    ports:
-      - "${WEB_PORT:-3000}:3000"
     networks:
       - internal
 

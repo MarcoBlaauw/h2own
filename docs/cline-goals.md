@@ -42,7 +42,8 @@
      - preview recommendation
      - RBAC checks
 14. **Docker Compose**
-   - `postgres`, `api`, `web` services; volumes for db data.
+   - `postgres`, `redis` services for local development; volumes for db data.
+   - Use pnpm dev scripts for the API and web instances.
 
 ## Coding Conventions
 
@@ -54,7 +55,8 @@
 
 ## Acceptance Criteria
 
-- `docker compose up -d --build` starts **postgres, api, web**.
+- `docker compose up -d` starts **postgres + redis**.
+- `pnpm dev` runs **api + web** locally with live reload.
 - `GET /healthz` → 200.
 - Register/login works; cookie set.
 - Create pool → list pools shows it.
@@ -68,4 +70,3 @@
 - Woodpecker pipeline running lint/test/build.
 - Seed script for demo data.
 - Basic admin page (chemicals list).
-

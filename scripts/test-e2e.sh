@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.yaml}"
+COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.release.yaml}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-h2own-e2e}"
 API_PORT="${API_PORT:-3001}"
 POSTGRES_USER="${POSTGRES_USER:-h2own}"

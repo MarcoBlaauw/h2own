@@ -267,7 +267,7 @@ Event types: test.created, dosing.created, recommendation.status_changed, cost.c
   - **API:** Fastify (TypeScript), Drizzle ORM (Postgres), Zod for validation
   - **Web:** SvelteKit + Tailwind
   - **DB:** PostgreSQL (schema in `db/init.sql`, updated per latest merge)
-- Run local via Docker Compose (postgres, api, web).  
+- Run local via `docker-compose.yaml` (postgres, redis) plus pnpm dev scripts for api/web.  
 - Auth: cookie sessions (fastify‑secure‑session) + API tokens (Bearer).
 
 ## High‑level Goals (MVP)
