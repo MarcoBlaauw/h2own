@@ -1,3 +1,6 @@
+// For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
+import storybook from "eslint-plugin-storybook";
+
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,48 +25,41 @@ const svelteConfigs = svelte.configs['flat/recommended'].map((config) => ({
   }
 }));
 
-export default tseslint.config(
-  {
-    ignores: [
-      'build',
-      '.svelte-kit',
-      'dist',
-      'node_modules',
-      '.storybook',
-      '**/*.stories.ts',
-      'postcss.config.cjs',
-      'svelte.config.js',
-      'tailwind.config.ts',
-      'playwright.config.ts',
-      'playwright.visual.config.ts',
-      'eslint.config.js'
-    ]
-  },
-  {
-    files: ['**/*.{js,cjs,mjs}'],
-    ...js.configs.recommended
-  },
-  ...tseslint.configs.recommended,
-  ...svelteConfigs,
-  {
-    files: ['**/*.svelte'],
-    rules: {
-      'svelte/no-target-blank': 'error'
-    }
-  },
-  {
-    files: ['**/*.{js,ts,svelte,cjs,mjs}'],
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node
-      }
-    },
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
-      'svelte/no-navigation-without-resolve': 'off',
-      'svelte/require-each-key': 'off'
-    }
+export default tseslint.config({
+  ignores: [
+    'build',
+    '.svelte-kit',
+    'dist',
+    'node_modules',
+    '.storybook',
+    '**/*.stories.ts',
+    'postcss.config.cjs',
+    'svelte.config.js',
+    'tailwind.config.ts',
+    'playwright.config.ts',
+    'playwright.visual.config.ts',
+    'eslint.config.js'
+  ]
+}, {
+  files: ['**/*.{js,cjs,mjs}'],
+  ...js.configs.recommended
+}, ...tseslint.configs.recommended, ...svelteConfigs, {
+  files: ['**/*.svelte'],
+  rules: {
+    'svelte/no-target-blank': 'error'
   }
-);
+}, {
+  files: ['**/*.{js,ts,svelte,cjs,mjs}'],
+  languageOptions: {
+    globals: {
+      ...globals.browser,
+      ...globals.node
+    }
+  },
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-unused-vars': 'off',
+    'svelte/no-navigation-without-resolve': 'off',
+    'svelte/require-each-key': 'off'
+  }
+}, storybook.configs["flat/recommended"]);

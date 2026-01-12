@@ -6,7 +6,6 @@
       "@testing-library/jest-dom/vitest",
       "@storybook/svelte",
       "@storybook/sveltekit",
-      "@storybook/test-runner",
       "@axe-core/playwright"
     ],
     "strictNullChecks": true,

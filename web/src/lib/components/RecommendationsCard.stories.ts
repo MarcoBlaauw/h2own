@@ -1,12 +1,17 @@
-import type { Meta, StoryObj } from '@storybook/svelte';
+import type { Meta, StoryObj } from '@storybook/sveltekit';
 import RecommendationsCard from './RecommendationsCard.svelte';
 
 const meta = {
   title: 'Cards/Recommendations',
   component: RecommendationsCard,
   tags: ['autodocs'],
-  render: () => ({
-    Component: RecommendationsCard
+  args: {
+    recommendations: null,
+    hasTest: false
+  },
+  render: (args) => ({
+    Component: RecommendationsCard,
+    props: args
   })
 } satisfies Meta<RecommendationsCard>;
 
