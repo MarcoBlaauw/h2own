@@ -84,7 +84,13 @@ async function buildApp() {
         expiresAt,
       });
       app.log.info(
-        { event: "session.create", sid: maskSid(sid), userId, role: role ?? null, expiresAt },
+        {
+          event: "session.create",
+          sid: maskSid(sid),
+          userId,
+          role: role ?? null,
+          expiresAt,
+        },
         "created session and persisted to store",
       );
 
@@ -103,7 +109,10 @@ async function buildApp() {
       if (sid) {
         try {
           await sessionStore.delete(sid);
-          app.log.info({ event: "session.destroy", sid: maskSid(sid) }, "removed session from store");
+          app.log.info(
+            { event: "session.destroy", sid: maskSid(sid) },
+            "removed session from store",
+          );
         } catch (error) {
           app.log.error({ err: error, sid }, "failed to remove session");
         }
@@ -114,7 +123,10 @@ async function buildApp() {
       if (!sid) return;
       try {
         await sessionStore.touch(sid);
-        app.log.debug({ event: "session.touch", sid: maskSid(sid) }, "refreshed session ttl");
+        app.log.debug(
+          { event: "session.touch", sid: maskSid(sid) },
+          "refreshed session ttl",
+        );
       } catch (error) {
         app.log.error({ err: error, sid }, "failed to refresh session ttl");
       }
@@ -136,7 +148,11 @@ async function buildApp() {
     if (raw) {
       const res = req.server.unsignCookie(raw);
       app.log.info(
-        { event: "session.cookie.unsign", valid: res.valid, renew: res.renew ?? false },
+        {
+          event: "session.cookie.unsign",
+          valid: res.valid,
+          renew: res.renew ?? false,
+        },
         "processed signed sid cookie",
       );
       if (res.valid) {
@@ -168,10 +184,16 @@ async function buildApp() {
         }
       } else {
         reply.clearCookie("sid", { path: "/" });
-        app.log.warn({ event: "session.cookie.invalid" }, "received invalid signed sid cookie");
+        app.log.warn(
+          { event: "session.cookie.invalid" },
+          "received invalid signed sid cookie",
+        );
       }
     } else {
-      app.log.debug({ event: "session.cookie.absent" }, "request without sid cookie");
+      app.log.debug(
+        { event: "session.cookie.absent" },
+        "request without sid cookie",
+      );
     }
 
     req.session = {

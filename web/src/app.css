@@ -89,14 +89,20 @@
     @apply h-10 w-10 rounded-full text-lg;
   }
 
+  .btn-pill {
+    @apply rounded-full;
+  }
+
   .btn-primary {
-    background-color: rgb(var(--color-accent));
+    border: 1px solid rgb(var(--color-accent-strong));
+    background-color: rgb(var(--color-accent-strong));
     color: rgb(var(--color-accent-contrast));
     box-shadow: var(--shadow-soft);
   }
 
   .btn-primary:hover {
-    background-color: rgb(var(--color-accent-strong));
+    background-color: rgb(var(--color-accent));
+    border-color: rgb(var(--color-accent));
   }
 
   .btn-primary:focus-visible {

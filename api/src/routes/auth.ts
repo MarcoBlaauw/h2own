@@ -5,10 +5,16 @@ import { UserAlreadyExistsError, authService } from "../services/auth.js";
 
 const registerBodySchema = z.object({
   email: z
-    .string({ required_error: "Email is required", invalid_type_error: "Email must be a string" })
+    .string({
+      required_error: "Email is required",
+      invalid_type_error: "Email must be a string",
+    })
     .email("Email must be a valid email address"),
   password: z
-    .string({ required_error: "Password is required", invalid_type_error: "Password must be a string" })
+    .string({
+      required_error: "Password is required",
+      invalid_type_error: "Password must be a string",
+    })
     .min(8, "Password must be at least 8 characters long"),
   name: z
     .string({ invalid_type_error: "Name must be a string" })
@@ -19,10 +25,16 @@ const registerBodySchema = z.object({
 
 const loginBodySchema = z.object({
   email: z
-    .string({ required_error: "Email is required", invalid_type_error: "Email must be a string" })
+    .string({
+      required_error: "Email is required",
+      invalid_type_error: "Email must be a string",
+    })
     .email("Email must be a valid email address"),
   password: z
-    .string({ required_error: "Password is required", invalid_type_error: "Password must be a string" })
+    .string({
+      required_error: "Password is required",
+      invalid_type_error: "Password must be a string",
+    })
     .min(1, "Password is required"),
 });
 
@@ -112,7 +124,12 @@ export async function authRoutes(app: FastifyInstance) {
       await app.sessions.create(reply, user.userId, user.role ?? undefined);
 
       return reply.code(201).send({
-        user: { id: user.userId, email: user.email, name: user.name, role: user.role },
+        user: {
+          id: user.userId,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -149,7 +166,10 @@ export async function authRoutes(app: FastifyInstance) {
 
 const apiTokenBodySchema = z.object({
   name: z
-    .string({ required_error: "Name is required", invalid_type_error: "Name must be a string" })
+    .string({
+      required_error: "Name is required",
+      invalid_type_error: "Name must be a string",
+    })
     .trim()
     .min(1, "Name must not be empty")
     .max(120, "Name must be at most 120 characters"),
@@ -158,7 +178,10 @@ const apiTokenBodySchema = z.object({
 
 const apiTokenParamsSchema = z.object({
   tokenId: z
-    .string({ required_error: "Token ID is required", invalid_type_error: "Token ID must be a string" })
+    .string({
+      required_error: "Token ID is required",
+      invalid_type_error: "Token ID must be a string",
+    })
     .uuid("Token ID must be a valid UUID"),
 });
 
@@ -176,7 +199,11 @@ export async function adminApiTokenRoutes(app: FastifyInstance) {
     try {
       const payload = apiTokenBodySchema.parse(req.body);
       const userId = req.user!.id;
-      const token = await authService.createApiToken(userId, payload.name, payload.permissions);
+      const token = await authService.createApiToken(
+        userId,
+        payload.name,
+        payload.permissions,
+      );
       return reply.code(201).send(token);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -194,7 +221,9 @@ export async function adminApiTokenRoutes(app: FastifyInstance) {
       const revoked = await authService.revokeApiToken(userId, tokenId);
 
       if (!revoked) {
-        return reply.code(404).send({ error: "NotFound", message: "Token not found" });
+        return reply
+          .code(404)
+          .send({ error: "NotFound", message: "Token not found" });
       }
 
       return reply.status(204).send();

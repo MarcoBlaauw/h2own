@@ -81,12 +81,7 @@
           >
             Sign In
           </button>
-          <a
-            class="text-sm font-medium text-accent hover:text-accent-strong"
-            href="/auth/register"
-          >
-            Register
-          </a>
+          <a class="btn btn-base btn-secondary" href="/auth/register">Register</a>
         </div>
       </form>
     </Card>

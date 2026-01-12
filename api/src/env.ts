@@ -18,7 +18,14 @@ const envSchema = z.object({
     .string()
     .min(32)
     .default("dev-secret-please-change-in-production"),
-  REDIS_URL: z.string().url().default("redis://redis:6379"),
+  REDIS_URL: z
+    .string()
+    .url()
+    .default(
+      process.env.NODE_ENV === "development"
+        ? "redis://localhost:6379"
+        : "redis://redis:6379",
+    ),
   SESSION_TTL_SECONDS: z
     .string()
     .transform((value) => Number(value))
