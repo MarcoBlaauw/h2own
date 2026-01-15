@@ -27,7 +27,7 @@ h2own/
 ├── api/          # Fastify backend (TypeScript, Drizzle ORM)
 ├── web/          # SvelteKit + Tailwind frontend
 ├── db/           # SQL migrations & seed data
-├── docs/         # Documentation, diagrams, cline goals
+├── docs/         # Documentation, diagrams, implementation plan
 ├── docker-compose.yaml
 ├── docker-compose.release.yaml
 ├── .woodpecker.yml
