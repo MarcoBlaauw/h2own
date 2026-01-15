@@ -9,10 +9,13 @@
   const adminLinks = [
     { href: '/admin/pools', label: 'Pools' },
     { href: '/admin/chemicals', label: 'Chemicals' },
+    { href: '/admin/notifications', label: 'Notifications' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/api-tokens', label: 'API tokens' },
     { href: '/admin/audit-log', label: 'Audit log' },
   ];
+
+  const userLinks = [{ href: '/pools', label: 'Pools' }];
 
   function isActive(href: string) {
     const path = $page.url.pathname;
@@ -34,6 +37,22 @@
         <div class="h-9 w-9 rounded-xl bg-accent shadow-card"></div>
         <span class="text-lg font-semibold tracking-tight text-content-primary dark:text-content-primary">H2Own</span>
       </a>
+      {#if $page.data.session}
+        <nav class="hidden items-center gap-4 text-sm font-medium text-content-secondary sm:flex">
+          {#each userLinks as link}
+            <a
+              href={link.href}
+              class={`transition-colors ${
+                isActive(link.href)
+                  ? 'text-accent-strong dark:text-accent-strong'
+                  : 'text-content-secondary hover:text-content-primary'
+              }`}
+            >
+              {link.label}
+            </a>
+          {/each}
+        </nav>
+      {/if}
       {#if isAdmin}
         <nav class="hidden items-center gap-4 text-sm font-medium text-content-secondary sm:flex">
           {#each adminLinks as link}
@@ -52,6 +71,20 @@
       {/if}
     </div>
     <div class="flex items-center gap-3 text-sm text-content-secondary">
+      {#if $page.data.session}
+        <div class="flex gap-2 sm:hidden">
+          {#each userLinks as link}
+            <a
+              href={link.href}
+              class={`btn btn-sm btn-tonal ${
+                isActive(link.href) ? 'font-semibold text-accent-strong' : ''
+              }`}
+            >
+              {link.label}
+            </a>
+          {/each}
+        </div>
+      {/if}
       {#if isAdmin}
         <div class="flex gap-2 sm:hidden">
           {#each adminLinks as link}

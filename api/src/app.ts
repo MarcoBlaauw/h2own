@@ -17,6 +17,10 @@ import { adminUsersRoutes } from "./routes/admin-users";
 import { adminLocationsRoutes } from "./routes/admin-locations";
 import { adminPoolsRoutes } from "./routes/admin-pools";
 import { adminAuditLogRoutes } from "./routes/admin-audit-log";
+import { adminNotificationTemplateRoutes } from "./routes/admin-notification-templates";
+import { notificationRoutes } from "./routes/notifications";
+import { locationsRoutes } from "./routes/locations";
+import { photosRoutes } from "./routes/photos";
 import { createRedisSessionStore } from "./services/session-store.js";
 
 async function buildApp() {
@@ -246,8 +250,14 @@ async function buildApp() {
   await app.register(chemicalsRoutes, { prefix: "/chemicals" });
   await app.register(adminUsersRoutes, { prefix: "/admin/users" });
   await app.register(adminLocationsRoutes, { prefix: "/admin/locations" });
+  await app.register(locationsRoutes, { prefix: "/locations" });
   await app.register(adminPoolsRoutes, { prefix: "/admin/pools" });
   await app.register(adminAuditLogRoutes, { prefix: "/admin/audit-log" });
+  await app.register(adminNotificationTemplateRoutes, {
+    prefix: "/admin/notification-templates",
+  });
+  await app.register(notificationRoutes, { prefix: "/notifications" });
+  await app.register(photosRoutes, { prefix: "/photos" });
 
   // --- Dev convenience route ---
   app.get("/test", async () => ({ ok: true, message: "test route" }));

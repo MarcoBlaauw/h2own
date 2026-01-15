@@ -7,11 +7,11 @@ import dotenv from 'dotenv';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
-import * as schema from '../src/db/schema/index.js';
-import { generatePassword, hashPassword } from '../src/services/passwords.js';
+import * as schema from '../api/src/db/schema/index.js';
+import { generatePassword, hashPassword } from '../api/src/services/passwords.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, '..', '.env') });
+dotenv.config({ path: join(__dirname, '..', 'api', '.env') });
 
 const rl = createInterface({ input, output, terminal: true });
 
@@ -34,15 +34,13 @@ async function main() {
   const db = drizzle(client, { schema });
 
   try {
-    await client`select 1`; // quick connectivity check
+    await client`select 1`; // ensure connectivity
 
-    const name = await prompt('Name', true);
     const email = await prompt('Email', true);
-    const chosen = await prompt('Password (leave blank to auto-generate)');
+    const chosen = await prompt('New password (leave blank to auto-generate)');
     const password = chosen || generatePassword();
-    const passwordHash = await hashPassword(password);
 
-    const [existing] = await db
+    const [user] = await db
       .select({
         userId: schema.users.userId,
         name: schema.users.name,
@@ -51,42 +49,30 @@ async function main() {
       .where(eq(schema.users.email, email))
       .limit(1);
 
-    let userId: string;
-    let created = false;
-
-    if (existing) {
-      await db
-        .update(schema.users)
-        .set({
-          name: name || existing.name,
-          passwordHash,
-          role: 'admin',
-          isActive: true,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.users.userId, existing.userId));
-      userId = existing.userId;
-    } else {
-      const [inserted] = await db
-        .insert(schema.users)
-        .values({
-          email,
-          name: name || null,
-          passwordHash,
-          role: 'admin',
-          isActive: true,
-          emailVerified: true,
-        })
-        .returning({ userId: schema.users.userId });
-
-      userId = inserted.userId;
-      created = true;
+    if (!user) {
+      console.error(`❌ No user found for email ${email}`);
+      process.exitCode = 1;
+      return;
     }
 
+    const passwordHash = await hashPassword(password);
+
+    await db
+      .update(schema.users)
+      .set({
+        passwordHash,
+        updatedAt: new Date(),
+        isActive: true,
+      })
+      .where(eq(schema.users.userId, user.userId));
+
     console.log('');
-    console.log(created ? '✅ Admin user created.' : '✅ Existing user elevated to admin.');
-    console.log(`   ID: ${userId}`);
+    console.log('✅ Password updated successfully.');
+    console.log(`   ID: ${user.userId}`);
     console.log(`   Email: ${email}`);
+    if (user.name) {
+      console.log(`   Name: ${user.name}`);
+    }
     console.log(`   Password: ${password}`);
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && (error as any).code === 'ECONNREFUSED') {
@@ -94,7 +80,7 @@ async function main() {
       console.error(`   Current DATABASE_URL: ${databaseUrl}`);
       console.error('   Try: docker compose up postgres');
     } else {
-      console.error('❌ Failed to create admin user:', error instanceof Error ? error.message : error);
+      console.error('❌ Failed to update password:', error instanceof Error ? error.message : error);
     }
     process.exitCode = 1;
   } finally {

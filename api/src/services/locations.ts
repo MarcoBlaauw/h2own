@@ -257,6 +257,50 @@ export class LocationsService {
     return rows.map((row) => this.mapLocation(row, poolsByLocation.get(row.locationId) ?? []));
   }
 
+  async listLocationsForUser(userId: string): Promise<LocationDetail[]> {
+    const rows = await this.db
+      .select({
+        locationId: schema.userLocations.locationId,
+        userId: schema.userLocations.userId,
+        name: schema.userLocations.name,
+        latitude: schema.userLocations.latitude,
+        longitude: schema.userLocations.longitude,
+        timezone: schema.userLocations.timezone,
+        isPrimary: schema.userLocations.isPrimary,
+        isActive: schema.userLocations.isActive,
+        createdAt: schema.userLocations.createdAt,
+        userEmail: schema.users.email,
+        userName: schema.users.name,
+      })
+      .from(schema.userLocations)
+      .leftJoin(schema.users, eq(schema.userLocations.userId, schema.users.userId))
+      .where(eq(schema.userLocations.userId, userId));
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const ids = rows.map((row) => row.locationId);
+    const poolRows = await this.db
+      .select({
+        poolId: schema.pools.poolId,
+        name: schema.pools.name,
+        locationId: schema.pools.locationId,
+      })
+      .from(schema.pools)
+      .where(inArray(schema.pools.locationId, ids));
+
+    const poolsByLocation = new Map<string, PoolRow[]>();
+    for (const pool of poolRows) {
+      if (!pool.locationId) continue;
+      const list = poolsByLocation.get(pool.locationId) ?? [];
+      list.push(pool);
+      poolsByLocation.set(pool.locationId, list);
+    }
+
+    return rows.map((row) => this.mapLocation(row, poolsByLocation.get(row.locationId) ?? []));
+  }
+
   async createLocation(data: CreateLocationData) {
     const [inserted] = await this.db
       .insert(schema.userLocations)

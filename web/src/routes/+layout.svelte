@@ -7,7 +7,7 @@
 <div class="flex flex-col min-h-screen">
   <AppHeader />
 
-  <main class="flex-grow flex flex-col">
+  <main class="flex-grow flex flex-col mt-6">
     <slot />
   </main>
 

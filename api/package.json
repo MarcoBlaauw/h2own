@@ -11,8 +11,8 @@
     "format": "prettier --write src/app.ts src/env.ts src/routes/auth.ts src/services/session-store.ts src/services/session-store.test.ts src/types/fastify.d.ts",
     "format:check": "prettier --check src/app.ts src/env.ts src/routes/auth.ts src/services/session-store.ts src/services/session-store.test.ts src/types/fastify.d.ts",
     "seed": "tsx src/seed.ts",
-    "user:create-admin": "tsx scripts/create-admin.ts",
-    "user:set-password": "tsx scripts/set-password.ts"
+    "user:create-admin": "tsx ../scripts/create-admin.ts",
+    "user:set-password": "tsx ../scripts/set-password.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.1",
@@ -25,7 +25,6 @@
     "drizzle-orm": "^0.33.0",
     "fastify": "^4.28.1",
     "fastify-plugin": "^4.5.1",
-    "oslo": "^1.2.1",
     "postgres": "^3.4.4",
     "zod": "^3.23.8"
   },

@@ -11,7 +11,9 @@ import {
   poolMembershipService,
   poolRecommendationsService,
   poolTestingService,
+  poolCostsService,
 } from '../services/pools/index.js';
+import { photosService } from '../services/photos.js';
 import { recommenderService } from '../services/recommender.js';
 import { wrapPoolRoute } from './route-utils.js';
 
@@ -80,6 +82,7 @@ const createTestSchema = z.object({
   salt: optionalMeasurement,
   temp: optionalMeasurement,
   collectedAt: optionalCollectedAt,
+  photoId: z.string().uuid().optional(),
 });
 
 const createDosingSchema = z.object({
@@ -88,6 +91,24 @@ const createDosingSchema = z.object({
   unit: z.string(),
   linkedTestId: z.string().uuid().optional(),
   notes: z.string().optional(),
+});
+
+const createPhotoUploadSchema = z.object({
+  filename: z.string().optional(),
+  contentType: z.string().optional(),
+});
+
+const createCostSchema = z.object({
+  categoryId: z.string().uuid().optional(),
+  amount: z.coerce.number().positive(),
+  currency: z.string().length(3).optional(),
+  description: z.string().optional(),
+  chemicalActionId: z.string().uuid().optional(),
+  maintenanceEventId: z.string().uuid().optional(),
+  equipmentId: z.string().uuid().optional(),
+  vendor: z.string().optional(),
+  receiptUrl: z.string().url().optional(),
+  incurredAt: z.string().datetime().optional(),
 });
 
 const recommendationStatusSchema = z.enum(['pending', 'saved', 'applied', 'dismissed']);
@@ -137,6 +158,17 @@ const getTestsQuery = z
 const getRecommendationsQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
   status: recommendationStatusSchema.optional(),
+});
+const getCostsQuery = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+});
+const getCostSummaryQuery = z.object({
+  window: z.enum(['week', 'month', 'year']).default('month'),
+});
+const getDosingQuery = z.object({
+  limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
 export async function poolsRoutes(app: FastifyInstance) {
@@ -252,13 +284,24 @@ export async function poolsRoutes(app: FastifyInstance) {
   // POST /pools/:poolId/tests
   app.post(
     '/:poolId/tests',
-    wrapPoolRoute(async (req, reply) => {
-      const { poolId } = poolIdParams.parse(req.params);
-      const userId = req.user!.id;
-      const data = createTestSchema.parse(req.body);
-      const test = await poolTestingService.createTest(poolId, userId, data);
-      return reply.code(201).send(test);
-    })
+    wrapPoolRoute(
+      async (req, reply) => {
+        const { poolId } = poolIdParams.parse(req.params);
+        const userId = req.user!.id;
+        const data = createTestSchema.parse(req.body);
+        const test = await poolTestingService.createTest(poolId, userId, data);
+        return reply.code(201).send(test);
+      },
+      {
+        onError: (err, _req, reply) => {
+          if (err instanceof Error && err.message === 'Photo does not belong to this pool') {
+            reply.code(400).send({ error: err.message });
+            return true;
+          }
+          return false;
+        },
+      }
+    )
   );
 
   // POST /pools/:poolId/dosing
@@ -285,6 +328,86 @@ export async function poolsRoutes(app: FastifyInstance) {
         },
       }
     )
+  );
+
+  // GET /pools/:poolId/dosing
+  app.get(
+    '/:poolId/dosing',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const { limit } = getDosingQuery.parse(req.query);
+      const dosingEvents = await poolTestingService.getDosingEventsByPoolId(poolId, userId, limit);
+      return reply.send(dosingEvents);
+    })
+  );
+
+  // POST /pools/:poolId/photos
+  app.post(
+    '/:poolId/photos',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const data = createPhotoUploadSchema.parse(req.body ?? {});
+      const upload = await photosService.createPresignedUpload(poolId, userId, data);
+      return reply.send(upload);
+    })
+  );
+
+  // POST /pools/:poolId/costs
+  app.post(
+    '/:poolId/costs',
+    wrapPoolRoute(
+      async (req, reply) => {
+        const { poolId } = poolIdParams.parse(req.params);
+        const userId = req.user!.id;
+        const data = createCostSchema.parse(req.body);
+        const cost = await poolCostsService.createCost(poolId, userId, data);
+        return reply.code(201).send(cost);
+      },
+      {
+        onError: (err, _req, reply) => {
+          if (
+            err instanceof Error &&
+            (err.message === 'Cost category not found' ||
+              err.message === 'Chemical action not found' ||
+              err.message === 'Chemical action does not belong to this pool')
+          ) {
+            reply.code(400).send({ error: err.message });
+            return true;
+          }
+          return false;
+        },
+      }
+    )
+  );
+
+  // GET /pools/:poolId/costs
+  app.get(
+    '/:poolId/costs',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const { from, to, limit } = getCostsQuery.parse(req.query);
+      const costs = await poolCostsService.getCostsByPoolId(poolId, userId, {
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+        limit,
+      });
+      return reply.send(costs);
+    })
+  );
+
+  // GET /pools/:poolId/costs/summary
+  app.get(
+    '/:poolId/costs/summary',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const { window } = getCostSummaryQuery.parse(req.query);
+      const summary = await poolCostsService.getCostsSummary(poolId, userId, window);
+      return reply.send(summary);
+    })
   );
 
   // GET /pools/:poolId/recommendations/preview

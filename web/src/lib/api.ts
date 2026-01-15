@@ -74,6 +74,10 @@ type ApiClient = {
     update: (locationId: string, body: Record<string, unknown>) => Promise<Response>;
     deactivate: (locationId: string, body?: Record<string, unknown>) => Promise<Response>;
   };
+  userLocations: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    create: (body: Record<string, unknown>) => Promise<Response>;
+  };
   pools: {
     list: (customFetch?: FetchLike, owner?: boolean) => Promise<Response>;
     create: (body: Record<string, unknown>) => Promise<Response>;
@@ -104,6 +108,26 @@ type ApiClient = {
     ) => Promise<Response>;
     show: (poolId: string, recommendationId: string, customFetch?: FetchLike) => Promise<Response>;
   };
+  dosing: {
+    list: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { limit?: number }
+    ) => Promise<Response>;
+  };
+  costs: {
+    list: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { from?: string; to?: string; limit?: number }
+    ) => Promise<Response>;
+    summary: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { window?: 'week' | 'month' | 'year' }
+    ) => Promise<Response>;
+    create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+  };
   members: {
     update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
     del: (poolId: string, userId: string) => Promise<Response>;
@@ -129,6 +153,29 @@ type ApiClient = {
       customFetch?: FetchLike,
       params?: { page?: number; pageSize?: number; user?: string; action?: string; entity?: string }
     ) => Promise<Response>;
+  };
+  notificationTemplates: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    create: (body: Record<string, unknown>) => Promise<Response>;
+    update: (templateId: string, body: Record<string, unknown>) => Promise<Response>;
+  };
+  notifications: {
+    preview: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+  };
+  weather: {
+    list: (
+      locationId: string,
+      customFetch?: FetchLike,
+      params?: { from?: string; to?: string; granularity?: 'day'; refresh?: boolean }
+    ) => Promise<Response>;
+  };
+  photos: {
+    presign: (
+      poolId: string,
+      body: { filename?: string; contentType?: string },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    confirm: (body: { fileUrl: string; poolId: string; testId?: string }, customFetch?: FetchLike) => Promise<Response>;
   };
 };
 
@@ -179,6 +226,10 @@ export const api: ApiClient = {
         jsonRequest(body ?? {}, { method: 'POST' })
       ),
   },
+  userLocations: {
+    list: (customFetch) => apiFetch('/locations', {}, customFetch),
+    create: (body) => apiFetch('/locations', jsonRequest(body, { method: 'POST' })),
+  },
   pools: {
     list: (customFetch, owner = false) =>
       apiFetch(`/pools${owner ? '?owner=true' : ''}`, {}, customFetch),
@@ -219,6 +270,34 @@ export const api: ApiClient = {
     show: (poolId, recommendationId, customFetch) =>
       apiFetch(`/pools/${poolId}/recommendations/${recommendationId}`, {}, customFetch),
   },
+  dosing: {
+    list: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      const path = `/pools/${poolId}/dosing${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+  },
+  costs: {
+    list: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.from) search.set('from', params.from);
+      if (params.to) search.set('to', params.to);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      const path = `/pools/${poolId}/costs${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    summary: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.window) search.set('window', params.window);
+      const query = search.toString();
+      const path = `/pools/${poolId}/costs/summary${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    create: (poolId, body) => apiFetch(`/pools/${poolId}/costs`, jsonRequest(body, { method: 'POST' })),
+  },
   members: {
     update: (poolId, userId, body) =>
       apiFetch(`/pools/${poolId}/members/${userId}`, jsonRequest(body, { method: 'PUT' })),
@@ -257,6 +336,38 @@ export const api: ApiClient = {
       const path = `/admin/audit-log${query ? `?${query}` : ''}`;
       return apiFetch(path, {}, customFetch);
     },
+  },
+  notificationTemplates: {
+    list: (customFetch) => apiFetch('/admin/notification-templates', {}, customFetch),
+    create: (body) =>
+      apiFetch('/admin/notification-templates', jsonRequest(body, { method: 'POST' })),
+    update: (templateId, body) =>
+      apiFetch(
+        `/admin/notification-templates/${templateId}`,
+        jsonRequest(body, { method: 'PATCH' })
+      ),
+  },
+  notifications: {
+    preview: (body, customFetch) =>
+      apiFetch('/notifications/preview', jsonRequest(body, { method: 'POST' }), customFetch),
+  },
+  weather: {
+    list: (locationId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.from) search.set('from', params.from);
+      if (params.to) search.set('to', params.to);
+      if (params.granularity) search.set('granularity', params.granularity);
+      if (typeof params.refresh === 'boolean') search.set('refresh', params.refresh ? 'true' : 'false');
+      const query = search.toString();
+      const path = `/locations/${locationId}/weather${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+  },
+  photos: {
+    presign: (poolId, body, customFetch) =>
+      apiFetch(`/pools/${poolId}/photos`, jsonRequest(body, { method: 'POST' }), customFetch),
+    confirm: (body, customFetch) =>
+      apiFetch('/photos/confirm', jsonRequest(body, { method: 'POST' }), customFetch),
   },
 };
 

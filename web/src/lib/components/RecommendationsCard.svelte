@@ -132,24 +132,25 @@
 <Card>
   <h2 class="text-lg font-semibold text-content-primary">Recommendations</h2>
   <div class="mt-4 space-y-3">
-    {#if recommendations?.primary || (recommendations?.alternatives?.length ?? 0) > 0}
-      {#if recommendations?.primary}
+  {#if recommendations?.primary || (recommendations?.alternatives?.length ?? 0) > 0}
+    {#if recommendations?.primary}
+      {@const primary = recommendations.primary}
         <div class="surface-panel flex items-center justify-between gap-4">
           <div class="space-y-1">
-            <div class="font-medium text-content-primary">{toDoseLabel(recommendations.primary)}</div>
-            <div class="text-xs text-content-secondary/80">{recommendations.primary.predictedOutcome}</div>
-            <div class="text-xs text-content-secondary/70">{recommendations.primary.reason}</div>
+            <div class="font-medium text-content-primary">{toDoseLabel(primary)}</div>
+            <div class="text-xs text-content-secondary/80">{primary.predictedOutcome}</div>
+            <div class="text-xs text-content-secondary/70">{primary.reason}</div>
           </div>
           <button
             class="btn btn-sm btn-primary"
             disabled={
               !poolId ||
-              isActionComplete(recommendations.primary, 'applied') ||
-              isActionBusy(recommendations.primary, 'applied')
+              isActionComplete(primary, 'applied') ||
+              isActionBusy(primary, 'applied')
             }
-            on:click={() => handleAction(recommendations.primary, 'applied')}
+            on:click={() => handleAction(primary, 'applied')}
           >
-            {getActionLabel(recommendations.primary, 'applied')}
+            {getActionLabel(primary, 'applied')}
           </button>
         </div>
       {/if}

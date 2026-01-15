@@ -7,7 +7,10 @@ const dirname =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 const baseUrl = process.env.BASELINE_BASE_URL ?? 'http://127.0.0.1:4173';
-const outputPath = path.resolve(dirname, '../tests/e2e/fixtures/theme-visual-baselines.ts');
+const outputPath = path.resolve(
+  dirname,
+  '../web/tests/e2e/fixtures/theme-visual-baselines.ts',
+);
 
 const waitForLayoutStability = async (page) => {
   await page.waitForLoadState('networkidle');

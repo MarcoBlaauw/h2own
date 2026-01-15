@@ -13,6 +13,7 @@ export interface CreateTestData {
   salt?: number;
   temp?: number;
   collectedAt?: string;
+  photoId?: string;
 }
 
 export interface CreateDosingData {
@@ -32,6 +33,17 @@ export class PoolTestingService {
   async createTest(poolId: string, userId: string, data: CreateTestData) {
     await this.core.ensurePoolAccess(poolId, userId);
 
+    if (data.photoId) {
+      const [photo] = await this.db
+        .select({ poolId: schema.photos.poolId })
+        .from(schema.photos)
+        .where(eq(schema.photos.photoId, data.photoId));
+
+      if (!photo || photo.poolId !== poolId) {
+        throw new Error('Photo does not belong to this pool');
+      }
+    }
+
     let cc: number | undefined;
     if (typeof data.tc === 'number' && typeof data.fc === 'number') {
       cc = Math.max(0, data.tc - data.fc);
@@ -49,6 +61,7 @@ export class PoolTestingService {
       calciumHardnessPpm: data.ch,
       saltPpm: data.salt,
       waterTempF: data.temp,
+      photoId: data.photoId,
     };
 
     const [test] = await this.db.insert(schema.testSessions).values(dbData).returning();
@@ -172,6 +185,32 @@ export class PoolTestingService {
       .returning();
 
     return dosingEvent;
+  }
+
+  async getDosingEventsByPoolId(poolId: string, requestingUserId: string, limit: number) {
+    await this.core.ensurePoolAccess(poolId, requestingUserId);
+
+    const items = await this.db
+      .select({
+        actionId: schema.chemicalActions.actionId,
+        chemicalId: schema.chemicalActions.productId,
+        chemicalName: schema.products.name,
+        amount: schema.chemicalActions.amount,
+        unit: schema.chemicalActions.unit,
+        addedAt: schema.chemicalActions.addedAt,
+        reason: schema.chemicalActions.reason,
+        targetEffect: schema.chemicalActions.targetEffect,
+        actualEffect: schema.chemicalActions.actualEffect,
+        linkedTestId: schema.chemicalActions.linkedTestId,
+        additionMethod: schema.chemicalActions.additionMethod,
+      })
+      .from(schema.chemicalActions)
+      .leftJoin(schema.products, eq(schema.chemicalActions.productId, schema.products.productId))
+      .where(eq(schema.chemicalActions.poolId, poolId))
+      .orderBy(desc(schema.chemicalActions.addedAt), desc(schema.chemicalActions.actionId))
+      .limit(limit);
+
+    return { items };
   }
 }
 

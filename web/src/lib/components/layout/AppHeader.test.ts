@@ -112,6 +112,7 @@ describe('AppHeader', () => {
 
     expect(queryByText('Chemicals')).toBeNull();
     expect(queryByText('Users')).toBeNull();
+    expect(queryByText('Pools')).toBeTruthy();
   });
 
   it('logs out via the API and redirects to login', async () => {

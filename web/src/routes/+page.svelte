@@ -4,6 +4,9 @@
   import PoolSummaryCard from "$lib/components/PoolSummaryCard.svelte";
   import QuickTestForm from "$lib/components/QuickTestForm.svelte";
   import RecommendationsCard from "$lib/components/RecommendationsCard.svelte";
+  import DosingHistoryCard from "$lib/components/DosingHistoryCard.svelte";
+  import CostsCard from "$lib/components/CostsCard.svelte";
+  import WeatherQualityCard from "$lib/components/WeatherQualityCard.svelte";
 
   type HighlightedPool = {
     id: string;
@@ -11,6 +14,7 @@
     volumeGallons?: number | null;
     surfaceType?: string | null;
     sanitizerType?: string | null;
+    locationId?: string | null;
     lastTestedAt?: string | Date | null;
   };
 
@@ -58,6 +62,47 @@
         predictedOutcome?: string;
       } | null;
       createdAt: string;
+    }>;
+    dosingHistory: Array<{
+      actionId: string;
+      chemicalId: string;
+      chemicalName?: string | null;
+      amount: string | number;
+      unit: string | null;
+      addedAt: string | Date | null;
+      reason?: string | null;
+      additionMethod?: string | null;
+    }>;
+    costs: Array<{
+      costId: string;
+      amount: string | number;
+      currency?: string | null;
+      categoryName?: string | null;
+      description?: string | null;
+      vendor?: string | null;
+      incurredAt: string | Date | null;
+    }>;
+    costSummary: {
+      window: "week" | "month" | "year";
+      from: string;
+      to: string;
+      total: string | number;
+      currency?: string | null;
+      byCategory: Array<{
+        categoryId?: string | null;
+        categoryName?: string | null;
+        total: string | number;
+      }>;
+    } | null;
+    weatherDaily: Array<{
+      weatherId: string;
+      locationId: string;
+      recordedAt: string;
+      airTempF?: number | null;
+      uvIndex?: number | null;
+      rainfallIn?: string | number | null;
+      windSpeedMph?: number | null;
+      humidityPercent?: number | null;
     }>;
   };
 
@@ -170,13 +215,20 @@
         <QuickTestForm poolId={data.highlightedPool.id} />
       {/if}
 
-      <div class="lg:col-span-3">
+      <div class="lg:col-span-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <RecommendationsCard
           recommendations={data.recommendations}
           hasTest={Boolean(data.latestTest)}
           poolId={data.highlightedPool?.id}
           recommendationHistory={data.recommendationHistory}
         />
+        <DosingHistoryCard dosingHistory={data.dosingHistory} />
+      </div>
+      <div class="lg:col-span-3">
+        <CostsCard costs={data.costs} summary={data.costSummary} />
+      </div>
+      <div class="lg:col-span-3">
+        <WeatherQualityCard dailyWeather={data.weatherDaily} />
       </div>
     </div>
   {:else}

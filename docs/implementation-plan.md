@@ -10,23 +10,20 @@ Capture the current feature state and outline the next implementation steps to r
 - Auth/session lifecycle (`/auth/register`, `/auth/login`, `/auth/logout`, `/auth/me`) and admin API tokens.
 - Pools CRUD + membership management.
 - Test session creation and listing by pool, plus single test lookup by ID.
-- Dosing event creation.
+- Dosing event creation + history listing.
 - Recommendations preview endpoint.
+- Persisted recommendations lifecycle (create + update status + list/detail).
 - Chemicals CRUD (admin) and public chemical list.
+- Costs create/list + summary endpoints.
+- Notification templates + preview endpoint (admin).
 - Admin endpoints for users, locations, pools, and audit log.
-- SvelteKit dashboard shell with a quick test form and basic admin UI pages.
-
-### Partial/Placeholder
-- Recommendations UI actions are still static (apply/save flows not wired).
+- SvelteKit dashboard shell with quick test, recommendations, dosing history, and costs views.
+- Admin UI for notification templates and preview.
+- Locations weather endpoint + Tomorrow.io ingestion, weather-informed recommendations, and dashboard weather quality card.
+- Photo presign/confirm endpoints + quick test attachment.
 
 ### Missing (relative to MVP goals)
-- Persisted recommendations lifecycle (create + update status).
-- Dosing history listing.
-- Costs endpoints (create, list, and summary view).
-- Notifications templating/preview endpoint.
-- Weather data API route(s) and ingestion pipeline.
-- Photos upload confirmation/presigned workflow.
-
+- None.
 ## Implementation Plan
 
 ### 1) Wire live dashboard data (Completed)
@@ -40,27 +37,27 @@ Capture the current feature state and outline the next implementation steps to r
 - [x] Extend the web UI to apply/track recommendations.
 - [x] Add list/detail endpoints to view recommendation history per pool.
 
-### 3) Dosing and history (Not started)
-- Add `GET /pools/:poolId/dosing` endpoint.
-- Render dosing history in the UI.
+### 3) Dosing and history (Completed)
+- [x] Add `GET /pools/:poolId/dosing` endpoint.
+- [x] Render dosing history in the UI.
 
-### 4) Costs (Not started)
-- Add costs CRUD endpoints.
-- Add `/pools/:id/costs/summary?window=month`.
-- Add a basic costs view in the web app.
+### 4) Costs (Completed)
+- [x] Add costs create/list endpoints.
+- [x] Add `/pools/:id/costs/summary?window=month`.
+- [x] Add a basic costs view in the web app.
 
-### 5) Notifications (Not started)
-- Add templates table and `/notifications/preview` endpoint.
-- Wire preview flows in admin UI.
+### 5) Notifications (Completed)
+- [x] Add templates table and `/notifications/preview` endpoint.
+- [x] Wire preview flows in admin UI.
 
-### 6) Weather (Not started)
-- Add locations weather query endpoint.
-- Implement ingestion (batch import or scheduled job).
-- Use weather data as a recommendation input.
+### 6) Weather (Completed)
+- [x] Add locations weather query endpoint.
+- [x] Implement ingestion (on-demand from Tomorrow.io).
+- [x] Use weather data as a recommendation input.
 
-### 7) Photos (Not started)
-- Add presigned upload endpoint and confirm endpoint.
-- Attach photos to test sessions in the UI.
+### 7) Photos (Completed)
+- [x] Add presigned upload endpoint and confirm endpoint.
+- [x] Attach photos to test sessions in the UI.
 
 ## QA / Verification
 - Run `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm test:web`, and `pnpm test:web:e2e`.

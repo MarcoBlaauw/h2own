@@ -1,5 +1,10 @@
 import { z } from "zod";
-import "dotenv/config";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import dotenv from "dotenv";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, "..", ".env") });
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -37,6 +42,10 @@ const envSchema = z.object({
   CAPTCHA_PROVIDER: z.enum(["turnstile", "hcaptcha"]).optional(),
   CAPTCHA_SITE_KEY: z.string().optional(),
   CAPTCHA_SECRET: z.string().optional(),
+  TOMORROW_API_KEY: z.string().optional(),
+  TOMORROW_API_BASE: z.string().url().optional(),
+  PHOTO_PUBLIC_BASE_URL: z.string().optional(),
+  PHOTO_UPLOAD_BASE_URL: z.string().optional(),
 });
 
 function parseEnv() {
@@ -68,4 +77,13 @@ if (env.NODE_ENV === "development") {
   console.log(`  LOG_LEVEL: ${env.LOG_LEVEL}`);
   console.log(`  SESSION_TTL_SECONDS: ${env.SESSION_TTL_SECONDS}`);
   console.log(`  SESSION_PREFIX: ${env.SESSION_PREFIX}`);
+  console.log(
+    `  TOMORROW_API_BASE: ${env.TOMORROW_API_BASE ?? "https://api.tomorrow.io/v4"}`,
+  );
+  if (env.PHOTO_PUBLIC_BASE_URL) {
+    console.log(`  PHOTO_PUBLIC_BASE_URL: ${env.PHOTO_PUBLIC_BASE_URL}`);
+  }
+  if (env.PHOTO_UPLOAD_BASE_URL) {
+    console.log(`  PHOTO_UPLOAD_BASE_URL: ${env.PHOTO_UPLOAD_BASE_URL}`);
+  }
 }

@@ -3,7 +3,13 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql, eq } from 'drizzle-orm';
 import postgres from 'postgres';
 import argon2 from 'argon2';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import dotenv from 'dotenv';
 import * as schema from './db/schema/index.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://h2own:h2own@postgres:5432/h2own';

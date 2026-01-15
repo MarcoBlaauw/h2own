@@ -11,6 +11,7 @@
   let ph = '';
   let ta = '';
   let cya = '';
+  let photoUrl = '';
   let error = '';
   let success = '';
   let isSubmitting = false;
@@ -52,11 +53,37 @@
     isSubmitting = true;
     const { payload, skipped } = buildSubmission(result.data);
     try {
-      const res = await api.tests.create(poolId, payload);
+      let photoId: string | undefined;
+      if (photoUrl.trim()) {
+        const confirmRes = await api.photos.confirm({
+          fileUrl: photoUrl.trim(),
+          poolId,
+        });
+        if (!confirmRes.ok) {
+          let message = 'Unable to attach photo. Please check the URL and try again.';
+          try {
+            const data = await confirmRes.json();
+            if (typeof data?.error === 'string' && data.error.trim() !== '') {
+              message = data.error;
+            }
+          } catch (parseError) {
+            // Ignore JSON parsing errors.
+          }
+          error = message;
+          return;
+        }
+        const photo = await confirmRes.json();
+        photoId = photo?.photoId;
+      }
+
+      const res = await api.tests.create(poolId, { ...payload, ...(photoId ? { photoId } : {}) });
       if (res.ok) {
         success = skipped.length
           ? `Saved test results. No measurement recorded for ${skipped.join(', ')}.`
           : 'Test results saved successfully.';
+        if (photoId) {
+          success = `${success} Photo attached.`;
+        }
       } else {
         let message = 'Unable to save test results. Please try again.';
         try {
@@ -189,6 +216,20 @@
           {fieldMessages.cya}
         </p>
       {/if}
+    </div>
+    <div class="form-field sm:col-span-2">
+      <label class="form-label" for="photo-url">Photo URL (optional)</label>
+      <input
+        id="photo-url"
+        type="url"
+        placeholder="https://example.com/pool-photo.jpg"
+        bind:value={photoUrl}
+        class="form-control"
+        disabled={isSubmitting}
+      >
+      <p class="form-message" data-state="info">
+        Attach a hosted photo URL to this test session.
+      </p>
     </div>
     {#if error}
       <p
