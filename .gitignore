@@ -66,3 +66,4 @@ tmp/
 temp/
 *.bak
 *.old
+cookie*.txt
