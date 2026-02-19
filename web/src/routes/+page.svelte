@@ -23,6 +23,7 @@
     pools: Array<{ poolId: string }>;
     highlightedPool: HighlightedPool | null;
     latestTest: {
+      sessionId?: string;
       freeChlorinePpm?: string | null;
       phLevel?: string | null;
       totalAlkalinityPpm?: number | null;
@@ -186,9 +187,16 @@
 <Container>
   {#if data.session}
     <!-- Metrics row -->
-    <h2 class="mt-6 text-xl font-semibold text-content-primary">
-      Last Test Results
-    </h2>
+    <div class="mt-6 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-xl font-semibold text-content-primary">
+        Last Test Results
+      </h2>
+      {#if data.latestTest?.sessionId}
+        <a class="text-sm font-semibold text-accent hover:text-accent-strong" href={`/tests/${data.latestTest.sessionId}`}>
+          View test details
+        </a>
+      {/if}
+    </div>
     {#if data.latestTest}
       <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {#each metrics as m}
@@ -222,10 +230,17 @@
           poolId={data.highlightedPool?.id}
           recommendationHistory={data.recommendationHistory}
         />
-        <DosingHistoryCard dosingHistory={data.dosingHistory} />
+        <DosingHistoryCard
+          dosingHistory={data.dosingHistory}
+          poolId={data.highlightedPool?.id ?? null}
+        />
       </div>
       <div class="lg:col-span-3">
-        <CostsCard costs={data.costs} summary={data.costSummary} />
+        <CostsCard
+          costs={data.costs}
+          summary={data.costSummary}
+          poolId={data.highlightedPool?.id ?? null}
+        />
       </div>
       <div class="lg:col-span-3">
         <WeatherQualityCard dailyWeather={data.weatherDaily} />

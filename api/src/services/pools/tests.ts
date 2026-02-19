@@ -20,6 +20,7 @@ export interface CreateDosingData {
   chemicalId: string;
   amount: number;
   unit: string;
+  addedAt?: string;
   linkedTestId?: string;
   notes?: string;
 }
@@ -177,6 +178,7 @@ export class PoolTestingService {
       amount: data.amount.toString(),
       unit: data.unit,
       notes: data.notes,
+      addedAt: data.addedAt ? new Date(data.addedAt) : undefined,
     };
 
     const [dosingEvent] = await this.db

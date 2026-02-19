@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import Page from './+page.svelte';
@@ -82,7 +82,7 @@ describe('admin notifications page', () => {
       })
     );
 
-    const { getByLabelText, getByRole, findByRole, queryByText } = render(Page, {
+    const { getByLabelText, getByRole, findByRole } = render(Page, {
       props: { data: { session: null, templates, loadError: null } },
     });
 
@@ -104,7 +104,9 @@ describe('admin notifications page', () => {
     const status = await findByRole('status');
     expect(status.textContent).toContain('Template created.');
     await waitFor(() => {
-      expect(queryByText(created.name)).toBeTruthy();
+      const templatesSection = getByRole('heading', { name: 'Templates' }).closest('section');
+      expect(templatesSection).toBeTruthy();
+      expect(within(templatesSection as HTMLElement).getByText(created.name)).toBeTruthy();
     });
   });
 
@@ -116,7 +118,7 @@ describe('admin notifications page', () => {
       })
     );
 
-    const { getByRole, getByText, getByLabelText, findByText } = render(Page, {
+    const { getByRole, getByLabelText, findByText } = render(Page, {
       props: { data: { session: null, templates, loadError: null } },
     });
 
@@ -129,6 +131,6 @@ describe('admin notifications page', () => {
       data: { user: { name: 'Alex' } },
     });
     expect(await findByText('Hello Alex')).toBeTruthy();
-    expect(getByText('Preview')).toBeTruthy();
+    expect(getByRole('heading', { name: 'Preview' })).toBeTruthy();
   });
 });

@@ -121,6 +121,9 @@
                   <p class="text-xs text-content-secondary/75">
                     Tested on {new Date(test.testedAt).toLocaleString()} by {test.tester?.email ?? 'Unknown'}
                   </p>
+                  <a class="text-xs font-semibold text-accent hover:text-accent-strong" href={`/tests/${test.id}`}>
+                    View details
+                  </a>
                 </li>
               {/each}
             </ul>

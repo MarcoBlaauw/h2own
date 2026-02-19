@@ -108,11 +108,11 @@ describe('AppHeader', () => {
   it('hides admin links for non-admin users', () => {
     setPage('/', { user: { email: 'member@example.com', role: 'member' } });
 
-    const { queryByText } = render(AppHeader);
+    const { queryAllByText } = render(AppHeader);
 
-    expect(queryByText('Chemicals')).toBeNull();
-    expect(queryByText('Users')).toBeNull();
-    expect(queryByText('Pools')).toBeTruthy();
+    expect(queryAllByText('Chemicals')).toHaveLength(0);
+    expect(queryAllByText('Users')).toHaveLength(0);
+    expect(queryAllByText('Pools').length).toBeGreaterThan(0);
   });
 
   it('logs out via the API and redirects to login', async () => {

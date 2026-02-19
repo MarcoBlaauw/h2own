@@ -92,6 +92,7 @@ type ApiClient = {
       customFetch?: FetchLike,
       params?: { limit?: number }
     ) => Promise<Response>;
+    show: (sessionId: string, customFetch?: FetchLike) => Promise<Response>;
   };
   recommendations: {
     preview: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
@@ -114,6 +115,7 @@ type ApiClient = {
       customFetch?: FetchLike,
       params?: { limit?: number }
     ) => Promise<Response>;
+    create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
   };
   costs: {
     list: (
@@ -248,6 +250,7 @@ export const api: ApiClient = {
       const path = `/pools/${poolId}/tests${query ? `?${query}` : ''}`;
       return apiFetch(path, {}, customFetch);
     },
+    show: (sessionId, customFetch) => apiFetch(`/tests/${sessionId}`, {}, customFetch),
   },
   recommendations: {
     preview: (poolId, customFetch) =>
@@ -278,6 +281,8 @@ export const api: ApiClient = {
       const path = `/pools/${poolId}/dosing${query ? `?${query}` : ''}`;
       return apiFetch(path, {}, customFetch);
     },
+    create: (poolId, body) =>
+      apiFetch(`/pools/${poolId}/dosing`, jsonRequest(body, { method: 'POST' })),
   },
   costs: {
     list: (poolId, customFetch, params = {}) => {

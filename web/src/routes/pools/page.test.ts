@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import Page from './+page.svelte';
@@ -120,7 +120,7 @@ describe('pools page', () => {
   it('creates a location for the user', async () => {
     const location = {
       locationId: '9b93d8f1-0e7a-4f3d-b76a-5f7a9e1a0ed1',
-      name: 'Home',
+      name: 'Cabin',
       latitude: 30.02,
       longitude: -90.46,
     };
@@ -168,13 +168,17 @@ describe('pools page', () => {
       })
     );
 
-    const { getByRole, getByLabelText, queryByText } = render(Page, {
+    const { getByRole, getByText, queryByText } = render(Page, {
       props: { data: { session: null, pools, locations, loadError: null } },
     });
 
     await fireEvent.click(getByRole('button', { name: /edit/i }));
 
-    await fireEvent.input(getByLabelText('Name'), { target: { value: updated.name } });
+    const panel = getByText(pools[0].name).closest('.surface-panel');
+    expect(panel).toBeTruthy();
+    await fireEvent.input(within(panel as HTMLElement).getByLabelText('Name'), {
+      target: { value: updated.name },
+    });
     await fireEvent.click(getByRole('button', { name: /save changes/i }));
 
     expect(patchMock).toHaveBeenCalledWith(updated.poolId, expect.objectContaining({ name: updated.name }));

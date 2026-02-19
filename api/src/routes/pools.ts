@@ -89,6 +89,7 @@ const createDosingSchema = z.object({
   chemicalId: z.string().uuid(),
   amount: z.number(),
   unit: z.string(),
+  addedAt: z.string().datetime().optional(),
   linkedTestId: z.string().uuid().optional(),
   notes: z.string().optional(),
 });

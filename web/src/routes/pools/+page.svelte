@@ -56,12 +56,17 @@
   const sanitizerOptions = ['chlorine', 'salt', 'bromine', 'mineral', 'biguanide', 'other'];
   const surfaceOptions = ['plaster', 'vinyl', 'fiberglass', 'tile', 'concrete', 'other'];
 
+  const normalizeText = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return '';
+    return typeof value === 'string' ? value : String(value);
+  };
+
   const validateForm = (form: FormState) => {
     const errors: string[] = [];
-    if (!form.name.trim()) errors.push('Name is required.');
-    if (!form.volumeGallons.trim()) errors.push('Volume is required.');
-    if (!form.sanitizerType.trim()) errors.push('Sanitizer type is required.');
-    if (!form.surfaceType.trim()) errors.push('Surface type is required.');
+    if (!normalizeText(form.name).trim()) errors.push('Name is required.');
+    if (!normalizeText(form.volumeGallons).trim()) errors.push('Volume is required.');
+    if (!normalizeText(form.sanitizerType).trim()) errors.push('Sanitizer type is required.');
+    if (!normalizeText(form.surfaceType).trim()) errors.push('Surface type is required.');
     return errors;
   };
 
