@@ -17,6 +17,9 @@ export interface LocationDetail {
   locationId: string;
   userId: string;
   name: string;
+  formattedAddress: string | null;
+  googlePlaceId: string | null;
+  googlePlusCode: string | null;
   latitude: number | null;
   longitude: number | null;
   timezone: string | null;
@@ -30,6 +33,9 @@ export interface LocationDetail {
 export interface CreateLocationData {
   userId: string;
   name: string;
+  formattedAddress?: string | null;
+  googlePlaceId?: string | null;
+  googlePlusCode?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   timezone?: string | null;
@@ -40,6 +46,9 @@ export interface CreateLocationData {
 export interface UpdateLocationData {
   userId?: string;
   name?: string;
+  formattedAddress?: string | null;
+  googlePlaceId?: string | null;
+  googlePlusCode?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   timezone?: string | null;
@@ -58,6 +67,9 @@ type LocationRow = {
   locationId: string;
   userId: string;
   name: string;
+  formattedAddress: string | null;
+  googlePlaceId: string | null;
+  googlePlusCode: string | null;
   latitude: string | number | null;
   longitude: string | number | null;
   timezone: string | null;
@@ -93,6 +105,9 @@ function mapCreateLocationData(data: CreateLocationData): LocationInsert {
   const mapped: LocationInsert = {
     userId: data.userId,
     name: data.name,
+    formattedAddress: data.formattedAddress ?? null,
+    googlePlaceId: data.googlePlaceId ?? null,
+    googlePlusCode: data.googlePlusCode ?? null,
     isPrimary: data.isPrimary,
     isActive: data.isActive ?? true,
   };
@@ -123,6 +138,15 @@ function mapUpdateLocationData(data: UpdateLocationData): Partial<LocationInsert
 
   if (data.name !== undefined) {
     mapped.name = data.name;
+  }
+  if (data.formattedAddress !== undefined) {
+    mapped.formattedAddress = data.formattedAddress ?? null;
+  }
+  if (data.googlePlaceId !== undefined) {
+    mapped.googlePlaceId = data.googlePlaceId ?? null;
+  }
+  if (data.googlePlusCode !== undefined) {
+    mapped.googlePlusCode = data.googlePlusCode ?? null;
   }
 
   if (data.latitude !== undefined) {
@@ -159,6 +183,9 @@ export class LocationsService {
       locationId: row.locationId,
       userId: row.userId,
       name: row.name,
+      formattedAddress: row.formattedAddress ?? null,
+      googlePlaceId: row.googlePlaceId ?? null,
+      googlePlusCode: row.googlePlusCode ?? null,
       latitude: toNullableNumber(row.latitude),
       longitude: toNullableNumber(row.longitude),
       timezone: row.timezone ?? null,
@@ -185,6 +212,9 @@ export class LocationsService {
         locationId: schema.userLocations.locationId,
         userId: schema.userLocations.userId,
         name: schema.userLocations.name,
+        formattedAddress: schema.userLocations.formattedAddress,
+        googlePlaceId: schema.userLocations.googlePlaceId,
+        googlePlusCode: schema.userLocations.googlePlusCode,
         latitude: schema.userLocations.latitude,
         longitude: schema.userLocations.longitude,
         timezone: schema.userLocations.timezone,
@@ -220,6 +250,9 @@ export class LocationsService {
         locationId: schema.userLocations.locationId,
         userId: schema.userLocations.userId,
         name: schema.userLocations.name,
+        formattedAddress: schema.userLocations.formattedAddress,
+        googlePlaceId: schema.userLocations.googlePlaceId,
+        googlePlusCode: schema.userLocations.googlePlusCode,
         latitude: schema.userLocations.latitude,
         longitude: schema.userLocations.longitude,
         timezone: schema.userLocations.timezone,
@@ -263,6 +296,9 @@ export class LocationsService {
         locationId: schema.userLocations.locationId,
         userId: schema.userLocations.userId,
         name: schema.userLocations.name,
+        formattedAddress: schema.userLocations.formattedAddress,
+        googlePlaceId: schema.userLocations.googlePlaceId,
+        googlePlusCode: schema.userLocations.googlePlusCode,
         latitude: schema.userLocations.latitude,
         longitude: schema.userLocations.longitude,
         timezone: schema.userLocations.timezone,

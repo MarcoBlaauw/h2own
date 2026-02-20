@@ -1,7 +1,10 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {} from "../types/fastify.d.ts";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
+import { mailerService } from "../services/mailer.js";
+import { env } from "../env.js";
 
 const registerBodySchema = z.object({
   email: z
@@ -36,6 +39,39 @@ const loginBodySchema = z.object({
       invalid_type_error: "Password must be a string",
     })
     .min(1, "Password is required"),
+});
+
+const forgotPasswordBodySchema = z.object({
+  email: z
+    .string({
+      required_error: "Email is required",
+      invalid_type_error: "Email must be a string",
+    })
+    .email("Email must be a valid email address"),
+});
+
+const resetPasswordBodySchema = z.object({
+  token: z
+    .string({
+      required_error: "Token is required",
+      invalid_type_error: "Token must be a string",
+    })
+    .min(32, "Token is invalid"),
+  password: z
+    .string({
+      required_error: "Password is required",
+      invalid_type_error: "Password must be a string",
+    })
+    .min(8, "Password must be at least 8 characters long"),
+});
+
+const forgotUsernameBodySchema = z.object({
+  email: z
+    .string({
+      required_error: "Email is required",
+      invalid_type_error: "Email must be a string",
+    })
+    .email("Email must be a valid email address"),
 });
 
 interface DomainError extends Error {
@@ -79,6 +115,54 @@ const handleValidationError = (reply: FastifyReply, error: z.ZodError) => {
 };
 
 export async function authRoutes(app: FastifyInstance) {
+  const buildRequestBaseUrl = (req: FastifyRequest) => {
+    const forwardedProtoRaw = req.headers["x-forwarded-proto"];
+    const forwardedHostRaw = req.headers["x-forwarded-host"];
+    const hostRaw = req.headers.host;
+
+    const forwardedProto = Array.isArray(forwardedProtoRaw)
+      ? forwardedProtoRaw[0]
+      : forwardedProtoRaw;
+    const forwardedHost = Array.isArray(forwardedHostRaw)
+      ? forwardedHostRaw[0]
+      : forwardedHostRaw;
+    const host = Array.isArray(hostRaw) ? hostRaw[0] : hostRaw;
+
+    if (typeof forwardedProto === "string" && typeof forwardedHost === "string") {
+      return `${forwardedProto}://${forwardedHost}`;
+    }
+
+    if (typeof host === "string") {
+      const protocol = req.protocol || "http";
+      return `${protocol}://${host}`;
+    }
+
+    return env.APP_BASE_URL;
+  };
+
+  const normalizeResetToken = (rawToken: string) => {
+    const tokenCandidate = rawToken.trim();
+
+    // Support users pasting either the raw token or the full reset URL.
+    if (tokenCandidate.includes("://")) {
+      try {
+        const url = new URL(tokenCandidate);
+        const fromQuery = url.searchParams.get("token");
+        if (fromQuery) {
+          return fromQuery.trim();
+        }
+      } catch {
+        // Fall through and try raw token handling.
+      }
+    }
+
+    try {
+      return decodeURIComponent(tokenCandidate).trim();
+    } catch {
+      return tokenCandidate;
+    }
+  };
+
   // POST /auth/register
   app.post("/register", async (req, reply) => {
     try {
@@ -92,6 +176,20 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const user = await authService.getUserById(userId);
+      if (user) {
+        try {
+          await mailerService.sendWelcomeEmail(user.email, user.name ?? null);
+        } catch (mailError) {
+          req.log.warn(
+            {
+              err: mailError,
+              userId: user.userId,
+              email: user.email,
+            },
+            "failed to send welcome email",
+          );
+        }
+      }
       return reply.code(201).send(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -144,6 +242,121 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/logout", async (req, reply) => {
     await app.sessions.destroy(reply, req.session?.id ?? null);
     return reply.send({ ok: true });
+  });
+
+  // POST /auth/forgot-password
+  app.post("/forgot-password", async (req, reply) => {
+    try {
+      const body = forgotPasswordBodySchema.parse(req.body);
+
+      const user = await authService.getUserByEmail(body.email);
+      if (user) {
+        const token = randomBytes(32).toString("hex");
+        const tokenKey = `password-reset:${token}`;
+        await app.redis.set(
+          tokenKey,
+          user.userId,
+          "EX",
+          env.PASSWORD_RESET_TOKEN_TTL_SECONDS,
+        );
+
+        const base = buildRequestBaseUrl(req).replace(/\/$/, "");
+        const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+
+        try {
+          await mailerService.sendPasswordResetEmail(
+            user.email,
+            resetUrl,
+            env.PASSWORD_RESET_TOKEN_TTL_SECONDS,
+          );
+        } catch (mailError) {
+          req.log.warn(
+            { err: mailError, userId: user.userId, email: user.email },
+            "failed to send password reset email",
+          );
+        }
+      }
+
+      return reply.send({
+        ok: true,
+        message:
+          "If an account exists for that email, a password reset email has been sent.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
+  });
+
+  // POST /auth/reset-password
+  app.post("/reset-password", async (req, reply) => {
+    try {
+      const body = resetPasswordBodySchema.parse(req.body);
+      const normalizedToken = normalizeResetToken(body.token);
+      const tokenKey = `password-reset:${normalizedToken}`;
+      const userId = await app.redis.get(tokenKey);
+
+      if (!userId) {
+        return reply.code(400).send({
+          error: "InvalidToken",
+          message: "The password reset token is invalid or expired.",
+        });
+      }
+
+      const updated = await authService.updatePasswordByUserId(
+        userId,
+        body.password,
+      );
+      if (!updated) {
+        await app.redis.del(tokenKey);
+        return reply.code(400).send({
+          error: "InvalidToken",
+          message: "The password reset token is invalid or expired.",
+        });
+      }
+
+      await app.redis.del(tokenKey);
+      return reply.send({ ok: true, message: "Password has been reset." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
+  });
+
+  // POST /auth/forgot-username
+  app.post("/forgot-username", async (req, reply) => {
+    try {
+      const body = forgotUsernameBodySchema.parse(req.body);
+      const user = await authService.getUserByEmail(body.email);
+      if (user) {
+        try {
+          await mailerService.sendUsernameReminderEmail(user.email, user.email);
+        } catch (mailError) {
+          req.log.warn(
+            { err: mailError, userId: user.userId, email: user.email },
+            "failed to send username reminder email",
+          );
+        }
+      }
+
+      return reply.send({
+        ok: true,
+        message:
+          "If an account exists for that email, a username reminder email has been sent.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
   });
 
   // (optional) GET /auth/me – quick probe that auth works

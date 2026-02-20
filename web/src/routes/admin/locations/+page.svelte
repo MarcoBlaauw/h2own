@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import GoogleMapPicker from '$lib/components/location/GoogleMapPicker.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { PageData } from './$types';
@@ -16,6 +17,9 @@
     locationId: string | null;
     userId: string;
     name: string;
+    formattedAddress: string;
+    googlePlaceId: string;
+    googlePlusCode: string;
     latitude: string;
     longitude: string;
     timezone: string;
@@ -25,6 +29,9 @@
     locationId: null,
     userId: '',
     name: '',
+    formattedAddress: '',
+    googlePlaceId: '',
+    googlePlusCode: '',
     latitude: '',
     longitude: '',
     timezone: '',
@@ -35,6 +42,9 @@
   const defaultCreateForm = {
     userId: '',
     name: '',
+    formattedAddress: '',
+    googlePlaceId: '',
+    googlePlusCode: '',
     latitude: '',
     longitude: '',
     timezone: '',
@@ -73,6 +83,9 @@
       locationId: location.locationId,
       userId: location.userId,
       name: location.name,
+      formattedAddress: location.formattedAddress ?? '',
+      googlePlaceId: location.googlePlaceId ?? '',
+      googlePlusCode: location.googlePlusCode ?? '',
       latitude: location.latitude !== null ? location.latitude.toString() : '',
       longitude: location.longitude !== null ? location.longitude.toString() : '',
       timezone: location.timezone ?? '',
@@ -141,6 +154,9 @@
     const payload: Record<string, unknown> = {
       userId: createForm.userId,
       name: createForm.name.trim(),
+      formattedAddress: createForm.formattedAddress.trim() || undefined,
+      googlePlaceId: createForm.googlePlaceId.trim() || undefined,
+      googlePlusCode: createForm.googlePlusCode.trim() || undefined,
       isPrimary: createForm.isPrimary,
     };
 
@@ -208,6 +224,9 @@
     const payload: Record<string, unknown> = {
       userId: updateForm.userId,
       name: updateForm.name.trim(),
+      formattedAddress: updateForm.formattedAddress.trim() || null,
+      googlePlaceId: updateForm.googlePlaceId.trim() || null,
+      googlePlusCode: updateForm.googlePlusCode.trim() || null,
       isPrimary: updateForm.isPrimary,
     };
 
@@ -375,6 +394,9 @@
                   {location.user?.email ?? 'Unassigned'} •
                   {location.timezone ?? 'No timezone'}
                 </div>
+                {#if location.formattedAddress}
+                  <div class="mt-1 text-xs text-content-secondary/80">{location.formattedAddress}</div>
+                {/if}
               </button>
             </li>
           {/each}
@@ -426,6 +448,14 @@
           <label class="form-label" for="create-name">Name</label>
           <input id="create-name" class="form-control" bind:value={createForm.name} required />
         </div>
+        <GoogleMapPicker
+          idPrefix="admin-create-location"
+          bind:latitude={createForm.latitude}
+          bind:longitude={createForm.longitude}
+          bind:formattedAddress={createForm.formattedAddress}
+          bind:googlePlaceId={createForm.googlePlaceId}
+          bind:googlePlusCode={createForm.googlePlusCode}
+        />
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1">
             <label class="form-label" for="create-latitude">Latitude</label>
@@ -439,6 +469,10 @@
         <div class="space-y-1">
           <label class="form-label" for="create-timezone">Timezone</label>
           <input id="create-timezone" class="form-control" bind:value={createForm.timezone} placeholder="e.g. America/New_York" />
+        </div>
+        <div class="space-y-1">
+          <label class="form-label" for="create-formatted-address">Formatted address</label>
+          <input id="create-formatted-address" class="form-control" bind:value={createForm.formattedAddress} />
         </div>
         <label class="flex items-center gap-2 text-sm">
           <input type="checkbox" bind:checked={createForm.isPrimary} />
@@ -497,6 +531,14 @@
             <label class="form-label" for="edit-name">Name</label>
             <input id="edit-name" class="form-control" bind:value={updateForm.name} required />
           </div>
+          <GoogleMapPicker
+            idPrefix="admin-edit-location"
+            bind:latitude={updateForm.latitude}
+            bind:longitude={updateForm.longitude}
+            bind:formattedAddress={updateForm.formattedAddress}
+            bind:googlePlaceId={updateForm.googlePlaceId}
+            bind:googlePlusCode={updateForm.googlePlusCode}
+          />
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-1">
               <label class="form-label" for="edit-latitude">Latitude</label>
@@ -510,6 +552,10 @@
           <div class="space-y-1">
             <label class="form-label" for="edit-timezone">Timezone</label>
             <input id="edit-timezone" class="form-control" bind:value={updateForm.timezone} placeholder="e.g. America/Los_Angeles" />
+          </div>
+          <div class="space-y-1">
+            <label class="form-label" for="edit-formatted-address">Formatted address</label>
+            <input id="edit-formatted-address" class="form-control" bind:value={updateForm.formattedAddress} />
           </div>
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" bind:checked={updateForm.isPrimary} />

@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import * as schema from './db/schema/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, '..', '.env') });
+dotenv.config({ path: join(__dirname, '..', '..', '.env') });
 
 const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://h2own:h2own@postgres:5432/h2own';

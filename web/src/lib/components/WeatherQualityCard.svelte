@@ -11,6 +11,7 @@
   };
 
   export let dailyWeather: WeatherDay[] = [];
+  export let error: string | null = null;
 
   const toNumber = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return null;
@@ -37,6 +38,9 @@
 
   const computeQuality = (day?: WeatherDay) => {
     if (!day) {
+      if (error) {
+        return { score: null, label: 'Unavailable', detail: error };
+      }
       return { score: null, label: 'No data', detail: 'Connect a location to see forecasts.' };
     }
 

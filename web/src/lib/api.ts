@@ -4,6 +4,13 @@ const base = (() => {
     return configured;
   }
 
+  if (typeof process !== 'undefined' && process?.env) {
+    const serverConfigured = process.env.VITE_API_URL || process.env.PUBLIC_API_BASE;
+    if (serverConfigured) {
+      return serverConfigured;
+    }
+  }
+
   if (typeof globalThis !== 'undefined' && typeof globalThis.location === 'object' && globalThis.location) {
     const origin = (globalThis.location as Location).origin;
     if (origin) {
@@ -48,6 +55,9 @@ type ApiClient = {
     login: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     logout: (customFetch?: FetchLike) => Promise<Response>;
     me: (customFetch?: FetchLike) => Promise<Response>;
+    forgotPassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    resetPassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    forgotUsername: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   apiTokens: {
     list: (customFetch?: FetchLike) => Promise<Response>;
@@ -189,6 +199,12 @@ export const api: ApiClient = {
       apiFetch('/auth/login', jsonRequest(body, { method: 'POST' }), customFetch),
     logout: (customFetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
     me: (customFetch) => apiFetch('/auth/me', {}, customFetch),
+    forgotPassword: (body, customFetch) =>
+      apiFetch('/auth/forgot-password', jsonRequest(body, { method: 'POST' }), customFetch),
+    resetPassword: (body, customFetch) =>
+      apiFetch('/auth/reset-password', jsonRequest(body, { method: 'POST' }), customFetch),
+    forgotUsername: (body, customFetch) =>
+      apiFetch('/auth/forgot-username', jsonRequest(body, { method: 'POST' }), customFetch),
   },
   apiTokens: {
     list: (customFetch) => apiFetch('/admin/api-tokens', {}, customFetch),

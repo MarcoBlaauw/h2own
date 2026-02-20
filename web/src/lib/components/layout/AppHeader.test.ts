@@ -30,9 +30,11 @@ vi.mock('$app/stores', () => {
 });
 
 const gotoMock = vi.hoisted(() => vi.fn());
+const invalidateAllMock = vi.hoisted(() => vi.fn());
 
 vi.mock('$app/navigation', () => ({
   goto: gotoMock,
+  invalidateAll: invalidateAllMock,
 }));
 
 const logoutMock = vi.hoisted(() => vi.fn());
@@ -70,6 +72,7 @@ describe('AppHeader', () => {
   beforeEach(() => {
     logoutMock.mockReset();
     gotoMock.mockReset();
+    invalidateAllMock.mockReset();
     matchMediaMock.mockClear();
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
@@ -112,7 +115,7 @@ describe('AppHeader', () => {
 
     expect(queryAllByText('Chemicals')).toHaveLength(0);
     expect(queryAllByText('Users')).toHaveLength(0);
-    expect(queryAllByText('Pools').length).toBeGreaterThan(0);
+    expect(queryAllByText('Pool Setup').length).toBeGreaterThan(0);
   });
 
   it('logs out via the API and redirects to login', async () => {
@@ -125,6 +128,7 @@ describe('AppHeader', () => {
     await fireEvent.click(button);
 
     expect(logoutMock).toHaveBeenCalled();
-    expect(gotoMock).toHaveBeenCalledWith('/auth/login');
+    expect(invalidateAllMock).toHaveBeenCalled();
+    expect(gotoMock).toHaveBeenCalledWith('/auth/login', { invalidateAll: true });
   });
 });

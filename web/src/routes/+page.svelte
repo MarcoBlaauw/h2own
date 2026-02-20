@@ -105,6 +105,7 @@
       windSpeedMph?: number | null;
       humidityPercent?: number | null;
     }>;
+    weatherError?: string | null;
   };
 
   const formatMeasurement = (
@@ -243,7 +244,7 @@
         />
       </div>
       <div class="lg:col-span-3">
-        <WeatherQualityCard dailyWeather={data.weatherDaily} />
+        <WeatherQualityCard dailyWeather={data.weatherDaily} error={data.weatherError ?? null} />
       </div>
     </div>
   {:else}

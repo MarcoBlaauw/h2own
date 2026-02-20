@@ -25,6 +25,7 @@ import { createRedisSessionStore } from "./services/session-store.js";
 
 async function buildApp() {
   const app = Fastify({
+    trustProxy: env.TRUST_PROXY,
     logger: {
       level: env.LOG_LEVEL,
       redact: {
@@ -48,9 +49,6 @@ async function buildApp() {
     if (!sid) return null;
     return `${sid.slice(0, 8)}…${sid.slice(-4)}`;
   };
-
-  // If you run behind a proxy/ingress that terminates TLS, uncomment:
-  // app.setTrustProxy(true);
 
   // 🔎 Log every route as it is registered (dev-only)
   app.addHook("onRoute", (o) => {

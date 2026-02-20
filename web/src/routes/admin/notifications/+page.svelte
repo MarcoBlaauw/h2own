@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Container from '$lib/components/layout/Container.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { api } from '$lib/api';
   import type { PageData } from './$types';
@@ -153,7 +154,8 @@
   };
 </script>
 
-<section class="space-y-6">
+<Container>
+<section class="mx-auto w-full max-w-6xl space-y-6 py-6">
   <header>
     <h1 class="text-2xl font-semibold text-content-primary">Notification templates</h1>
     <p class="mt-1 text-sm text-content-secondary">
@@ -302,3 +304,4 @@
     </div>
   </Card>
 </section>
+</Container>

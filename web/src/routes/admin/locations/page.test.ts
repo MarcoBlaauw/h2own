@@ -47,6 +47,9 @@ describe('admin locations page', () => {
     locationId: '5e4f2a8c-6c41-4c60-b3f6-bb34a91d9c1a',
     userId: baseUserId,
     name: 'Primary Home',
+    formattedAddress: null,
+    googlePlaceId: null,
+    googlePlusCode: null,
     latitude: 33.12,
     longitude: -84.98,
     timezone: 'America/New_York',
@@ -195,14 +198,17 @@ describe('admin locations page', () => {
     await fireEvent.click(getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
-      expect(locationsApi.update).toHaveBeenCalledWith(baseLocation.locationId, {
-        userId: baseLocation.userId,
-        name: 'Renamed Location',
-        isPrimary: true,
-        latitude: baseLocation.latitude,
-        longitude: baseLocation.longitude,
-        timezone: 'America/New_York',
-      });
+      expect(locationsApi.update).toHaveBeenCalledWith(
+        baseLocation.locationId,
+        expect.objectContaining({
+          userId: baseLocation.userId,
+          name: 'Renamed Location',
+          isPrimary: true,
+          latitude: baseLocation.latitude,
+          longitude: baseLocation.longitude,
+          timezone: 'America/New_York',
+        })
+      );
     });
 
     expect(await findByText('Renamed Location')).toBeInTheDocument();

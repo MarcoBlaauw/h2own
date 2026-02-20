@@ -30,4 +30,16 @@ describe('WeatherQualityCard', () => {
     expect(getByText('No data')).toBeTruthy();
     expect(getByText('Add a location with coordinates to view daily weather guidance.')).toBeTruthy();
   });
+
+  it('shows an unavailable state when weather loading fails', () => {
+    const { getByText } = render(WeatherQualityCard, {
+      props: {
+        dailyWeather: [],
+        error: 'Location is missing coordinates',
+      },
+    });
+
+    expect(getByText('Unavailable')).toBeTruthy();
+    expect(getByText('Location is missing coordinates')).toBeTruthy();
+  });
 });

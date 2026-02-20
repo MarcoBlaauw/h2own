@@ -6,6 +6,8 @@ const kitPlugins = (await sveltekit()) as unknown as any;
 const plugins = Array.isArray(kitPlugins) ? kitPlugins : [kitPlugins];
 
 export default defineConfig({
+  envDir: '..',
+  envPrefix: ['VITE_', 'PUBLIC_'],
   plugins: [...plugins, svelteTesting()],
   test: {
     environment: 'jsdom',

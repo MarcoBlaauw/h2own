@@ -30,20 +30,41 @@ const timezoneSchema = z
     z.union([z.string().min(1), z.null()]).optional()
   );
 
-const createLocationSchema = z.object({
-  userId: z.string().uuid(),
-  name: z.string().min(1),
-  latitude: optionalLatitude,
-  longitude: optionalLongitude,
-  timezone: timezoneSchema,
-  isPrimary: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-});
+const optionalText = z
+  .preprocess(
+    (value) => {
+      if (value === '' || value === undefined) return undefined;
+      if (value === null) return null;
+      return value;
+    },
+    z.union([z.string().min(1), z.null()]).optional()
+  );
+
+const createLocationSchema = z
+  .object({
+    userId: z.string().uuid(),
+    name: z.string().min(1),
+    formattedAddress: optionalText,
+    googlePlaceId: optionalText,
+    googlePlusCode: optionalText,
+    latitude: optionalLatitude,
+    longitude: optionalLongitude,
+    timezone: timezoneSchema,
+    isPrimary: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((data) => (data.latitude === undefined) === (data.longitude === undefined), {
+    message: 'Latitude and longitude must both be provided together.',
+    path: ['latitude'],
+  });
 
 const updateLocationSchema = z
   .object({
     userId: z.string().uuid().optional(),
     name: z.string().min(1).optional(),
+    formattedAddress: optionalText,
+    googlePlaceId: optionalText,
+    googlePlusCode: optionalText,
     latitude: optionalLatitude,
     longitude: optionalLongitude,
     timezone: timezoneSchema,
@@ -51,6 +72,17 @@ const updateLocationSchema = z
     assignPools: z.array(z.string().uuid()).optional(),
     unassignPools: z.array(z.string().uuid()).optional(),
   })
+  .refine(
+    (data) =>
+      !(
+        (data.latitude === undefined && data.longitude !== undefined) ||
+        (data.longitude === undefined && data.latitude !== undefined)
+      ),
+    {
+      message: 'Latitude and longitude must both be provided together.',
+      path: ['latitude'],
+    }
+  )
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one property must be provided.',
   });

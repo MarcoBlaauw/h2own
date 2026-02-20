@@ -18,8 +18,14 @@ type LoadOutput = {
   locations: Array<{
     locationId: string;
     name: string;
+    formattedAddress?: string | null;
+    googlePlaceId?: string | null;
+    googlePlusCode?: string | null;
     latitude: number | null;
     longitude: number | null;
+    timezone?: string | null;
+    isPrimary?: boolean;
+    isActive?: boolean;
   }>;
   loadError: string | null;
 };

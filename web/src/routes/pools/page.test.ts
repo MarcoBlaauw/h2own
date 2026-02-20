@@ -48,11 +48,19 @@ describe('pools page', () => {
   const createMock = api.pools.create as unknown as Mock;
   const patchMock = api.pools.patch as unknown as Mock;
   const deleteMock = api.pools.del as unknown as Mock;
+  const listLocationsMock = api.userLocations.list as unknown as Mock;
 
   beforeEach(() => {
     createMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    listLocationsMock.mockReset();
+    listLocationsMock.mockResolvedValue(
+      new Response(JSON.stringify(locations), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
@@ -126,14 +134,21 @@ describe('pools page', () => {
     };
 
     const createLocationMock = api.userLocations?.create as unknown as Mock;
+    const refreshedLocations = [...locations, location];
     createLocationMock?.mockResolvedValueOnce(
       new Response(JSON.stringify(location), {
         status: 201,
         headers: { 'Content-Type': 'application/json' },
       })
     );
+    listLocationsMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(refreshedLocations), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
 
-    const { getByLabelText, getByRole, findByRole, queryByText } = render(Page, {
+    const { getByLabelText, getByRole, findByRole, queryAllByText } = render(Page, {
       props: { data: { session: null, pools, locations, loadError: null } },
     });
 
@@ -151,11 +166,11 @@ describe('pools page', () => {
         longitude: location.longitude,
       })
     );
-
     const status = await findByRole('status');
     expect(status.textContent).toContain('Location created.');
     await waitFor(() => {
-      expect(queryByText(location.name)).toBeTruthy();
+      expect(listLocationsMock).toHaveBeenCalled();
+      expect(queryAllByText(location.name).length).toBeGreaterThan(0);
     });
   });
 
@@ -201,5 +216,15 @@ describe('pools page', () => {
     await waitFor(() => {
       expect(queryByText(pools[0].name)).toBeNull();
     });
+  });
+
+  it('shows a manage locations section', () => {
+    const { getByText, getAllByText } = render(Page, {
+      props: { data: { session: null, pools, locations, loadError: null } },
+    });
+
+    expect(getByText('Manage locations')).toBeTruthy();
+    const entries = getAllByText(locations[0].name);
+    expect(entries.length).toBeGreaterThan(0);
   });
 });

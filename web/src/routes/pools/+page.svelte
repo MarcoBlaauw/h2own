@@ -1,13 +1,51 @@
 <script lang="ts">
+  import Container from '$lib/components/layout/Container.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import GoogleMapPicker from '$lib/components/location/GoogleMapPicker.svelte';
   import { api } from '$lib/api';
   import type { PageData } from './$types';
   import type { PoolSummary } from './+page';
 
   export let data: PageData;
 
+  type LocationSummary = {
+    locationId: string;
+    name: string;
+    formattedAddress: string | null;
+    googlePlaceId: string | null;
+    googlePlusCode: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    timezone: string | null;
+    isPrimary: boolean;
+    isActive: boolean;
+  };
+
+  const normalizeLocations = (items: unknown): LocationSummary[] => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const raw = item as Record<string, unknown>;
+        if (typeof raw.locationId !== 'string' || !raw.locationId.trim()) return null;
+        return {
+          locationId: raw.locationId,
+          name: typeof raw.name === 'string' && raw.name.trim() ? raw.name : 'Unnamed location',
+          formattedAddress: typeof raw.formattedAddress === 'string' ? raw.formattedAddress : null,
+          googlePlaceId: typeof raw.googlePlaceId === 'string' ? raw.googlePlaceId : null,
+          googlePlusCode: typeof raw.googlePlusCode === 'string' ? raw.googlePlusCode : null,
+          latitude: typeof raw.latitude === 'number' ? raw.latitude : null,
+          longitude: typeof raw.longitude === 'number' ? raw.longitude : null,
+          timezone: typeof raw.timezone === 'string' ? raw.timezone : null,
+          isPrimary: Boolean(raw.isPrimary),
+          isActive: raw.isActive === undefined ? true : Boolean(raw.isActive),
+        } satisfies LocationSummary;
+      })
+      .filter((location): location is LocationSummary => Boolean(location));
+  };
+
   let pools: PoolSummary[] = data.pools ?? [];
-  let locations = data.locations ?? [];
+  let locations: LocationSummary[] = normalizeLocations(data.locations);
   let loadError = data.loadError;
 
   type FormState = {
@@ -30,12 +68,18 @@
   let editForm: FormState = { ...defaultForm };
   let locationForm: {
     name: string;
-    latitude: string | number;
-    longitude: string | number;
+    formattedAddress: string;
+    googlePlaceId: string;
+    googlePlusCode: string;
+    latitude: string;
+    longitude: string;
     timezone: string;
     isPrimary: boolean;
   } = {
     name: '',
+    formattedAddress: '',
+    googlePlaceId: '',
+    googlePlusCode: '',
     latitude: '',
     longitude: '',
     timezone: '',
@@ -52,6 +96,9 @@
   let updating = false;
   let creatingLocation = false;
   let deletingPoolId: string | null = null;
+  let loadingLocations = false;
+
+  $: activeLocations = locations.filter((location) => location.isActive !== false);
 
   const sanitizerOptions = ['chlorine', 'salt', 'bromine', 'mineral', 'biguanide', 'other'];
   const surfaceOptions = ['plaster', 'vinyl', 'fiberglass', 'tile', 'concrete', 'other'];
@@ -86,12 +133,36 @@
   const resetLocationForm = () => {
     locationForm = {
       name: '',
+      formattedAddress: '',
+      googlePlaceId: '',
+      googlePlusCode: '',
       latitude: '',
       longitude: '',
       timezone: '',
       isPrimary: false,
     };
     locationErrors = [];
+  };
+
+  const refreshLocations = async () => {
+    loadingLocations = true;
+    try {
+      const res = await api.userLocations.list();
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        locationMessage = {
+          type: 'error',
+          text: body.error ?? body.message ?? `Load locations failed (${res.status}).`,
+        };
+        return;
+      }
+      const body = await res.json();
+      locations = normalizeLocations(body);
+    } catch (error) {
+      locationMessage = { type: 'error', text: 'Unable to refresh locations.' };
+    } finally {
+      loadingLocations = false;
+    }
   };
 
   const beginEdit = (pool: PoolSummary) => {
@@ -150,10 +221,8 @@
 
     creatingLocation = true;
     try {
-      const latitudeRaw = locationForm.latitude;
-      const longitudeRaw = locationForm.longitude;
-      const latitudeText = typeof latitudeRaw === 'number' ? String(latitudeRaw) : latitudeRaw;
-      const longitudeText = typeof longitudeRaw === 'number' ? String(longitudeRaw) : longitudeRaw;
+      const latitudeText = locationForm.latitude;
+      const longitudeText = locationForm.longitude;
       const latitude = latitudeText.trim() ? Number(latitudeText) : undefined;
       const longitude = longitudeText.trim() ? Number(longitudeText) : undefined;
 
@@ -168,6 +237,9 @@
 
       const payload = {
         name: locationForm.name.trim(),
+        formattedAddress: locationForm.formattedAddress.trim() || undefined,
+        googlePlaceId: locationForm.googlePlaceId.trim() || undefined,
+        googlePlusCode: locationForm.googlePlusCode.trim() || undefined,
         latitude,
         longitude,
         timezone: locationForm.timezone.trim() || undefined,
@@ -182,8 +254,8 @@
         };
         return;
       }
-      const created = await res.json();
-      locations = [created, ...locations];
+      await res.json().catch(() => null);
+      await refreshLocations();
       locationMessage = { type: 'success', text: 'Location created.' };
       resetLocationForm();
     } catch (error) {
@@ -255,9 +327,10 @@
   };
 </script>
 
-<section class="space-y-6">
+<Container>
+<section class="mx-auto w-full max-w-6xl space-y-6 py-6">
   <header>
-    <h1 class="text-2xl font-semibold text-content-primary">Your pools</h1>
+    <h1 class="text-2xl font-semibold text-content-primary">Pool setup</h1>
     <p class="mt-1 text-sm text-content-secondary">
       Create and manage pools tied to your account.
     </p>
@@ -302,7 +375,7 @@
         Location (optional)
         <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={createForm.locationId}>
           <option value="">No location</option>
-          {#each locations as location}
+          {#each activeLocations as location}
             <option value={location.locationId}>{location.name}</option>
           {/each}
         </select>
@@ -380,7 +453,7 @@
                   Location (optional)
                   <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={editForm.locationId}>
                     <option value="">No location</option>
-                    {#each locations as location}
+                    {#each activeLocations as location}
                       <option value={location.locationId}>{location.name}</option>
                     {/each}
                   </select>
@@ -423,6 +496,16 @@
         Timezone (optional)
         <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" placeholder="America/Los_Angeles" bind:value={locationForm.timezone} />
       </label>
+      <div class="sm:col-span-2">
+        <GoogleMapPicker
+          idPrefix="pool-location"
+          bind:latitude={locationForm.latitude}
+          bind:longitude={locationForm.longitude}
+          bind:formattedAddress={locationForm.formattedAddress}
+          bind:googlePlaceId={locationForm.googlePlaceId}
+          bind:googlePlusCode={locationForm.googlePlusCode}
+        />
+      </div>
       <label class="text-sm font-medium text-content-secondary">
         Latitude (optional)
         <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="number" step="0.0001" bind:value={locationForm.latitude} />
@@ -430,6 +513,10 @@
       <label class="text-sm font-medium text-content-secondary">
         Longitude (optional)
         <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="number" step="0.0001" bind:value={locationForm.longitude} />
+      </label>
+      <label class="text-sm font-medium text-content-secondary sm:col-span-2">
+        Formatted address
+        <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={locationForm.formattedAddress} />
       </label>
       <label class="inline-flex items-center gap-2 text-sm text-content-secondary sm:col-span-2">
         <input type="checkbox" class="rounded border-border" bind:checked={locationForm.isPrimary} />
@@ -452,4 +539,62 @@
       </button>
     </div>
   </Card>
+
+  <Card>
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-lg font-semibold text-content-primary">Manage locations</h2>
+      <button class="btn btn-sm btn-tonal" on:click={refreshLocations} disabled={loadingLocations}>
+        {loadingLocations ? 'Refreshing...' : 'Refresh'}
+      </button>
+    </div>
+    {#if locations.length === 0}
+      <p class="mt-3 text-sm text-content-secondary">No locations yet.</p>
+    {:else}
+      <div class="mt-4 space-y-4">
+        {#each locations as location}
+          <div class="surface-panel">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="font-medium text-content-primary">{location.name}</div>
+                <div class="text-xs text-content-secondary/80">
+                  {#if location.formattedAddress}
+                    {location.formattedAddress}
+                  {:else}
+                    {#if location.latitude !== null && location.longitude !== null}
+                      {location.latitude}, {location.longitude}
+                    {:else}
+                      Coordinates not set
+                    {/if}
+                  {/if}
+                  {#if location.googlePlaceId}
+                    · Google place linked
+                  {/if}
+                </div>
+                <div class="text-xs text-content-secondary/70">
+                  {#if location.latitude !== null && location.longitude !== null}
+                    {location.latitude}, {location.longitude}
+                  {:else}
+                    Coordinates not set
+                  {/if}
+                  {#if location.timezone}
+                    · {location.timezone}
+                  {/if}
+                </div>
+              </div>
+              <div class="text-xs text-content-secondary/80">
+                {#if location.isActive === false}
+                  Inactive
+                {:else if location.isPrimary}
+                  Primary
+                {:else}
+                  Active
+                {/if}
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </Card>
 </section>
+</Container>

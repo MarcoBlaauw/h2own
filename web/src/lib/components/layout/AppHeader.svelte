@@ -2,12 +2,12 @@
   import { page } from '$app/stores';
   import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
   import { api } from '$lib/api';
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
 
   let isAdmin = false;
 
   const adminLinks = [
-    { href: '/admin/pools', label: 'Pools' },
+    { href: '/admin/pools', label: 'Pool Admin' },
     { href: '/admin/chemicals', label: 'Chemicals' },
     { href: '/admin/notifications', label: 'Notifications' },
     { href: '/admin/users', label: 'Users' },
@@ -15,7 +15,7 @@
     { href: '/admin/audit-log', label: 'Audit log' },
   ];
 
-  const userLinks = [{ href: '/pools', label: 'Pools' }];
+  const userLinks = [{ href: '/pools', label: 'Pool Setup' }];
 
   function isActive(href: string) {
     const path = $page.url.pathname;
@@ -24,7 +24,8 @@
 
   async function handleLogout() {
     await api.auth.logout();
-    await goto('/auth/login');
+    await invalidateAll();
+    await goto('/auth/login', { invalidateAll: true });
   }
 
   $: isAdmin = $page.data.session?.user?.role === 'admin';

@@ -28,8 +28,14 @@ export async function load({ fetch, url, parent }) {
       let costs = [];
       let costSummary = null;
       let weatherDaily = [];
+      let weatherError: string | null = null;
       if (pools.length > 0) {
-        const detailRes = await api.pools.show(pools[0].poolId, fetch);
+        const highlightedCandidate =
+          pools.find(
+            (pool: { poolId?: string; locationId?: string | null }) =>
+              typeof pool.poolId === 'string' && Boolean(pool.locationId)
+          ) ?? pools[0];
+        const detailRes = await api.pools.show(highlightedCandidate.poolId, fetch);
         if (detailRes.ok) {
           highlightedPool = await detailRes.json();
         }
@@ -75,10 +81,17 @@ export async function load({ fetch, url, parent }) {
           from: start.toISOString(),
           to: end.toISOString(),
           granularity: 'day',
+          refresh: true,
         });
         if (weatherRes.ok) {
           const payload = await weatherRes.json();
           weatherDaily = payload.items ?? [];
+        } else {
+          const payload = await weatherRes.json().catch(() => ({}));
+          weatherError =
+            payload?.error ??
+            payload?.message ??
+            `Unable to load weather data (${weatherRes.status}).`;
         }
       }
       return {
@@ -91,6 +104,7 @@ export async function load({ fetch, url, parent }) {
         costs,
         costSummary,
         weatherDaily,
+        weatherError,
       };
     }
     return {
@@ -103,6 +117,7 @@ export async function load({ fetch, url, parent }) {
       costs: [],
       costSummary: null,
       weatherDaily: [],
+      weatherError: null,
     };
   } catch (err) {
     return {
@@ -115,6 +130,7 @@ export async function load({ fetch, url, parent }) {
       costs: [],
       costSummary: null,
       weatherDaily: [],
+      weatherError: null,
     };
   }
 }

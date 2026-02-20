@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Container from '$lib/components/layout/Container.svelte';
   import { api } from '$lib/api';
   import Card from '$lib/components/ui/Card.svelte';
   import { SvelteSet } from 'svelte/reactivity';
@@ -143,7 +144,8 @@
   <title>Admin · Users</title>
 </svelte:head>
 
-<div class="space-y-6 py-6">
+<Container>
+<div class="mx-auto w-full max-w-6xl space-y-6 py-6">
   <div>
     <h1 class="text-2xl font-semibold text-content-primary">User management</h1>
     <p class="text-sm text-content-secondary">
@@ -287,3 +289,4 @@
     </div>
   </Card>
 </div>
+</Container>

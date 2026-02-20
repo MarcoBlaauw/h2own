@@ -17,13 +17,47 @@ const optionalNumber = z.preprocess(
   z.coerce.number().optional()
 );
 
-const createLocationSchema = z.object({
-  name: z.string().min(1),
-  latitude: optionalNumber,
-  longitude: optionalNumber,
-  timezone: z.string().optional(),
-  isPrimary: z.coerce.boolean().optional(),
-});
+const optionalString = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    return value;
+  },
+  z.string().optional()
+);
+
+const createLocationSchema = z
+  .object({
+    name: z.string().min(1),
+    formattedAddress: optionalString,
+    googlePlaceId: optionalString,
+    googlePlusCode: optionalString,
+    latitude: optionalNumber,
+    longitude: optionalNumber,
+    timezone: optionalString,
+    isPrimary: z.coerce.boolean().optional(),
+  })
+  .refine((data) => (data.latitude === undefined) === (data.longitude === undefined), {
+    message: 'Latitude and longitude must both be provided together.',
+    path: ['latitude'],
+  })
+  .refine(
+    (data) =>
+      data.latitude === undefined || (data.latitude >= -90 && data.latitude <= 90),
+    {
+      message: 'Latitude must be between -90 and 90.',
+      path: ['latitude'],
+    }
+  )
+  .refine(
+    (data) =>
+      data.longitude === undefined || (data.longitude >= -180 && data.longitude <= 180),
+    {
+      message: 'Longitude must be between -180 and 180.',
+      path: ['longitude'],
+    }
+  );
 
 const weatherQuery = z.object({
   from: z.string().datetime().optional(),
@@ -46,6 +80,9 @@ export async function locationsRoutes(app: FastifyInstance) {
       const location = await locationsService.createLocation({
         userId: req.user!.id,
         name: body.name,
+        formattedAddress: body.formattedAddress,
+        googlePlaceId: body.googlePlaceId,
+        googlePlusCode: body.googlePlusCode,
         latitude: body.latitude,
         longitude: body.longitude,
         timezone: body.timezone,
@@ -92,6 +129,9 @@ export async function locationsRoutes(app: FastifyInstance) {
         }
         if (err.message === 'Weather provider not configured') {
           return reply.code(503).send({ error: err.message });
+        }
+        if (err.message.startsWith('Tomorrow.io request failed')) {
+          return reply.code(502).send({ error: err.message });
         }
       }
       throw err;

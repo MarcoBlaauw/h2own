@@ -1,6 +1,6 @@
 <script>
   import { api } from '$lib/api';
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   import Card from '$lib/components/ui/Card.svelte';
   import { page } from '$app/stores';
   import { browser } from '$app/environment';
@@ -32,7 +32,8 @@
     success = '';
     const res = await api.auth.login({ email, password });
     if (res.ok) {
-      await goto('/profile');
+      await invalidateAll();
+      await goto('/profile', { invalidateAll: true });
     } else {
       const data = await res.json();
       error = data.message;
@@ -67,6 +68,14 @@
             placeholder="••••••••"
             bind:value={password}
           >
+        </div>
+        <div class="flex flex-wrap gap-4 text-sm">
+          <a class="font-medium text-accent hover:text-accent-strong" href="/auth/forgot-password">
+            Forgot password?
+          </a>
+          <a class="font-medium text-accent hover:text-accent-strong" href="/auth/forgot-username">
+            Forgot username?
+          </a>
         </div>
         {#if error}
           <p class="form-message" data-state="error">{error}</p>

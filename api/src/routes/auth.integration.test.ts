@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authRoutes } from "./auth.js";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
+import { mailerService } from "../services/mailer.js";
 
 describe("POST /auth/register integration", () => {
   let app: ReturnType<typeof Fastify>;
@@ -12,6 +13,7 @@ describe("POST /auth/register integration", () => {
 
   beforeEach(async () => {
     app = Fastify();
+    const tokenStore = new Map<string, string>();
     createSessionMock = vi.fn(async () => {});
     destroySessionMock = vi.fn(async () => {});
     verifySessionMock = vi.fn(async (req: any) => {
@@ -24,6 +26,17 @@ describe("POST /auth/register integration", () => {
     app.decorate("auth", {
       verifySession: verifySessionMock,
       requireRole: () => async () => {},
+    } as any);
+    app.decorate("redis", {
+      set: vi.fn(async (key: string, value: string) => {
+        tokenStore.set(key, value);
+        return "OK";
+      }),
+      get: vi.fn(async (key: string) => tokenStore.get(key) ?? null),
+      del: vi.fn(async (key: string) => {
+        const existed = tokenStore.delete(key);
+        return existed ? 1 : 0;
+      }),
     } as any);
 
     await app.register(authRoutes, { prefix: "/auth" });
@@ -48,6 +61,10 @@ describe("POST /auth/register integration", () => {
       createdAt: new Date("2024-06-01T12:34:56.000Z"),
     } as any);
 
+    const sendWelcomeSpy = vi
+      .spyOn(mailerService, "sendWelcomeEmail")
+      .mockResolvedValueOnce({ sent: true, skipped: false });
+
     const response = await app.inject({
       method: "POST",
       url: "/auth/register",
@@ -62,6 +79,7 @@ describe("POST /auth/register integration", () => {
       role: "member",
       createdAt: "2024-06-01T12:34:56.000Z",
     });
+    expect(sendWelcomeSpy).toHaveBeenCalledWith(payload.email, payload.name);
   });
 
   it("returns 409 when registering with an existing email", async () => {
@@ -189,5 +207,106 @@ describe("POST /auth/register integration", () => {
     expect(replyArg).toBeDefined();
     expect(sessionIdArg).toBeNull();
   });
-});
 
+  it("accepts forgot-password requests and sends reset email when user exists", async () => {
+    vi.spyOn(authService, "getUserByEmail").mockResolvedValueOnce({
+      userId: "u-1",
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      isActive: true,
+    } as any);
+    const resetSpy = vi
+      .spyOn(mailerService, "sendPasswordResetEmail")
+      .mockResolvedValueOnce({ sent: true, skipped: false });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/forgot-password",
+      payload: { email: "member@example.com" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().ok).toBe(true);
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets password using a valid token", async () => {
+    vi.spyOn(authService, "getUserByEmail").mockResolvedValueOnce({
+      userId: "u-1",
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      isActive: true,
+    } as any);
+    vi.spyOn(mailerService, "sendPasswordResetEmail").mockResolvedValueOnce({
+      sent: true,
+      skipped: false,
+    });
+
+    const setResponse = await app.inject({
+      method: "POST",
+      url: "/auth/forgot-password",
+      payload: { email: "member@example.com" },
+    });
+    expect(setResponse.statusCode).toBe(200);
+
+    const redisSetCall = (app.redis.set as any).mock.calls[0];
+    const tokenKey = redisSetCall[0] as string;
+    const token = tokenKey.replace("password-reset:", "");
+
+    vi.spyOn(authService, "updatePasswordByUserId").mockResolvedValueOnce(true);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/reset-password",
+      payload: { token, password: "new-password-123" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      message: "Password has been reset.",
+    });
+  });
+
+  it("returns 400 for invalid reset token", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/reset-password",
+      payload: { token: "f".repeat(32), password: "new-password-123" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: "InvalidToken",
+      message: "The password reset token is invalid or expired.",
+    });
+  });
+
+  it("accepts forgot-username requests and sends reminder when user exists", async () => {
+    vi.spyOn(authService, "getUserByEmail").mockResolvedValueOnce({
+      userId: "u-1",
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      isActive: true,
+    } as any);
+    const reminderSpy = vi
+      .spyOn(mailerService, "sendUsernameReminderEmail")
+      .mockResolvedValueOnce({ sent: true, skipped: false });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/forgot-username",
+      payload: { email: "member@example.com" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().ok).toBe(true);
+    expect(reminderSpy).toHaveBeenCalledWith(
+      "member@example.com",
+      "member@example.com",
+    );
+  });
+});

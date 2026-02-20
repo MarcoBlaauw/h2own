@@ -101,6 +101,36 @@ export class AuthService {
     };
   }
 
+  async getUserByEmail(email: string) {
+    const [user] = await db
+      .select({
+        userId: schema.users.userId,
+        email: schema.users.email,
+        name: schema.users.name,
+        role: schema.users.role,
+        isActive: schema.users.isActive,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.email, email));
+
+    if (!user || !user.isActive) {
+      return null;
+    }
+
+    return user;
+  }
+
+  async updatePasswordByUserId(userId: string, password: string) {
+    const passwordHash = await hashPassword(password);
+    const [updated] = await db
+      .update(schema.users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(schema.users.userId, userId))
+      .returning({ userId: schema.users.userId });
+
+    return Boolean(updated);
+  }
+
   async verifyCaptcha(token: string): Promise<boolean> {
     if (!env.CAPTCHA_PROVIDER || !env.CAPTCHA_SECRET) {
       return false;
