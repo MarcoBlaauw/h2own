@@ -2,6 +2,7 @@ import { and, eq, ilike, or, SQL, asc } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { generatePassword, hashPassword } from './passwords.js';
+import { hasSystemCapability } from './authorization.js';
 
 export class UsersForbiddenError extends Error {
   readonly statusCode = 403;
@@ -66,14 +67,20 @@ function buildFilters(filters: UsersServiceFilters): SQL | undefined {
 export class UsersService {
   constructor(private readonly db = dbClient) {}
 
-  private ensureAdmin(role: SessionRole) {
-    if (role !== 'admin') {
+  private ensureCanRead(role: SessionRole) {
+    if (!hasSystemCapability(role, 'admin.users.read')) {
+      throw new UsersForbiddenError();
+    }
+  }
+
+  private ensureCanManage(role: SessionRole) {
+    if (!hasSystemCapability(role, 'admin.users.manage')) {
       throw new UsersForbiddenError();
     }
   }
 
   async listUsers(role: SessionRole, filters: UsersServiceFilters = {}) {
-    this.ensureAdmin(role);
+    this.ensureCanRead(role);
 
     const where = buildFilters(filters);
 
@@ -97,7 +104,7 @@ export class UsersService {
   }
 
   async updateUser(role: SessionRole, userId: string, updates: UsersServiceUpdate) {
-    this.ensureAdmin(role);
+    this.ensureCanManage(role);
 
     const payload: Partial<typeof schema.users.$inferInsert> = {};
 
@@ -133,7 +140,7 @@ export class UsersService {
   }
 
   async resetPassword(role: SessionRole, userId: string, newPassword?: string) {
-    this.ensureAdmin(role);
+    this.ensureCanManage(role);
 
     const password = newPassword?.trim() ? newPassword.trim() : generatePassword();
     const passwordHash = await hashPassword(password);

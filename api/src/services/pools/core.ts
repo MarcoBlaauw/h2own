@@ -1,6 +1,12 @@
 import { db as dbClient } from '../../db/index.js';
 import * as schema from '../../db/schema/index.js';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import {
+  canAssignPoolOwner,
+  hasPoolCapability,
+  requiresOwnerForCapability,
+  type PoolCapability,
+} from '../authorization.js';
 
 export class PoolNotFoundError extends Error {
   constructor(poolId: string) {
@@ -16,7 +22,22 @@ export class PoolForbiddenError extends Error {
   }
 }
 
+export class PoolOwnerRequiredError extends Error {
+  constructor(poolId: string) {
+    super(`Owner role required for pool ${poolId}`);
+    this.name = 'PoolOwnerRequiredError';
+  }
+}
+
+export class PoolCreateOwnerForbiddenError extends Error {
+  constructor() {
+    super('Only business/admin users can create pools for another owner');
+    this.name = 'PoolCreateOwnerForbiddenError';
+  }
+}
+
 export interface CreatePoolData {
+  ownerId?: string;
   name: string;
   volumeGallons: number;
   sanitizerType: string;
@@ -234,6 +255,53 @@ export class PoolCoreService {
     return pool;
   }
 
+  async getPoolAccess(poolId: string, userId: string) {
+    const [pool] = await this.db
+      .select({ poolId: schema.pools.poolId, ownerId: schema.pools.ownerId })
+      .from(schema.pools)
+      .where(eq(schema.pools.poolId, poolId))
+      .limit(1);
+
+    if (!pool) {
+      throw new PoolNotFoundError(poolId);
+    }
+
+    if (pool.ownerId === userId) {
+      return { pool, isOwner: true, roleName: 'owner' } as const;
+    }
+
+    const [membership] = await this.db
+      .select({ roleName: schema.poolMembers.roleName })
+      .from(schema.poolMembers)
+      .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, userId)))
+      .limit(1);
+
+    if (!membership) {
+      throw new PoolForbiddenError(poolId);
+    }
+
+    return { pool, isOwner: false, roleName: membership.roleName ?? 'viewer' } as const;
+  }
+
+  async ensurePoolOwner(poolId: string, userId: string) {
+    return this.ensurePoolCapability(poolId, userId, 'pool.update');
+  }
+
+  async ensurePoolCapability(poolId: string, userId: string, capability: PoolCapability) {
+    const access = await this.getPoolAccess(poolId, userId);
+    const allowed = hasPoolCapability(capability, {
+      isOwner: access.isOwner,
+      poolRole: access.roleName,
+    });
+    if (!allowed) {
+      if (requiresOwnerForCapability(capability)) {
+        throw new PoolOwnerRequiredError(poolId);
+      }
+      throw new PoolForbiddenError(poolId);
+    }
+    return access.pool;
+  }
+
   async ensureLocationAccessible(locationId: string, userId: string) {
     const [location] = await this.db
       .select({
@@ -249,38 +317,64 @@ export class PoolCoreService {
     }
   }
 
-  async createPool(userId: string, data: CreatePoolData) {
+  async createPool(requestingUserId: string, data: CreatePoolData, requesterRole?: string) {
+    const ownerId = data.ownerId && data.ownerId !== requestingUserId ? data.ownerId : requestingUserId;
+
+    if (ownerId !== requestingUserId && !canAssignPoolOwner(requesterRole)) {
+      throw new PoolCreateOwnerForbiddenError();
+    }
+
     if (data.locationId) {
-      await this.ensureLocationAccessible(data.locationId, userId);
+      await this.ensureLocationAccessible(data.locationId, ownerId);
     }
 
     const [pool] = await this.db
       .insert(schema.pools)
-      .values(mapCreatePoolData(userId, data))
+      .values(mapCreatePoolData(ownerId, data))
       .returning();
 
     await this.db.insert(schema.poolMembers).values({
       poolId: pool.poolId,
-      userId,
+      userId: ownerId,
       roleName: 'owner',
     });
+
+    if (ownerId !== requestingUserId) {
+      await this.db
+        .insert(schema.poolMembers)
+        .values({
+          poolId: pool.poolId,
+          userId: requestingUserId,
+          roleName: 'operator',
+        })
+        .onConflictDoNothing();
+    }
 
     return pool;
   }
 
   async getPools(userId: string, filterOwner = false) {
     if (filterOwner) {
-      return this.db.select().from(schema.pools).where(eq(schema.pools.ownerId, userId));
+      const ownerPools = await this.db.select().from(schema.pools).where(eq(schema.pools.ownerId, userId));
+      return ownerPools.map((pool) => ({ ...pool, accessRole: 'owner' }));
     }
 
-    const memberships = await this.db.select().from(schema.poolMembers).where(eq(schema.poolMembers.userId, userId));
+    const memberships = await this.db
+      .select({ poolId: schema.poolMembers.poolId, roleName: schema.poolMembers.roleName })
+      .from(schema.poolMembers)
+      .where(eq(schema.poolMembers.userId, userId));
     const poolIds = memberships.map((m) => m.poolId);
 
     if (poolIds.length === 0) {
       return [];
     }
 
-    return this.db.select().from(schema.pools).where(inArray(schema.pools.poolId, poolIds));
+    const pools = await this.db.select().from(schema.pools).where(inArray(schema.pools.poolId, poolIds));
+    const rolesByPool = new Map(memberships.map((m) => [m.poolId, m.roleName ?? 'viewer']));
+    return pools.map((pool) => ({
+      ...pool,
+      accessRole: pool.ownerId === userId ? 'owner' : rolesByPool.get(pool.poolId) ?? 'viewer',
+    }));
   }
 
   async getPoolById(
@@ -442,7 +536,7 @@ export class PoolCoreService {
   }
 
   async updatePool(poolId: string, requestingUserId: string, data: UpdatePoolData) {
-    await this.ensurePoolAccess(poolId, requestingUserId);
+    await this.ensurePoolCapability(poolId, requestingUserId, 'pool.update');
 
     if (data.locationId && typeof data.locationId === 'string') {
       await this.ensureLocationAccessible(data.locationId, requestingUserId);
@@ -457,7 +551,7 @@ export class PoolCoreService {
   }
 
   async deletePool(poolId: string, requestingUserId: string) {
-    await this.ensurePoolAccess(poolId, requestingUserId);
+    await this.ensurePoolCapability(poolId, requestingUserId, 'pool.delete');
     await this.db.delete(schema.pools).where(eq(schema.pools.poolId, poolId));
   }
 }

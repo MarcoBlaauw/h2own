@@ -1,0 +1,14 @@
+[allowlist]
+description = "Global allowlist for test fixtures and placeholders"
+paths = [
+  '''(^|/)docs/''',
+  '''(^|/)web/src/routes/admin/api-tokens/page.test.ts$''',
+  '''(^|/)api/src/services/auth.test.ts$''',
+  '''(^|/)api/src/services/passwords.test.ts$'''
+]
+regexes = [
+  '''tok_super_secret''',
+  '''sup3rsecret''',
+  '''replace-with-''',
+  '''changeme'''
+]

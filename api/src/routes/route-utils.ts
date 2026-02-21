@@ -3,6 +3,8 @@ import { z } from 'zod';
 import {
   PoolForbiddenError,
   PoolNotFoundError,
+  PoolOwnerRequiredError,
+  PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
 } from '../services/pools/index.js';
 
@@ -32,7 +34,11 @@ export function handlePoolAccessError(reply: FastifyReply, error: unknown) {
     return true;
   }
 
-  if (error instanceof PoolForbiddenError) {
+  if (
+    error instanceof PoolForbiddenError ||
+    error instanceof PoolOwnerRequiredError ||
+    error instanceof PoolCreateOwnerForbiddenError
+  ) {
     reply.code(403).send({ error: 'Forbidden' });
     return true;
   }

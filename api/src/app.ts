@@ -18,10 +18,16 @@ import { adminLocationsRoutes } from "./routes/admin-locations";
 import { adminPoolsRoutes } from "./routes/admin-pools";
 import { adminAuditLogRoutes } from "./routes/admin-audit-log";
 import { adminNotificationTemplateRoutes } from "./routes/admin-notification-templates";
+import { adminReadinessRoutes } from "./routes/admin-readiness";
+import { adminIntegrationsRoutes } from "./routes/admin-integrations";
 import { notificationRoutes } from "./routes/notifications";
+import { messagesRoutes } from "./routes/messages";
+import { billingRoutes } from "./routes/billing";
 import { locationsRoutes } from "./routes/locations";
 import { photosRoutes } from "./routes/photos";
+import { meRoutes } from "./routes/me";
 import { createRedisSessionStore } from "./services/session-store.js";
+import { auditWriterService } from "./services/audit-writer.js";
 
 async function buildApp() {
   const app = Fastify({
@@ -59,7 +65,11 @@ async function buildApp() {
 
   // --- Global hardening & cross-origin ---
   await app.register(helmet);
-  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
+  await app.register(cors, {
+    origin: env.CORS_ORIGIN,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
   await app.register(cookie, { secret: env.SESSION_SECRET });
 
   await app.register(fastifyRedis, {
@@ -131,6 +141,16 @@ async function buildApp() {
         );
       } catch (error) {
         app.log.error({ err: error, sid }, "failed to refresh session ttl");
+      }
+    },
+  });
+
+  app.decorate("audit", {
+    log: async (entry) => {
+      try {
+        await auditWriterService.write(entry);
+      } catch (error) {
+        app.log.error({ err: error, action: entry.action }, "failed to write audit log entry");
       }
     },
   });
@@ -242,6 +262,7 @@ async function buildApp() {
 
   // --- Route groups (plain plugins so prefixes & per-scope hooks work) ---
   await app.register(authRoutes, { prefix: "/auth" }); // public login/logout
+  await app.register(meRoutes, { prefix: "/me" });
   await app.register(adminApiTokenRoutes, { prefix: "/admin/api-tokens" });
   await app.register(poolsRoutes, { prefix: "/pools" }); // secure these inside the module with app.auth.verifySession
   await app.register(testsRoutes, { prefix: "/tests" });
@@ -254,7 +275,11 @@ async function buildApp() {
   await app.register(adminNotificationTemplateRoutes, {
     prefix: "/admin/notification-templates",
   });
+  await app.register(adminReadinessRoutes, { prefix: "/admin/readiness" });
+  await app.register(adminIntegrationsRoutes, { prefix: "/admin/integrations" });
   await app.register(notificationRoutes, { prefix: "/notifications" });
+  await app.register(messagesRoutes, { prefix: "/messages" });
+  await app.register(billingRoutes, { prefix: "/billing" });
   await app.register(photosRoutes, { prefix: "/photos" });
 
   // --- Dev convenience route ---

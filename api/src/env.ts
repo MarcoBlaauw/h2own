@@ -55,6 +55,16 @@ const envSchema = z.object({
   CAPTCHA_SECRET: z.string().optional(),
   TOMORROW_API_KEY: z.string().optional(),
   TOMORROW_API_BASE: z.string().url().optional(),
+  WEATHER_CACHE_TTL_MINUTES: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("30"),
+  WEATHER_RATE_LIMIT_COOLDOWN_SECONDS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("300"),
   PHOTO_PUBLIC_BASE_URL: z.string().optional(),
   PHOTO_UPLOAD_BASE_URL: z.string().optional(),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
@@ -63,6 +73,11 @@ const envSchema = z.object({
     .transform((value) => Number(value))
     .pipe(z.number().int().positive())
     .default("3600"),
+  EMAIL_CHANGE_TOKEN_TTL_SECONDS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("86400"),
   SMTP_HOST: emptyToUndefined(z.string().optional()),
   SMTP_PORT: emptyToUndefined(
     z
@@ -115,7 +130,14 @@ if (env.NODE_ENV === "development") {
     `  PASSWORD_RESET_TOKEN_TTL_SECONDS: ${env.PASSWORD_RESET_TOKEN_TTL_SECONDS}`,
   );
   console.log(
+    `  EMAIL_CHANGE_TOKEN_TTL_SECONDS: ${env.EMAIL_CHANGE_TOKEN_TTL_SECONDS}`,
+  );
+  console.log(
     `  TOMORROW_API_BASE: ${env.TOMORROW_API_BASE ?? "https://api.tomorrow.io/v4"}`,
+  );
+  console.log(`  WEATHER_CACHE_TTL_MINUTES: ${env.WEATHER_CACHE_TTL_MINUTES}`);
+  console.log(
+    `  WEATHER_RATE_LIMIT_COOLDOWN_SECONDS: ${env.WEATHER_RATE_LIMIT_COOLDOWN_SECONDS}`,
   );
   console.log(
     `  SMTP_ENABLED: ${Boolean(env.SMTP_HOST && env.SMTP_PORT && env.SMTP_FROM_EMAIL)}`,

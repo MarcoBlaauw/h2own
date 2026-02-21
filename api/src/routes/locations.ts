@@ -1,7 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { locationsService } from '../services/locations.js';
-import { weatherService } from '../services/weather.js';
+import { locationsService, LocationTransferTargetError } from '../services/locations.js';
+import {
+  weatherService,
+  WeatherProviderRateLimitError,
+  WeatherProviderRequestError,
+} from '../services/weather.js';
 
 const locationIdParam = z.object({
   locationId: z.string().uuid(),
@@ -66,8 +70,45 @@ const weatherQuery = z.object({
   refresh: z.coerce.boolean().optional(),
 });
 
+const updateLocationSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    formattedAddress: optionalString.nullable().optional(),
+    googlePlaceId: optionalString.nullable().optional(),
+    googlePlusCode: optionalString.nullable().optional(),
+    latitude: optionalNumber.nullable().optional(),
+    longitude: optionalNumber.nullable().optional(),
+    timezone: optionalString.nullable().optional(),
+    isPrimary: z.coerce.boolean().optional(),
+  })
+  .refine(
+    (data) =>
+      !(
+        (data.latitude === undefined && data.longitude !== undefined) ||
+        (data.longitude === undefined && data.latitude !== undefined)
+      ),
+    {
+      message: 'Latitude and longitude must both be provided together.',
+      path: ['latitude'],
+    }
+  )
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one property must be provided.',
+  });
+
+const deactivateLocationSchema = z
+  .object({
+    transferPoolsTo: z.string().uuid().nullable().optional(),
+  })
+  .optional();
+
 export async function locationsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.auth.verifySession);
+
+  const assertOwnedLocation = async (locationId: string, userId: string) => {
+    const locations = await locationsService.listLocationsForUser(userId);
+    return locations.find((location) => location.locationId === locationId) ?? null;
+  };
 
   app.get('/', async (req, reply) => {
     const locations = await locationsService.listLocationsForUser(req.user!.id);
@@ -95,6 +136,77 @@ export async function locationsRoutes(app: FastifyInstance) {
       }
       throw err;
     }
+  });
+
+  app.patch('/:locationId', async (req, reply) => {
+    try {
+      const { locationId } = locationIdParam.parse(req.params);
+      const payload = updateLocationSchema.parse(req.body ?? {});
+      const owned = await assertOwnedLocation(locationId, req.user!.id);
+      if (!owned) {
+        return reply.code(404).send({ error: 'Location not found' });
+      }
+      const location = await locationsService.updateLocation(locationId, payload);
+      if (!location) {
+        return reply.code(404).send({ error: 'Location not found' });
+      }
+      return reply.send(location);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      throw err;
+    }
+  });
+
+  app.post('/:locationId/deactivate', async (req, reply) => {
+    try {
+      const { locationId } = locationIdParam.parse(req.params);
+      const payload = deactivateLocationSchema.parse(req.body ?? {});
+      const owned = await assertOwnedLocation(locationId, req.user!.id);
+      if (!owned) {
+        return reply.code(404).send({ error: 'Location not found' });
+      }
+
+      if (payload?.transferPoolsTo) {
+        const transferTarget = await assertOwnedLocation(payload.transferPoolsTo, req.user!.id);
+        if (!transferTarget || transferTarget.isActive === false) {
+          return reply.code(400).send({ error: 'Invalid transfer target' });
+        }
+      }
+
+      const location = await locationsService.deactivateLocation(locationId, payload ?? {});
+      if (!location) {
+        return reply.code(404).send({ error: 'Location not found' });
+      }
+      return reply.send(location);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (err instanceof LocationTransferTargetError) {
+        return reply.code(400).send({ error: 'Invalid transfer target', target: err.targetLocationId });
+      }
+      throw err;
+    }
+  });
+
+  app.delete('/:locationId', async (req, reply) => {
+    const { locationId } = locationIdParam.parse(req.params);
+    const owned = await assertOwnedLocation(locationId, req.user!.id);
+    if (!owned) {
+      return reply.code(404).send({ error: 'Location not found' });
+    }
+    const deleted = await locationsService.deleteLocation(locationId);
+    if (!deleted) {
+      return reply.code(404).send({ error: 'Location not found' });
+    }
+    return reply.code(204).send();
+  });
+
+  app.post('/purge-legacy', async (req, reply) => {
+    const result = await locationsService.purgeLegacyLocationsForUser(req.user!.id);
+    return reply.send(result);
   });
 
   app.get('/:locationId/weather', async (req, reply) => {
@@ -130,8 +242,13 @@ export async function locationsRoutes(app: FastifyInstance) {
         if (err.message === 'Weather provider not configured') {
           return reply.code(503).send({ error: err.message });
         }
-        if (err.message.startsWith('Tomorrow.io request failed')) {
-          return reply.code(502).send({ error: err.message });
+        if (err instanceof WeatherProviderRateLimitError) {
+          return reply
+            .code(429)
+            .send({ error: err.message, retryAfterSeconds: err.retryAfterSeconds });
+        }
+        if (err instanceof WeatherProviderRequestError) {
+          return reply.code(502).send({ error: err.message, upstreamStatus: err.statusCode });
         }
       }
       throw err;

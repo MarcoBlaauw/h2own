@@ -34,6 +34,8 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-true}
       COOKIE_SECURE: "false"
       CORS_ORIGIN: http://localhost:${WEB_PORT:-3000}
+      TOMORROW_API_KEY: ${TOMORROW_API_KEY:-}
+      TOMORROW_API_BASE: ${TOMORROW_API_BASE:-https://api.tomorrow.io/v4}
     depends_on:
       postgres:
         condition: service_healthy

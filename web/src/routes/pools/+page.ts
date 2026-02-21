@@ -9,6 +9,7 @@ export type PoolSummary = {
   sanitizerType: string;
   surfaceType: string;
   locationId: string | null;
+  accessRole?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -26,6 +27,10 @@ type LoadOutput = {
     timezone?: string | null;
     isPrimary?: boolean;
     isActive?: boolean;
+    pools?: Array<{
+      poolId: string;
+      name: string;
+    }>;
   }>;
   loadError: string | null;
 };

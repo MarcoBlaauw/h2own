@@ -1,8 +1,12 @@
 // Export all schema definitions
 export * from './users.ts';
+export * from './user_profiles.ts';
+export * from './user_preferences.ts';
 export * from './user_locations.ts';
 export * from './pools.ts';
 export * from './pool_members.ts';
+export * from './pool_equipment.ts';
+export * from './pool_temperature_prefs.ts';
 export * from './test_sessions.ts';
 export * from './product_categories.ts';
 export * from './products.ts';
@@ -20,3 +24,4 @@ export * from './audit_log.ts';
 export * from './devices.ts';
 export * from './device_readings.ts';
 export * from './weather_data.ts';
+export * from './external_integrations.ts';

@@ -4,6 +4,8 @@ import {
   poolCoreService as defaultCoreService,
   PoolNotFoundError,
   PoolForbiddenError,
+  PoolOwnerRequiredError,
+  PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
   type CreatePoolData,
   type UpdatePoolData,
@@ -22,6 +24,10 @@ import {
   poolRecommendationsService as defaultRecommendationsService,
 } from './recommendations.js';
 import { PoolCostsService, poolCostsService as defaultCostsService } from './costs.js';
+import {
+  PoolEquipmentService,
+  poolEquipmentService as defaultEquipmentService,
+} from './equipment.js';
 
 export const poolsService = {
   core: defaultCoreService,
@@ -30,6 +36,7 @@ export const poolsService = {
   tests: defaultTestingService,
   recommendations: defaultRecommendationsService,
   costs: defaultCostsService,
+  equipment: defaultEquipmentService,
 };
 
 export {
@@ -39,8 +46,11 @@ export {
   PoolTestingService,
   PoolRecommendationsService,
   PoolCostsService,
+  PoolEquipmentService,
   PoolNotFoundError,
   PoolForbiddenError,
+  PoolOwnerRequiredError,
+  PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
 };
 
@@ -58,6 +68,16 @@ export type {
 export { type CreateTestData, type CreateDosingData } from './tests.js';
 export type { RecommendationStatus, CreateRecommendationData, UpdateRecommendationData } from './recommendations.js';
 export type { CreateCostData } from './costs.js';
+export type {
+  PoolEquipmentData,
+  PoolEquipmentDetail,
+  PoolTemperaturePreferencesData,
+  PoolTemperaturePreferencesDetail,
+  ThermalEquipmentType,
+  ThermalEnergySource,
+  ThermalStatus,
+  TemperatureUnit,
+} from './equipment.js';
 
 export const poolCoreService = defaultCoreService;
 export const poolAdminService = defaultAdminService;
@@ -65,6 +85,7 @@ export const poolMembershipService = defaultMembershipService;
 export const poolTestingService = defaultTestingService;
 export const poolRecommendationsService = defaultRecommendationsService;
 export const poolCostsService = defaultCostsService;
+export const poolEquipmentService = defaultEquipmentService;
 
 export function createPoolsOrchestrator(db = dbClient) {
   const core = new PoolCoreService(db);
@@ -73,6 +94,7 @@ export function createPoolsOrchestrator(db = dbClient) {
   const tests = new PoolTestingService(db, core);
   const recommendations = new PoolRecommendationsService(db, core);
   const costs = new PoolCostsService(db, core);
+  const equipment = new PoolEquipmentService(db, core);
 
-  return { core, admin, members, tests, recommendations, costs };
+  return { core, admin, members, tests, recommendations, costs, equipment };
 }

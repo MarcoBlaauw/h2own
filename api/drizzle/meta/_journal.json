@@ -15,6 +15,41 @@
       "when": 1760537000000,
       "tag": "0001_location-geodata",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771606830240,
+      "tag": "0002_user-profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771609200000,
+      "tag": "0003_user-preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771612800000,
+      "tag": "0004_pool-equipment-and-temperature-prefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771683000000,
+      "tag": "0005_external-integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771690800000,
+      "tag": "0006_weather-core-layers",
+      "breakpoints": true
     }
   ]
 }

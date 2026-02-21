@@ -131,6 +131,33 @@ export class AuthService {
     return Boolean(updated);
   }
 
+  async updateEmailByUserId(userId: string, email: string) {
+    const [updated] = await db
+      .update(schema.users)
+      .set({ email, emailVerified: true, updatedAt: new Date() })
+      .where(eq(schema.users.userId, userId))
+      .returning({ userId: schema.users.userId });
+
+    return Boolean(updated);
+  }
+
+  async verifyPasswordByUserId(userId: string, password: string) {
+    const [user] = await db
+      .select({
+        passwordHash: schema.users.passwordHash,
+        isActive: schema.users.isActive,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.userId, userId))
+      .limit(1);
+
+    if (!user || !user.isActive) {
+      return false;
+    }
+
+    return verifyPassword(user.passwordHash, password);
+  }
+
   async verifyCaptcha(token: string): Promise<boolean> {
     if (!env.CAPTCHA_PROVIDER || !env.CAPTCHA_SECRET) {
       return false;

@@ -4,8 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web,storybook -c cyan,green,magenta \"pnpm -C api dev\" \"pnpm -C web dev\" \"pnpm -C web storybook\"",
+    "hooks:install": "git config core.hooksPath .githooks",
     "lint": "pnpm --filter h2own-api lint && pnpm --filter h2own-web lint",
     "check": "pnpm --filter h2own-web check",
+    "secrets:scan": "./scripts/scan-secrets.sh",
     "format": "pnpm --filter h2own-api format && pnpm --filter h2own-web format",
     "format:check": "pnpm --filter h2own-api format:check && pnpm --filter h2own-web format:check",
     "test": "pnpm --filter h2own-api test",

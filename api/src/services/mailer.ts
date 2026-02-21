@@ -92,6 +92,22 @@ Your username is: ${loginEmail}
 You can sign in at ${env.APP_BASE_URL}.`,
     });
   }
+
+  async sendEmailChangeVerificationEmail(to: string, verifyUrl: string, ttlSeconds: number) {
+    const hours = Math.ceil(ttlSeconds / 3600);
+    return this.send({
+      to,
+      subject: "Verify your new H2Own email address",
+      text: `We received a request to change the email address on your H2Own account.
+
+Use the link below to confirm your new email address:
+${verifyUrl}
+
+This link expires in ${hours} hour(s).
+
+If you did not request this change, you can ignore this email.`,
+    });
+  }
 }
 
 export const mailerService = new MailerService();

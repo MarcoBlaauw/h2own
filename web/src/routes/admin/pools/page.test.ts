@@ -9,6 +9,10 @@ vi.mock('$lib/api', () => {
     list: vi.fn(),
     update: vi.fn(),
     transfer: vi.fn(),
+    equipment: vi.fn(),
+    updateEquipment: vi.fn(),
+    temperaturePreferences: vi.fn(),
+    updateTemperaturePreferences: vi.fn(),
   };
   return { api: { adminPools } };
 });
@@ -61,6 +65,48 @@ describe('admin pools page', () => {
 
   beforeEach(() => {
     Object.values(adminPoolsApi).forEach((mock) => mock.mockReset());
+    adminPoolsApi.equipment.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          poolId: basePool.id,
+          equipmentId: null,
+          equipmentType: 'none',
+          energySource: 'unknown',
+          status: 'disabled',
+          capacityBtu: null,
+          metadata: null,
+          createdAt: null,
+          updatedAt: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    adminPoolsApi.temperaturePreferences.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          poolId: basePool.id,
+          preferredTemp: null,
+          minTemp: null,
+          maxTemp: null,
+          unit: 'F',
+          createdAt: null,
+          updatedAt: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    adminPoolsApi.updateEquipment.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    adminPoolsApi.updateTemperaturePreferences.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
   });
 
   afterEach(() => {
@@ -128,6 +174,10 @@ describe('admin pools page', () => {
         isActive: false,
       });
     });
+    await waitFor(() => {
+      expect(adminPoolsApi.updateEquipment).toHaveBeenCalled();
+      expect(adminPoolsApi.updateTemperaturePreferences).toHaveBeenCalled();
+    });
 
     await waitFor(() => {
       expect(adminPoolsApi.list).toHaveBeenCalled();
@@ -174,7 +224,7 @@ describe('admin pools page', () => {
       },
     });
 
-    const select = getByLabelText('Transfer to existing member') as HTMLSelectElement;
+    const select = getByLabelText('New owner') as HTMLSelectElement;
     await fireEvent.change(select, { target: { value: 'member-2' } });
 
     await fireEvent.click(getByRole('button', { name: /transfer ownership/i }));
@@ -187,6 +237,6 @@ describe('admin pools page', () => {
       expect(adminPoolsApi.list).toHaveBeenCalled();
     });
 
-    expect(await findByText('member@example.com')).toBeInTheDocument();
+    expect(await findByText(/Owner:\s*member@example\.com/i)).toBeInTheDocument();
   });
 });

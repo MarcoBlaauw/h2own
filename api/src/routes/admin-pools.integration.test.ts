@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminPoolsRoutes } from './admin-pools.js';
-import { poolAdminService, poolCoreService } from '../services/pools/index.js';
+import { poolAdminService, poolCoreService, poolEquipmentService } from '../services/pools/index.js';
 
 vi.mock('../services/pools/index.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -12,6 +12,13 @@ vi.mock('../services/pools/index.js', async (importOriginal) => {
       listAllPools: vi.fn(),
       forceUpdatePool: vi.fn(),
       transferOwnership: vi.fn(),
+    },
+    poolEquipmentService: {
+      ...actual.poolEquipmentService,
+      getEquipmentAsAdmin: vi.fn(),
+      upsertEquipmentAsAdmin: vi.fn(),
+      getTemperaturePreferencesAsAdmin: vi.fn(),
+      upsertTemperaturePreferencesAsAdmin: vi.fn(),
     },
     poolCoreService: {
       ...actual.poolCoreService,
@@ -30,11 +37,23 @@ describe('admin pools routes', () => {
   const mockedCoreService = poolCoreService as unknown as {
     getPoolById: ReturnType<typeof vi.fn>;
   };
+  const mockedEquipmentService = poolEquipmentService as unknown as {
+    getEquipmentAsAdmin: ReturnType<typeof vi.fn>;
+    upsertEquipmentAsAdmin: ReturnType<typeof vi.fn>;
+    getTemperaturePreferencesAsAdmin: ReturnType<typeof vi.fn>;
+    upsertTemperaturePreferencesAsAdmin: ReturnType<typeof vi.fn>;
+  };
 
   const listAllPoolsMock = mockedAdminService.listAllPools as ReturnType<typeof vi.fn>;
   const getPoolByIdMock = mockedCoreService.getPoolById as ReturnType<typeof vi.fn>;
   const forceUpdatePoolMock = mockedAdminService.forceUpdatePool as ReturnType<typeof vi.fn>;
   const transferOwnershipMock = mockedAdminService.transferOwnership as ReturnType<typeof vi.fn>;
+  const getEquipmentAsAdminMock = mockedEquipmentService.getEquipmentAsAdmin as ReturnType<typeof vi.fn>;
+  const upsertEquipmentAsAdminMock = mockedEquipmentService.upsertEquipmentAsAdmin as ReturnType<typeof vi.fn>;
+  const getTemperaturePreferencesAsAdminMock =
+    mockedEquipmentService.getTemperaturePreferencesAsAdmin as ReturnType<typeof vi.fn>;
+  const upsertTemperaturePreferencesAsAdminMock =
+    mockedEquipmentService.upsertTemperaturePreferencesAsAdmin as ReturnType<typeof vi.fn>;
 
   let app: ReturnType<typeof Fastify>;
   let requireRoleMock: ReturnType<typeof vi.fn>;
@@ -57,6 +76,10 @@ describe('admin pools routes', () => {
     getPoolByIdMock.mockReset();
     forceUpdatePoolMock.mockReset();
     transferOwnershipMock.mockReset();
+    getEquipmentAsAdminMock.mockReset();
+    upsertEquipmentAsAdminMock.mockReset();
+    getTemperaturePreferencesAsAdminMock.mockReset();
+    upsertTemperaturePreferencesAsAdminMock.mockReset();
   });
 
   afterEach(async () => {
@@ -310,5 +333,83 @@ describe('admin pools routes', () => {
     expect(response.statusCode).toBe(200);
     expect(transferOwnershipMock).toHaveBeenCalledWith('0b75c93b-7ae5-4a08-9a69-8191355f2175', '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f');
     expect(response.json()).toEqual({ poolId: '0b75c93b-7ae5-4a08-9a69-8191355f2175', ownerId: '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f' });
+  });
+
+  it('gets and updates equipment as admin', async () => {
+    const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const equipment = {
+      poolId,
+      equipmentId: 'd0846866-f4db-4fd4-b5cd-bfdb4fc8f153',
+      equipmentType: 'heater',
+      energySource: 'gas',
+      status: 'enabled',
+      capacityBtu: 150000,
+      metadata: null,
+      createdAt: new Date('2026-02-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-02-20T00:10:00.000Z'),
+    };
+    getEquipmentAsAdminMock.mockResolvedValueOnce(equipment);
+
+    const getResponse = await app.inject({ method: 'GET', url: `/admin/pools/${poolId}/equipment` });
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.json()).toEqual({
+      ...equipment,
+      createdAt: equipment.createdAt.toISOString(),
+      updatedAt: equipment.updatedAt.toISOString(),
+    });
+
+    upsertEquipmentAsAdminMock.mockResolvedValueOnce({ ...equipment, equipmentType: 'combo' });
+    const putResponse = await app.inject({
+      method: 'PUT',
+      url: `/admin/pools/${poolId}/equipment`,
+      payload: { equipmentType: 'combo', energySource: 'heat_pump', status: 'enabled', capacityBtu: 120000 },
+    });
+    expect(putResponse.statusCode).toBe(200);
+    expect(upsertEquipmentAsAdminMock).toHaveBeenCalledWith(poolId, {
+      equipmentType: 'combo',
+      energySource: 'heat_pump',
+      status: 'enabled',
+      capacityBtu: 120000,
+      metadata: null,
+    });
+  });
+
+  it('gets and updates temperature preferences as admin', async () => {
+    const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const prefs = {
+      poolId,
+      preferredTemp: 84,
+      minTemp: 80,
+      maxTemp: 88,
+      unit: 'F',
+      createdAt: new Date('2026-02-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-02-20T00:10:00.000Z'),
+    };
+    getTemperaturePreferencesAsAdminMock.mockResolvedValueOnce(prefs);
+
+    const getResponse = await app.inject({
+      method: 'GET',
+      url: `/admin/pools/${poolId}/temperature-preferences`,
+    });
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.json()).toEqual({
+      ...prefs,
+      createdAt: prefs.createdAt.toISOString(),
+      updatedAt: prefs.updatedAt.toISOString(),
+    });
+
+    upsertTemperaturePreferencesAsAdminMock.mockResolvedValueOnce({ ...prefs, unit: 'C' });
+    const putResponse = await app.inject({
+      method: 'PUT',
+      url: `/admin/pools/${poolId}/temperature-preferences`,
+      payload: { preferredTemp: 29, minTemp: 26, maxTemp: 31, unit: 'C' },
+    });
+    expect(putResponse.statusCode).toBe(200);
+    expect(upsertTemperaturePreferencesAsAdminMock).toHaveBeenCalledWith(poolId, {
+      preferredTemp: 29,
+      minTemp: 26,
+      maxTemp: 31,
+      unit: 'C',
+    });
   });
 });

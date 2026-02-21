@@ -3,10 +3,21 @@
 
   type WeatherDay = {
     recordedAt: string | Date;
+    sunriseTime?: string | Date | null;
+    sunsetTime?: string | Date | null;
+    visibilityMi?: string | number | null;
+    cloudCoverPercent?: string | number | null;
+    cloudBaseKm?: string | number | null;
+    cloudCeilingKm?: string | number | null;
     airTempF?: number | null;
+    temperatureApparentF?: number | null;
     uvIndex?: number | null;
+    uvHealthConcern?: number | null;
+    ezHeatStressIndex?: number | null;
     rainfallIn?: string | number | null;
     windSpeedMph?: number | null;
+    windDirectionDeg?: number | null;
+    windGustMph?: number | null;
     humidityPercent?: number | null;
   };
 
@@ -25,6 +36,13 @@
     return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
+  const formatTime = (value?: string | Date | null) => {
+    if (!value) return '—';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  };
+
   const formatTemp = (value?: number | null) => {
     if (value === null || value === undefined) return '—';
     return `${Math.round(value)}°F`;
@@ -34,6 +52,34 @@
     const numeric = toNumber(value);
     if (numeric === null) return '—';
     return `${numeric.toFixed(2)} in`;
+  };
+
+  const formatMiles = (value?: string | number | null) => {
+    const numeric = toNumber(value);
+    if (numeric === null) return '—';
+    return `${numeric.toFixed(1)} mi`;
+  };
+
+  const formatPercent = (value?: string | number | null) => {
+    const numeric = toNumber(value);
+    if (numeric === null) return '—';
+    return `${Math.round(numeric)}%`;
+  };
+
+  const formatKm = (value?: string | number | null) => {
+    const numeric = toNumber(value);
+    if (numeric === null) return '—';
+    return `${numeric.toFixed(2)} km`;
+  };
+
+  const formatMph = (value?: number | null) => {
+    if (value === null || value === undefined) return '—';
+    return `${Math.round(value)} mph`;
+  };
+
+  const formatDegrees = (value?: number | null) => {
+    if (value === null || value === undefined) return '—';
+    return `${Math.round(value)}°`;
   };
 
   const computeQuality = (day?: WeatherDay) => {
@@ -124,6 +170,88 @@
           {#if sorted.length <= 1}
             <div class="text-sm text-content-secondary">No upcoming forecast yet.</div>
           {/if}
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-3 grid gap-3 lg:grid-cols-2">
+      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
+        <div class="text-xs uppercase tracking-wide text-content-secondary">Solar</div>
+        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div class="text-content-secondary">
+            Sunrise:
+            <span class="font-medium text-content-primary">{formatTime(today.sunriseTime)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Sunset:
+            <span class="font-medium text-content-primary">{formatTime(today.sunsetTime)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
+        <div class="text-xs uppercase tracking-wide text-content-secondary">Sky</div>
+        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div class="text-content-secondary">
+            Visibility:
+            <span class="font-medium text-content-primary">{formatMiles(today.visibilityMi)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Cloud cover:
+            <span class="font-medium text-content-primary">{formatPercent(today.cloudCoverPercent)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Cloud base:
+            <span class="font-medium text-content-primary">{formatKm(today.cloudBaseKm)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Cloud ceiling:
+            <span class="font-medium text-content-primary">{formatKm(today.cloudCeilingKm)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
+        <div class="text-xs uppercase tracking-wide text-content-secondary">UV And Heat</div>
+        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div class="text-content-secondary">
+            UV index:
+            <span class="font-medium text-content-primary">{today.uvIndex ?? '—'}</span>
+          </div>
+          <div class="text-content-secondary">
+            UV concern:
+            <span class="font-medium text-content-primary">{today.uvHealthConcern ?? '—'}</span>
+          </div>
+          <div class="text-content-secondary">
+            Apparent temp:
+            <span class="font-medium text-content-primary">{formatTemp(today.temperatureApparentF)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Heat stress:
+            <span class="font-medium text-content-primary">{today.ezHeatStressIndex ?? '—'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
+        <div class="text-xs uppercase tracking-wide text-content-secondary">Wind And Air</div>
+        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div class="text-content-secondary">
+            Wind speed:
+            <span class="font-medium text-content-primary">{formatMph(today.windSpeedMph)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Wind direction:
+            <span class="font-medium text-content-primary">{formatDegrees(today.windDirectionDeg)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Wind gust:
+            <span class="font-medium text-content-primary">{formatMph(today.windGustMph)}</span>
+          </div>
+          <div class="text-content-secondary">
+            Humidity:
+            <span class="font-medium text-content-primary">{formatPercent(today.humidityPercent)}</span>
+          </div>
         </div>
       </div>
     </div>

@@ -94,35 +94,42 @@ describe('AppHeader', () => {
     }
   });
 
-  it('renders admin navigation with active styling for the current route', () => {
+  it('keeps admin options inside the user menu (no direct top admin links)', () => {
     setPage('/admin/users', { user: { email: 'admin@example.com', role: 'admin' } });
 
-    const { getAllByText } = render(AppHeader);
-
-    const chemicalsLinks = getAllByText('Chemicals');
-    const usersLinks = getAllByText('Users');
-
-    expect(chemicalsLinks[0].className).toContain('text-content-secondary');
-    expect(usersLinks.some((link) => /text-accent-strong|font-semibold/.test(link.className))).toBe(
-      true
-    );
+    const { getByLabelText, getByRole, queryAllByText } = render(AppHeader);
+    expect(queryAllByText('Chemicals')).toHaveLength(0);
+    expect(queryAllByText('Users')).toHaveLength(0);
+    expect(getByLabelText(/open user menu/i)).toBeInTheDocument();
+    expect(getByRole('link', { name: /admin panel/i })).toBeInTheDocument();
   });
 
   it('hides admin links for non-admin users', () => {
     setPage('/', { user: { email: 'member@example.com', role: 'member' } });
 
-    const { queryAllByText } = render(AppHeader);
+    const { queryAllByText, getByLabelText } = render(AppHeader);
 
     expect(queryAllByText('Chemicals')).toHaveLength(0);
     expect(queryAllByText('Users')).toHaveLength(0);
     expect(queryAllByText('Pool Setup').length).toBeGreaterThan(0);
+    expect(getByLabelText(/open user menu/i)).toBeInTheDocument();
   });
 
-  it('logs out via the API and redirects to login', async () => {
+  it('shows only login/register for unauthenticated users', () => {
+    setPage('/', null);
+    const { queryByLabelText, queryByRole, getByRole } = render(AppHeader);
+    expect(getByRole('link', { name: /login/i })).toBeInTheDocument();
+    expect(getByRole('link', { name: /register/i })).toBeInTheDocument();
+    expect(queryByLabelText(/open user menu/i)).not.toBeInTheDocument();
+    expect(queryByRole('button', { name: /activate dark theme/i })).not.toBeInTheDocument();
+  });
+
+  it('logs out via the menu and redirects to login', async () => {
     logoutMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
     setPage('/pools', { user: { email: 'admin@example.com', role: 'admin' } });
 
-    const { getByRole } = render(AppHeader);
+    const { getByRole, getByLabelText } = render(AppHeader);
+    await fireEvent.click(getByLabelText(/open user menu/i));
 
     const button = getByRole('button', { name: /logout/i });
     await fireEvent.click(button);
@@ -130,5 +137,19 @@ describe('AppHeader', () => {
     expect(logoutMock).toHaveBeenCalled();
     expect(invalidateAllMock).toHaveBeenCalled();
     expect(gotoMock).toHaveBeenCalledWith('/auth/login', { invalidateAll: true });
+  });
+
+  it('closes the user menu when clicking outside', async () => {
+    setPage('/pools', { user: { email: 'member@example.com', role: 'member' } });
+
+    const { getByLabelText, container } = render(AppHeader);
+    const summary = getByLabelText(/open user menu/i);
+    await fireEvent.click(summary);
+
+    const details = container.querySelector('details');
+    expect(details?.open).toBe(true);
+
+    await fireEvent.pointerDown(document.body);
+    expect(details?.open).toBe(false);
   });
 });

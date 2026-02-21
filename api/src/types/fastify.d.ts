@@ -28,5 +28,18 @@ declare module "fastify" {
       destroy: (reply: any, sid?: string | null) => Promise<void>;
       touch: (sid?: string | null) => Promise<void>; // optional idle-refresh if you want it
     };
+    audit?: {
+      log: (entry: {
+        action: string;
+        entity?: string | null;
+        entityId?: string | null;
+        userId?: string | null;
+        poolId?: string | null;
+        ipAddress?: string | null;
+        userAgent?: string | null;
+        sessionId?: string | null;
+        data?: unknown;
+      }) => Promise<void>;
+    };
   }
 }

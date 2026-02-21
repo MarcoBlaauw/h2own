@@ -23,6 +23,7 @@
   const roles = [
     { label: 'All roles', value: '' },
     { label: 'Member', value: 'member' },
+    { label: 'Business', value: 'business' },
     { label: 'Admin', value: 'admin' },
   ];
 
@@ -31,6 +32,12 @@
     { label: 'Active', value: 'active' },
     { label: 'Inactive', value: 'inactive' },
   ];
+
+  const roleCapabilityPreview: Record<string, string[]> = {
+    admin: ['Users read/manage', 'Audit log read', 'API tokens manage', 'Admin pools manage', 'Billing manage', 'Messages send'],
+    business: ['Admin pools manage', 'Billing manage', 'Messages send'],
+    member: ['Messages send', 'Billing read'],
+  };
 
   function toBoolean(value: 'all' | 'active' | 'inactive') {
     if (value === 'all') return undefined;
@@ -250,6 +257,9 @@
                       <option value={option.value}>{option.label}</option>
                     {/each}
                   </select>
+                  <p class="mt-1 text-xs text-content-secondary">
+                    {roleCapabilityPreview[user.role ?? 'member']?.join(' · ') ?? 'No admin capabilities'}
+                  </p>
                 </td>
                 <td class="px-4 py-3">
                   <span

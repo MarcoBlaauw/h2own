@@ -15,7 +15,7 @@ export class PoolMembershipService {
   }
 
   async addPoolMember(poolId: string, requestingUserId: string, userId: string, role: string) {
-    await this.core.ensurePoolAccess(poolId, requestingUserId);
+    await this.core.ensurePoolCapability(poolId, requestingUserId, 'pool.members.manage');
     const [member] = await this.db
       .insert(schema.poolMembers)
       .values({
@@ -28,7 +28,7 @@ export class PoolMembershipService {
   }
 
   async updatePoolMember(poolId: string, requestingUserId: string, userId: string, role: string) {
-    await this.core.ensurePoolAccess(poolId, requestingUserId);
+    await this.core.ensurePoolCapability(poolId, requestingUserId, 'pool.members.manage');
     const [member] = await this.db
       .update(schema.poolMembers)
       .set({ roleName: role })
@@ -40,7 +40,7 @@ export class PoolMembershipService {
   }
 
   async removePoolMember(poolId: string, requestingUserId: string, userId: string) {
-    await this.core.ensurePoolAccess(poolId, requestingUserId);
+    await this.core.ensurePoolCapability(poolId, requestingUserId, 'pool.members.manage');
     await this.db
       .delete(schema.poolMembers)
       .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, userId)));

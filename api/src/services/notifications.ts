@@ -1,6 +1,6 @@
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 
 export type NotificationChannel = 'email' | 'sms' | 'push' | 'in_app';
 
@@ -39,6 +39,98 @@ const renderTemplateString = (template: string, data: Record<string, unknown>) =
 
 export class NotificationsService {
   constructor(private readonly db = dbClient) {}
+
+  async listUserNotifications(
+    userId: string,
+    options: { page?: number; pageSize?: number; unreadOnly?: boolean } = {}
+  ) {
+    const page = Math.max(1, options.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20));
+    const unreadOnly = options.unreadOnly ?? false;
+    const offset = (page - 1) * pageSize;
+    const whereClause = unreadOnly
+      ? and(eq(schema.notifications.userId, userId), isNull(schema.notifications.readAt))
+      : eq(schema.notifications.userId, userId);
+
+    const [totalRow, unreadRow, items] = await Promise.all([
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.notifications)
+        .where(whereClause)
+        .then((rows) => rows[0]),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.notifications)
+        .where(and(eq(schema.notifications.userId, userId), isNull(schema.notifications.readAt)))
+        .then((rows) => rows[0]),
+      this.db
+        .select({
+          notificationId: schema.notifications.notificationId,
+          userId: schema.notifications.userId,
+          poolId: schema.notifications.poolId,
+          templateId: schema.notifications.templateId,
+          channel: schema.notifications.channel,
+          title: schema.notifications.title,
+          message: schema.notifications.message,
+          data: schema.notifications.data,
+          status: schema.notifications.status,
+          sentAt: schema.notifications.sentAt,
+          deliveredAt: schema.notifications.deliveredAt,
+          readAt: schema.notifications.readAt,
+          createdAt: schema.notifications.createdAt,
+        })
+        .from(schema.notifications)
+        .where(whereClause)
+        .orderBy(desc(schema.notifications.createdAt))
+        .limit(pageSize)
+        .offset(offset),
+    ]);
+
+    const total = Number(totalRow?.count ?? 0);
+    const unreadCount = Number(unreadRow?.count ?? 0);
+
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      unreadCount,
+    };
+  }
+
+  async getUnreadCount(userId: string) {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.notifications)
+      .where(and(eq(schema.notifications.userId, userId), isNull(schema.notifications.readAt)));
+    return Number(row?.count ?? 0);
+  }
+
+  async markNotificationRead(userId: string, notificationId: string) {
+    const [updated] = await this.db
+      .update(schema.notifications)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(schema.notifications.notificationId, notificationId),
+          eq(schema.notifications.userId, userId),
+          isNull(schema.notifications.readAt)
+        )
+      )
+      .returning({ notificationId: schema.notifications.notificationId, readAt: schema.notifications.readAt });
+
+    return updated ?? null;
+  }
+
+  async markAllRead(userId: string) {
+    const updated = await this.db
+      .update(schema.notifications)
+      .set({ readAt: new Date() })
+      .where(and(eq(schema.notifications.userId, userId), isNull(schema.notifications.readAt)))
+      .returning({ notificationId: schema.notifications.notificationId });
+    return { updatedCount: updated.length };
+  }
 
   async listTemplates() {
     return this.db

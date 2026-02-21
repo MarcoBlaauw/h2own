@@ -8,6 +8,7 @@ import {
 } from './pools.schemas.js';
 import {
   poolCoreService,
+  poolEquipmentService,
   poolMembershipService,
   poolRecommendationsService,
   poolTestingService,
@@ -16,8 +17,10 @@ import {
 import { photosService } from '../services/photos.js';
 import { recommenderService } from '../services/recommender.js';
 import { wrapPoolRoute } from './route-utils.js';
+import { writeAuditLog } from './audit.js';
 
 const createPoolSchema = z.object({
+  ownerId: z.string().uuid().optional(),
   name: z.string(),
   volumeGallons: z.coerce.number(), // accepts "123" or 123
   sanitizerType: z.string(),
@@ -172,6 +175,81 @@ const getDosingQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
+const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
+const energySourceSchema = z.enum(['gas', 'electric', 'heat_pump', 'solar_assisted', 'unknown']);
+const equipmentStatusSchema = z.enum(['enabled', 'disabled']);
+const temperatureUnitSchema = z.enum(['F', 'C']);
+
+const nullableTemperatureValue = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) return null;
+    return value;
+  },
+  z.coerce.number().min(-20).max(120).nullable()
+);
+
+const updateEquipmentSchema = z.object({
+  equipmentType: equipmentTypeSchema,
+  energySource: energySourceSchema.default('unknown'),
+  status: equipmentStatusSchema.default('enabled'),
+  capacityBtu: z.coerce.number().int().positive().nullable().optional().default(null),
+  metadata: z.unknown().optional().default(null),
+});
+
+const updateTemperaturePreferencesSchema = z
+  .object({
+    preferredTemp: nullableTemperatureValue,
+    minTemp: nullableTemperatureValue,
+    maxTemp: nullableTemperatureValue,
+    unit: temperatureUnitSchema.default('F'),
+  })
+  .refine(
+    (data) =>
+      data.minTemp === null || data.maxTemp === null || Number(data.minTemp) <= Number(data.maxTemp),
+    {
+      message: 'minTemp must be less than or equal to maxTemp',
+      path: ['minTemp'],
+    }
+  )
+  .refine(
+    (data) =>
+      data.preferredTemp === null ||
+      data.minTemp === null ||
+      Number(data.preferredTemp) >= Number(data.minTemp),
+    {
+      message: 'preferredTemp must be greater than or equal to minTemp',
+      path: ['preferredTemp'],
+    }
+  )
+  .refine(
+    (data) =>
+      data.preferredTemp === null ||
+      data.maxTemp === null ||
+      Number(data.preferredTemp) <= Number(data.maxTemp),
+    {
+      message: 'preferredTemp must be less than or equal to maxTemp',
+      path: ['preferredTemp'],
+    }
+  );
+
+function serializeEquipment(detail: Awaited<ReturnType<typeof poolEquipmentService.getEquipment>>) {
+  return {
+    ...detail,
+    createdAt: detail.createdAt ? detail.createdAt.toISOString() : null,
+    updatedAt: detail.updatedAt ? detail.updatedAt.toISOString() : null,
+  };
+}
+
+function serializeTemperaturePreferences(
+  detail: Awaited<ReturnType<typeof poolEquipmentService.getTemperaturePreferences>>
+) {
+  return {
+    ...detail,
+    createdAt: detail.createdAt ? detail.createdAt.toISOString() : null,
+    updatedAt: detail.updatedAt ? detail.updatedAt.toISOString() : null,
+  };
+}
+
 export async function poolsRoutes(app: FastifyInstance) {
   // 🔒 All /pools/* endpoints require a valid session
   app.addHook('preHandler', app.auth.verifySession);
@@ -182,7 +260,15 @@ export async function poolsRoutes(app: FastifyInstance) {
     wrapPoolRoute(async (req, reply) => {
       const userId = req.user!.id; // set by verifySession
       const data = createPoolSchema.parse(req.body);
-      const pool = await poolCoreService.createPool(userId, data);
+      const pool = await poolCoreService.createPool(userId, data, req.user?.role);
+      await writeAuditLog(app, req, {
+        action: 'pool.created',
+        entity: 'pool',
+        entityId: pool.poolId,
+        userId,
+        poolId: pool.poolId,
+        data: { ownerId: pool.ownerId ?? data.ownerId ?? userId },
+      });
       return reply.code(201).send(pool);
     })
   );
@@ -217,6 +303,14 @@ export async function poolsRoutes(app: FastifyInstance) {
       const userId = req.user!.id;
       const data = updatePoolSchema.parse(req.body);
       const pool = await poolCoreService.updatePool(poolId, userId, data);
+      await writeAuditLog(app, req, {
+        action: 'pool.updated',
+        entity: 'pool',
+        entityId: poolId,
+        userId,
+        poolId,
+        data,
+      });
       return reply.send(pool);
     })
   );
@@ -228,6 +322,13 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
       await poolCoreService.deletePool(poolId, userId);
+      await writeAuditLog(app, req, {
+        action: 'pool.deleted',
+        entity: 'pool',
+        entityId: poolId,
+        userId,
+        poolId,
+      });
       return reply.code(204).send();
     })
   );
@@ -408,6 +509,71 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { window } = getCostSummaryQuery.parse(req.query);
       const summary = await poolCostsService.getCostsSummary(poolId, userId, window);
       return reply.send(summary);
+    })
+  );
+
+  // GET /pools/:poolId/equipment
+  app.get(
+    '/:poolId/equipment',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const equipment = await poolEquipmentService.getEquipment(poolId, userId);
+      return reply.send(serializeEquipment(equipment));
+    })
+  );
+
+  // PUT /pools/:poolId/equipment
+  app.put(
+    '/:poolId/equipment',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const data = updateEquipmentSchema.parse(req.body ?? {});
+      const equipment = await poolEquipmentService.upsertEquipment(poolId, userId, {
+        ...data,
+        metadata: data.metadata ?? null,
+      });
+      await writeAuditLog(app, req, {
+        action: 'pool.equipment.updated',
+        entity: 'pool_equipment',
+        entityId: equipment.equipmentId ?? poolId,
+        userId,
+        poolId,
+        data,
+      });
+      return reply.send(serializeEquipment(equipment));
+    })
+  );
+
+  // GET /pools/:poolId/temperature-preferences
+  app.get(
+    '/:poolId/temperature-preferences',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const prefs = await poolEquipmentService.getTemperaturePreferences(poolId, userId);
+      return reply.send(serializeTemperaturePreferences(prefs));
+    })
+  );
+
+  // PUT /pools/:poolId/temperature-preferences
+  app.put(
+    '/:poolId/temperature-preferences',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const data = updateTemperaturePreferencesSchema.parse(req.body ?? {});
+      const prefs = await poolEquipmentService.upsertTemperaturePreferences(poolId, userId, data);
+      await writeAuditLog(app, req, {
+        action: 'pool.temperature_preferences.updated',
+        entity: 'pool_temperature_prefs',
+        entityId: poolId,
+        userId,
+        poolId,
+        data,
+      });
+      return reply.send(serializeTemperaturePreferences(prefs));
     })
   );
 

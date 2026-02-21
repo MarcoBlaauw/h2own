@@ -72,6 +72,31 @@ CREATE TABLE IF NOT EXISTS pools (
 CREATE INDEX IF NOT EXISTS idx_pools_owner ON pools(owner_id);
 CREATE INDEX IF NOT EXISTS idx_pools_location ON pools(location_id);
 
+-- Pool thermal equipment
+CREATE TABLE IF NOT EXISTS pool_equipment (
+  equipment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
+  equipment_type VARCHAR(24) NOT NULL DEFAULT 'none', -- none|heater|chiller|combo
+  energy_source VARCHAR(30) NOT NULL DEFAULT 'unknown', -- gas|electric|heat_pump|solar_assisted|unknown
+  status VARCHAR(20) NOT NULL DEFAULT 'enabled', -- enabled|disabled
+  capacity_btu INTEGER,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT pool_equipment_pool_unique UNIQUE (pool_id)
+);
+
+-- Pool-level temperature preferences
+CREATE TABLE IF NOT EXISTS pool_temperature_prefs (
+  pool_id UUID PRIMARY KEY REFERENCES pools(pool_id) ON DELETE CASCADE,
+  preferred_temp_f NUMERIC(5,2),
+  min_temp_f NUMERIC(5,2),
+  max_temp_f NUMERIC(5,2),
+  unit CHAR(1) NOT NULL DEFAULT 'F',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Pool membership (RBAC at pool level)
 CREATE TABLE IF NOT EXISTS pool_members (
   pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
@@ -101,6 +126,35 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked ON api_tokens(revoked);
+
+-- External integrations (provider config + runtime status)
+CREATE TABLE IF NOT EXISTS external_integrations (
+  integration_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider VARCHAR(64) NOT NULL UNIQUE,
+  display_name VARCHAR(120) NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  config JSONB,
+  credentials JSONB,
+  cache_ttl_seconds INTEGER,
+  rate_limit_cooldown_seconds INTEGER,
+  last_response_code INTEGER,
+  last_response_text TEXT,
+  last_response_at TIMESTAMPTZ,
+  last_success_at TIMESTAMPTZ,
+  next_allowed_request_at TIMESTAMPTZ,
+  updated_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO external_integrations (provider, display_name)
+VALUES
+  ('tomorrow_io', 'Tomorrow.io'),
+  ('google_maps', 'Google Maps'),
+  ('captcha', 'CAPTCHA Provider'),
+  ('billing', 'Billing Provider'),
+  ('govee', 'Govee')
+ON CONFLICT (provider) DO NOTHING;
 
 -- Test kits
 CREATE TABLE IF NOT EXISTS test_kits (
@@ -333,10 +387,21 @@ CREATE TABLE IF NOT EXISTS weather_data (
   weather_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   location_id UUID NOT NULL REFERENCES user_locations(location_id) ON DELETE CASCADE,
   recorded_at TIMESTAMPTZ NOT NULL,
+  sunrise_time TIMESTAMPTZ,
+  sunset_time TIMESTAMPTZ,
+  visibility_mi DECIMAL(5,2),
+  cloud_cover_percent DECIMAL(5,2),
+  cloud_base_km DECIMAL(6,2),
+  cloud_ceiling_km DECIMAL(6,2),
   air_temp_f INTEGER,
+  temperature_apparent_f INTEGER,
   uv_index INTEGER,
+  uv_health_concern INTEGER,
+  ez_heat_stress_index INTEGER,
   rainfall_in DECIMAL(4,2),
   wind_speed_mph INTEGER,
+  wind_direction_deg INTEGER,
+  wind_gust_mph INTEGER,
   humidity_percent INTEGER,
   pressure_inhg DECIMAL(5,2),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -2,10 +2,14 @@ import { FastifyInstance } from 'fastify';
 import type {} from '../types/fastify.d.ts';
 import { z } from 'zod';
 import { usersService, UsersForbiddenError } from '../services/users.js';
+import { SYSTEM_ROLES } from '../services/authorization.js';
+import { writeAuditLog } from './audit.js';
+
+const systemRoleSchema = z.enum(SYSTEM_ROLES);
 
 const listUsersQuery = z.object({
   search: z.string().optional(),
-  role: z.string().optional(),
+  role: systemRoleSchema.optional(),
   isActive: z
     .enum(['true', 'false'])
     .optional()
@@ -17,7 +21,7 @@ const listUsersQuery = z.object({
 
 const updateUserBody = z
   .object({
-    role: z.string().min(1).optional(),
+    role: systemRoleSchema.optional(),
     isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -72,6 +76,13 @@ export async function adminUsersRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'NotFound' });
       }
 
+      await writeAuditLog(app, req, {
+        action: 'admin.user.updated',
+        entity: 'user',
+        entityId: userId,
+        data: body,
+      });
+
       return reply.send(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -97,6 +108,12 @@ export async function adminUsersRoutes(app: FastifyInstance) {
       if (!result) {
         return reply.code(404).send({ error: 'NotFound' });
       }
+
+      await writeAuditLog(app, req, {
+        action: 'admin.user.password_reset',
+        entity: 'user',
+        entityId: userId,
+      });
 
       return reply.send(result);
     } catch (error) {

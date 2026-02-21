@@ -58,6 +58,15 @@ type ApiClient = {
     forgotPassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     resetPassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     forgotUsername: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    verifyEmailChange: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+  };
+  me: {
+    profile: (customFetch?: FetchLike) => Promise<Response>;
+    updateProfile: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    preferences: (customFetch?: FetchLike) => Promise<Response>;
+    updatePreferences: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    updatePassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    requestEmailChange: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   apiTokens: {
     list: (customFetch?: FetchLike) => Promise<Response>;
@@ -87,6 +96,10 @@ type ApiClient = {
   userLocations: {
     list: (customFetch?: FetchLike) => Promise<Response>;
     create: (body: Record<string, unknown>) => Promise<Response>;
+    update: (locationId: string, body: Record<string, unknown>) => Promise<Response>;
+    deactivate: (locationId: string, body?: Record<string, unknown>) => Promise<Response>;
+    delete: (locationId: string) => Promise<Response>;
+    purgeLegacy: () => Promise<Response>;
   };
   pools: {
     list: (customFetch?: FetchLike, owner?: boolean) => Promise<Response>;
@@ -94,6 +107,18 @@ type ApiClient = {
     show: (id: string, customFetch?: FetchLike) => Promise<Response>;
     patch: (id: string, body: Record<string, unknown>) => Promise<Response>;
     del: (id: string) => Promise<Response>;
+    equipment: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    updateEquipment: (
+      poolId: string,
+      body: Record<string, unknown>,
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    temperaturePreferences: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    updateTemperaturePreferences: (
+      poolId: string,
+      body: Record<string, unknown>,
+      customFetch?: FetchLike
+    ) => Promise<Response>;
   };
   tests: {
     create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -159,6 +184,26 @@ type ApiClient = {
     show: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
     update: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
     transfer: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+    equipment: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    updateEquipment: (
+      poolId: string,
+      body: Record<string, unknown>,
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    temperaturePreferences: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    updateTemperaturePreferences: (
+      poolId: string,
+      body: Record<string, unknown>,
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+  };
+  adminReadiness: {
+    get: (customFetch?: FetchLike) => Promise<Response>;
+  };
+  adminIntegrations: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    get: (provider: string, customFetch?: FetchLike) => Promise<Response>;
+    update: (provider: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   auditLog: {
     list: (
@@ -172,7 +217,22 @@ type ApiClient = {
     update: (templateId: string, body: Record<string, unknown>) => Promise<Response>;
   };
   notifications: {
+    list: (
+      customFetch?: FetchLike,
+      params?: { unreadOnly?: boolean; page?: number; pageSize?: number }
+    ) => Promise<Response>;
+    summary: (customFetch?: FetchLike) => Promise<Response>;
+    read: (notificationId: string, customFetch?: FetchLike) => Promise<Response>;
+    readAll: (customFetch?: FetchLike) => Promise<Response>;
     preview: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+  };
+  messages: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    send: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+  };
+  billing: {
+    summary: (customFetch?: FetchLike) => Promise<Response>;
+    createPortalSession: (customFetch?: FetchLike) => Promise<Response>;
   };
   weather: {
     list: (
@@ -205,6 +265,20 @@ export const api: ApiClient = {
       apiFetch('/auth/reset-password', jsonRequest(body, { method: 'POST' }), customFetch),
     forgotUsername: (body, customFetch) =>
       apiFetch('/auth/forgot-username', jsonRequest(body, { method: 'POST' }), customFetch),
+    verifyEmailChange: (body, customFetch) =>
+      apiFetch('/auth/verify-email-change', jsonRequest(body, { method: 'POST' }), customFetch),
+  },
+  me: {
+    profile: (customFetch) => apiFetch('/me/profile', {}, customFetch),
+    updateProfile: (body, customFetch) =>
+      apiFetch('/me/profile', jsonRequest(body, { method: 'PATCH' }), customFetch),
+    preferences: (customFetch) => apiFetch('/me/preferences', {}, customFetch),
+    updatePreferences: (body, customFetch) =>
+      apiFetch('/me/preferences', jsonRequest(body, { method: 'PATCH' }), customFetch),
+    updatePassword: (body, customFetch) =>
+      apiFetch('/me/security/password', jsonRequest(body, { method: 'POST' }), customFetch),
+    requestEmailChange: (body, customFetch) =>
+      apiFetch('/me/email/change-request', jsonRequest(body, { method: 'POST' }), customFetch),
   },
   apiTokens: {
     list: (customFetch) => apiFetch('/admin/api-tokens', {}, customFetch),
@@ -247,6 +321,12 @@ export const api: ApiClient = {
   userLocations: {
     list: (customFetch) => apiFetch('/locations', {}, customFetch),
     create: (body) => apiFetch('/locations', jsonRequest(body, { method: 'POST' })),
+    update: (locationId, body) =>
+      apiFetch(`/locations/${locationId}`, jsonRequest(body, { method: 'PATCH' })),
+    deactivate: (locationId, body) =>
+      apiFetch(`/locations/${locationId}/deactivate`, jsonRequest(body ?? {}, { method: 'POST' })),
+    delete: (locationId) => apiFetch(`/locations/${locationId}`, { method: 'DELETE' }),
+    purgeLegacy: () => apiFetch('/locations/purge-legacy', { method: 'POST' }),
   },
   pools: {
     list: (customFetch, owner = false) =>
@@ -255,6 +335,17 @@ export const api: ApiClient = {
     show: (id, customFetch) => apiFetch(`/pools/${id}`, {}, customFetch),
     patch: (id, body) => apiFetch(`/pools/${id}`, jsonRequest(body, { method: 'PATCH' })),
     del: (id) => apiFetch(`/pools/${id}`, { method: 'DELETE' }),
+    equipment: (poolId, customFetch) => apiFetch(`/pools/${poolId}/equipment`, {}, customFetch),
+    updateEquipment: (poolId, body, customFetch) =>
+      apiFetch(`/pools/${poolId}/equipment`, jsonRequest(body, { method: 'PUT' }), customFetch),
+    temperaturePreferences: (poolId, customFetch) =>
+      apiFetch(`/pools/${poolId}/temperature-preferences`, {}, customFetch),
+    updateTemperaturePreferences: (poolId, body, customFetch) =>
+      apiFetch(
+        `/pools/${poolId}/temperature-preferences`,
+        jsonRequest(body, { method: 'PUT' }),
+        customFetch
+      ),
   },
   tests: {
     create: (poolId, body) =>
@@ -344,6 +435,27 @@ export const api: ApiClient = {
     update: (poolId, body) => apiFetch(`/admin/pools/${poolId}`, jsonRequest(body, { method: 'PATCH' })),
     transfer: (poolId, body) =>
       apiFetch(`/admin/pools/${poolId}/transfer`, jsonRequest(body, { method: 'POST' })),
+    equipment: (poolId, customFetch) =>
+      apiFetch(`/admin/pools/${poolId}/equipment`, {}, customFetch),
+    updateEquipment: (poolId, body, customFetch) =>
+      apiFetch(`/admin/pools/${poolId}/equipment`, jsonRequest(body, { method: 'PUT' }), customFetch),
+    temperaturePreferences: (poolId, customFetch) =>
+      apiFetch(`/admin/pools/${poolId}/temperature-preferences`, {}, customFetch),
+    updateTemperaturePreferences: (poolId, body, customFetch) =>
+      apiFetch(
+        `/admin/pools/${poolId}/temperature-preferences`,
+        jsonRequest(body, { method: 'PUT' }),
+        customFetch
+      ),
+  },
+  adminReadiness: {
+    get: (customFetch) => apiFetch('/admin/readiness', {}, customFetch),
+  },
+  adminIntegrations: {
+    list: (customFetch) => apiFetch('/admin/integrations', {}, customFetch),
+    get: (provider, customFetch) => apiFetch(`/admin/integrations/${provider}`, {}, customFetch),
+    update: (provider, body, customFetch) =>
+      apiFetch(`/admin/integrations/${provider}`, jsonRequest(body, { method: 'PATCH' }), customFetch),
   },
   auditLog: {
     list: (customFetch, params = {}) => {
@@ -369,8 +481,30 @@ export const api: ApiClient = {
       ),
   },
   notifications: {
+    list: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.unreadOnly === 'boolean') {
+        search.set('unreadOnly', params.unreadOnly ? 'true' : 'false');
+      }
+      if (typeof params.page === 'number') search.set('page', params.page.toString());
+      if (typeof params.pageSize === 'number') search.set('pageSize', params.pageSize.toString());
+      const query = search.toString();
+      return apiFetch(`/notifications${query ? `?${query}` : ''}`, {}, customFetch);
+    },
+    summary: (customFetch) => apiFetch('/notifications/summary', {}, customFetch),
+    read: (notificationId, customFetch) =>
+      apiFetch(`/notifications/${notificationId}/read`, { method: 'POST' }, customFetch),
+    readAll: (customFetch) => apiFetch('/notifications/read-all', { method: 'POST' }, customFetch),
     preview: (body, customFetch) =>
       apiFetch('/notifications/preview', jsonRequest(body, { method: 'POST' }), customFetch),
+  },
+  messages: {
+    list: (customFetch) => apiFetch('/messages', {}, customFetch),
+    send: (body, customFetch) => apiFetch('/messages/send', jsonRequest(body, { method: 'POST' }), customFetch),
+  },
+  billing: {
+    summary: (customFetch) => apiFetch('/billing/summary', {}, customFetch),
+    createPortalSession: (customFetch) => apiFetch('/billing/portal-session', { method: 'POST' }, customFetch),
   },
   weather: {
     list: (locationId, customFetch, params = {}) => {

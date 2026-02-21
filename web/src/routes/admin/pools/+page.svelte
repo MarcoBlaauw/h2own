@@ -6,10 +6,10 @@
 
   export let data: PageData;
 
-  let pools: AdminPool[] = data.pools ?? [];
-  let loadError: string | null = data.loadError;
-
-  let selectedPoolId: string | null = pools[0]?.id ?? null;
+  type EquipmentType = 'none' | 'heater' | 'chiller' | 'combo';
+  type EnergySource = 'gas' | 'electric' | 'heat_pump' | 'solar_assisted' | 'unknown';
+  type EquipmentStatus = 'enabled' | 'disabled';
+  type TemperatureUnit = 'F' | 'C';
 
   type UpdateFormState = {
     poolId: string | null;
@@ -18,6 +18,17 @@
     sanitizerType: string;
     surfaceType: string;
     isActive: boolean;
+  };
+
+  type ThermalFormState = {
+    equipmentType: EquipmentType;
+    energySource: EnergySource;
+    status: EquipmentStatus;
+    capacityBtu: string;
+    preferredTemp: string;
+    minTemp: string;
+    maxTemp: string;
+    unit: TemperatureUnit;
   };
 
   type TransferFormState = {
@@ -33,7 +44,38 @@
     isActive: true,
   };
 
+  const defaultThermalForm: ThermalFormState = {
+    equipmentType: 'none',
+    energySource: 'unknown',
+    status: 'disabled',
+    capacityBtu: '',
+    preferredTemp: '',
+    minTemp: '',
+    maxTemp: '',
+    unit: 'F',
+  };
+
+  const equipmentTypeOptions: Array<{ value: EquipmentType; label: string }> = [
+    { value: 'none', label: 'None' },
+    { value: 'heater', label: 'Heater only' },
+    { value: 'chiller', label: 'Chiller only' },
+    { value: 'combo', label: 'Heater + chiller' },
+  ];
+
+  const energySourceOptions: Array<{ value: EnergySource; label: string }> = [
+    { value: 'unknown', label: 'Unknown' },
+    { value: 'gas', label: 'Gas' },
+    { value: 'electric', label: 'Electric' },
+    { value: 'heat_pump', label: 'Heat pump' },
+    { value: 'solar_assisted', label: 'Solar-assisted' },
+  ];
+
+  let pools: AdminPool[] = data.pools ?? [];
+  let loadError: string | null = data.loadError;
+  let selectedPoolId: string | null = pools[0]?.id ?? null;
+
   let updateForm: UpdateFormState = { ...defaultUpdateForm };
+  let thermalForm: ThermalFormState = { ...defaultThermalForm };
   let transferForm: TransferFormState = { newOwnerId: '' };
 
   let updateErrors: string[] = [];
@@ -44,6 +86,7 @@
   let updating = false;
   let transferring = false;
   let refreshing = false;
+  let loadingThermal = false;
 
   $: selectedPool = selectedPoolId
     ? pools.find((pool) => pool.id === selectedPoolId) ?? null
@@ -52,10 +95,12 @@
   $: if (selectedPool && updateForm.poolId !== selectedPool.id) {
     updateForm = formFromPool(selectedPool);
     transferForm = defaultTransferForm(selectedPool);
+    thermalForm = { ...defaultThermalForm };
     updateErrors = [];
     transferErrors = [];
     updateMessage = null;
     transferMessage = null;
+    void loadThermalSettings(selectedPool.id);
   }
 
   function formFromPool(pool: AdminPool): UpdateFormState {
@@ -79,19 +124,101 @@
   function formatDate(iso: string | null) {
     if (!iso) return 'Never';
     const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) {
-      return 'Unknown';
-    }
+    if (Number.isNaN(date.getTime())) return 'Unknown';
     return date.toLocaleString();
+  }
+
+  const parseOptionalNumber = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const hydrateThermalForm = (equipmentInput: unknown, prefsInput: unknown): ThermalFormState => {
+    const equipment = (equipmentInput ?? {}) as Record<string, unknown>;
+    const prefs = (prefsInput ?? {}) as Record<string, unknown>;
+
+    return {
+      equipmentType: (equipment.equipmentType as EquipmentType) ?? 'none',
+      energySource: (equipment.energySource as EnergySource) ?? 'unknown',
+      status: (equipment.status as EquipmentStatus) ?? 'disabled',
+      capacityBtu:
+        equipment.capacityBtu === null || equipment.capacityBtu === undefined
+          ? ''
+          : String(equipment.capacityBtu),
+      preferredTemp:
+        prefs.preferredTemp === null || prefs.preferredTemp === undefined
+          ? ''
+          : String(prefs.preferredTemp),
+      minTemp: prefs.minTemp === null || prefs.minTemp === undefined ? '' : String(prefs.minTemp),
+      maxTemp: prefs.maxTemp === null || prefs.maxTemp === undefined ? '' : String(prefs.maxTemp),
+      unit: prefs.unit === 'C' ? 'C' : 'F',
+    };
+  };
+
+  const validateThermalForm = (errors: string[]) => {
+    const capacity = parseOptionalNumber(thermalForm.capacityBtu);
+    if (thermalForm.capacityBtu.trim() && (capacity === null || capacity <= 0)) {
+      errors.push('Equipment capacity must be a positive number.');
+    }
+
+    const preferred = parseOptionalNumber(thermalForm.preferredTemp);
+    const min = parseOptionalNumber(thermalForm.minTemp);
+    const max = parseOptionalNumber(thermalForm.maxTemp);
+
+    if (thermalForm.preferredTemp.trim() && preferred === null) errors.push('Preferred temperature must be numeric.');
+    if (thermalForm.minTemp.trim() && min === null) errors.push('Minimum temperature must be numeric.');
+    if (thermalForm.maxTemp.trim() && max === null) errors.push('Maximum temperature must be numeric.');
+    if (min !== null && max !== null && min > max) errors.push('Minimum temperature must be less than or equal to maximum temperature.');
+    if (preferred !== null && min !== null && preferred < min) errors.push('Preferred temperature must be greater than or equal to minimum temperature.');
+    if (preferred !== null && max !== null && preferred > max) errors.push('Preferred temperature must be less than or equal to maximum temperature.');
+  };
+
+  const equipmentPayload = () => ({
+    equipmentType: thermalForm.equipmentType,
+    energySource: thermalForm.energySource,
+    status: thermalForm.equipmentType === 'none' ? 'disabled' : thermalForm.status,
+    capacityBtu: parseOptionalNumber(thermalForm.capacityBtu),
+    metadata: null,
+  });
+
+  const tempPrefsPayload = () => ({
+    preferredTemp: parseOptionalNumber(thermalForm.preferredTemp),
+    minTemp: parseOptionalNumber(thermalForm.minTemp),
+    maxTemp: parseOptionalNumber(thermalForm.maxTemp),
+    unit: thermalForm.unit,
+  });
+
+  async function loadThermalSettings(poolId: string) {
+    loadingThermal = true;
+    try {
+      const [equipmentRes, prefsRes] = await Promise.all([
+        api.adminPools.equipment(poolId),
+        api.adminPools.temperaturePreferences(poolId),
+      ]);
+
+      if (!equipmentRes.ok || !prefsRes.ok) return;
+
+      const [equipment, prefs] = await Promise.all([
+        equipmentRes.json().catch(() => null),
+        prefsRes.json().catch(() => null),
+      ]);
+
+      if (selectedPoolId === poolId) {
+        thermalForm = hydrateThermalForm(equipment, prefs);
+      }
+    } finally {
+      loadingThermal = false;
+    }
   }
 
   async function refreshPools(preferredId?: string | null) {
     refreshing = true;
     try {
       const response = await api.adminPools.list();
-      if (!response.ok) {
-        throw new Error(`Refresh failed (${response.status})`);
-      }
+      if (!response.ok) throw new Error(`Refresh failed (${response.status})`);
+
       const refreshed = (await response.json()) as AdminPool[];
       pools = refreshed;
       if (preferredId && refreshed.some((pool) => pool.id === preferredId)) {
@@ -111,68 +238,62 @@
     updateErrors = [];
     updateMessage = null;
 
-    if (!selectedPool) {
-      return;
-    }
+    if (!selectedPool) return;
 
     const trimmedName = updateForm.name.trim();
-    if (!trimmedName) {
-      updateErrors.push('Name is required.');
-    }
+    if (!trimmedName) updateErrors.push('Name is required.');
 
-    const rawVolume = updateForm.volumeGallons;
-    const volumeInput = typeof rawVolume === 'number' ? String(rawVolume) : rawVolume ?? '';
+    const volumeInput =
+      typeof updateForm.volumeGallons === 'number'
+        ? String(updateForm.volumeGallons)
+        : (updateForm.volumeGallons ?? '');
     const volumeValue = Number(volumeInput.trim());
     if (Number.isNaN(volumeValue) || volumeValue <= 0) {
       updateErrors.push('Volume must be a positive number.');
     }
 
-    if (updateErrors.length > 0) {
-      return;
-    }
+    validateThermalForm(updateErrors);
+
+    if (updateErrors.length > 0) return;
 
     const payload: Record<string, unknown> = {};
-
-    if (trimmedName !== selectedPool.name) {
-      payload.name = trimmedName;
-    }
-
-    if (volumeValue !== selectedPool.volumeGallons) {
-      payload.volumeGallons = volumeValue;
-    }
+    if (trimmedName !== selectedPool.name) payload.name = trimmedName;
+    if (volumeValue !== selectedPool.volumeGallons) payload.volumeGallons = volumeValue;
 
     const sanitizer = updateForm.sanitizerType.trim();
-    if (sanitizer && sanitizer !== (selectedPool.sanitizerType ?? '')) {
-      payload.sanitizerType = sanitizer;
-    }
+    if (sanitizer !== (selectedPool.sanitizerType ?? '')) payload.sanitizerType = sanitizer;
 
     const surface = updateForm.surfaceType.trim();
-    if (surface && surface !== (selectedPool.surfaceType ?? '')) {
-      payload.surfaceType = surface;
-    }
+    if (surface !== (selectedPool.surfaceType ?? '')) payload.surfaceType = surface;
 
-    if (updateForm.isActive !== selectedPool.isActive) {
-      payload.isActive = updateForm.isActive;
-    }
-
-    if (Object.keys(payload).length === 0) {
-      updateMessage = { type: 'error', text: 'No changes detected.' };
-      return;
-    }
+    if (updateForm.isActive !== selectedPool.isActive) payload.isActive = updateForm.isActive;
 
     updating = true;
     try {
-      const response = await api.adminPools.update(selectedPool.id, payload);
-      if (!response.ok) {
+      if (Object.keys(payload).length > 0) {
+        const poolRes = await api.adminPools.update(selectedPool.id, payload);
+        if (!poolRes.ok) {
+          updateMessage = { type: 'error', text: `Pool metadata update failed (${poolRes.status}).` };
+          return;
+        }
+      }
+
+      const [equipmentRes, prefsRes] = await Promise.all([
+        api.adminPools.updateEquipment(selectedPool.id, equipmentPayload()),
+        api.adminPools.updateTemperaturePreferences(selectedPool.id, tempPrefsPayload()),
+      ]);
+
+      if (!equipmentRes.ok || !prefsRes.ok) {
         updateMessage = {
           type: 'error',
-          text: `Update failed (${response.status}).`,
+          text: `Thermal settings update failed (${equipmentRes.status}/${prefsRes.status}).`,
         };
         return;
       }
 
       updateMessage = { type: 'success', text: 'Pool updated successfully.' };
       await refreshPools(selectedPool.id);
+      await loadThermalSettings(selectedPool.id);
     } catch (error) {
       console.error('Failed to update pool', error);
       updateMessage = {
@@ -189,29 +310,19 @@
     transferErrors = [];
     transferMessage = null;
 
-    if (!selectedPool) {
-      return;
-    }
+    if (!selectedPool) return;
 
     const newOwnerId = transferForm.newOwnerId.trim();
-    if (!newOwnerId) {
-      transferErrors.push('A new owner must be selected.');
-    } else if (newOwnerId === selectedPool.ownerId) {
-      transferErrors.push('The selected user already owns this pool.');
-    }
+    if (!newOwnerId) transferErrors.push('A new owner must be selected.');
+    else if (newOwnerId === selectedPool.ownerId) transferErrors.push('The selected user already owns this pool.');
 
-    if (transferErrors.length > 0) {
-      return;
-    }
+    if (transferErrors.length > 0) return;
 
     transferring = true;
     try {
       const response = await api.adminPools.transfer(selectedPool.id, { newOwnerId });
       if (!response.ok) {
-        transferMessage = {
-          type: 'error',
-          text: `Transfer failed (${response.status}).`,
-        };
+        transferMessage = { type: 'error', text: `Transfer failed (${response.status}).` };
         return;
       }
 
@@ -283,50 +394,77 @@
         </header>
 
         <div class="mt-4 grid gap-6 lg:grid-cols-2">
-          <form class="space-y-4" on:submit|preventDefault={handleUpdate} aria-label="Update pool metadata">
-            <h3 class="text-lg font-semibold text-content-primary">Metadata</h3>
-            <div class="grid gap-3">
-              <label class="text-sm font-medium text-content-secondary" for="pool-name">Name</label>
-              <input
-                id="pool-name"
-                class="input"
-                type="text"
-                bind:value={updateForm.name}
-                required
-              />
+          <form class="space-y-4" on:submit|preventDefault={handleUpdate} aria-label="Update pool">
+            <h3 class="text-lg font-semibold text-content-primary">Pool Configuration</h3>
 
-              <label class="text-sm font-medium text-content-secondary" for="pool-volume">Volume (gallons)</label>
-              <input
-                id="pool-volume"
-                class="input"
-                type="number"
-                min="1"
-                bind:value={updateForm.volumeGallons}
-                required
-              />
+            <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-content-secondary">Pool Characteristics</p>
+              <div class="mt-3 grid gap-3">
+                <label class="text-sm font-medium text-content-secondary" for="pool-name">Name</label>
+                <input id="pool-name" class="input" type="text" bind:value={updateForm.name} required />
 
-              <label class="text-sm font-medium text-content-secondary" for="pool-sanitizer">Sanitizer</label>
-              <input
-                id="pool-sanitizer"
-                class="input"
-                type="text"
-                bind:value={updateForm.sanitizerType}
-                placeholder="e.g. Chlorine"
-              />
+                <label class="text-sm font-medium text-content-secondary" for="pool-volume">Volume (gallons)</label>
+                <input id="pool-volume" class="input" type="number" min="1" bind:value={updateForm.volumeGallons} required />
 
-              <label class="text-sm font-medium text-content-secondary" for="pool-surface">Surface</label>
-              <input
-                id="pool-surface"
-                class="input"
-                type="text"
-                bind:value={updateForm.surfaceType}
-                placeholder="e.g. Plaster"
-              />
+                <label class="text-sm font-medium text-content-secondary" for="pool-sanitizer">Sanitizer</label>
+                <input id="pool-sanitizer" class="input" type="text" bind:value={updateForm.sanitizerType} placeholder="e.g. Chlorine" />
 
-              <label class="flex items-center gap-2 text-sm font-medium text-content-secondary">
-                <input type="checkbox" bind:checked={updateForm.isActive} />
-                Pool is active
-              </label>
+                <label class="text-sm font-medium text-content-secondary" for="pool-surface">Surface</label>
+                <input id="pool-surface" class="input" type="text" bind:value={updateForm.surfaceType} placeholder="e.g. Plaster" />
+
+                <label class="flex items-center gap-2 text-sm font-medium text-content-secondary">
+                  <input type="checkbox" bind:checked={updateForm.isActive} />
+                  Pool is active
+                </label>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-content-secondary">Thermal System</p>
+              {#if loadingThermal}
+                <p class="mt-2 text-xs text-content-secondary/80">Loading thermal settings...</p>
+              {/if}
+              <div class="mt-3 grid gap-3">
+                <label class="text-sm font-medium text-content-secondary" for="pool-thermal-type">Thermal equipment</label>
+                <select id="pool-thermal-type" class="input" bind:value={thermalForm.equipmentType}>
+                  {#each equipmentTypeOptions as option}
+                    <option value={option.value}>{option.label}</option>
+                  {/each}
+                </select>
+
+                {#if thermalForm.equipmentType !== 'none'}
+                  <label class="text-sm font-medium text-content-secondary" for="pool-energy-source">Energy source</label>
+                  <select id="pool-energy-source" class="input" bind:value={thermalForm.energySource}>
+                    {#each energySourceOptions as option}
+                      <option value={option.value}>{option.label}</option>
+                    {/each}
+                  </select>
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-equipment-status">Equipment status</label>
+                  <select id="pool-equipment-status" class="input" bind:value={thermalForm.status}>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-capacity">Capacity (BTU/hr)</label>
+                  <input id="pool-capacity" class="input" type="number" min="1" bind:value={thermalForm.capacityBtu} />
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-temp-unit">Temperature unit</label>
+                  <select id="pool-temp-unit" class="input" bind:value={thermalForm.unit}>
+                    <option value="F">Fahrenheit (F)</option>
+                    <option value="C">Celsius (C)</option>
+                  </select>
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-temp-preferred">Preferred swim temperature</label>
+                  <input id="pool-temp-preferred" class="input" type="number" step="0.1" bind:value={thermalForm.preferredTemp} />
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-temp-min">Min automation temperature</label>
+                  <input id="pool-temp-min" class="input" type="number" step="0.1" bind:value={thermalForm.minTemp} />
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-temp-max">Max automation temperature</label>
+                  <input id="pool-temp-max" class="input" type="number" step="0.1" bind:value={thermalForm.maxTemp} />
+                {/if}
+              </div>
             </div>
 
             {#if updateErrors.length > 0}
@@ -358,31 +496,18 @@
             <h3 class="text-lg font-semibold text-content-primary">Ownership</h3>
             <div class="grid gap-3">
               <label class="text-sm font-medium text-content-secondary" for="pool-transfer-select">
-                Transfer to existing member
+                New owner
               </label>
-              <select
-                id="pool-transfer-select"
-                class="input"
-                bind:value={transferForm.newOwnerId}
-              >
-                <option value="">-- Select member --</option>
-                {#each selectedPool.members.filter((member) => member.userId !== selectedPool.ownerId) as member}
-                  <option value={member.userId}>
-                    {member.name ?? member.email ?? member.userId}
-                  </option>
+              <select id="pool-transfer-select" class="input" bind:value={transferForm.newOwnerId}>
+                <option value="">Select a member</option>
+                {#each selectedPool.members as member}
+                  {#if member.userId !== selectedPool.ownerId}
+                    <option value={member.userId}>
+                      {member.email ?? member.userId} ({member.roleName})
+                    </option>
+                  {/if}
                 {/each}
               </select>
-
-              <label class="text-sm font-medium text-content-secondary" for="pool-transfer-input">
-                Or specify a user ID
-              </label>
-              <input
-                id="pool-transfer-input"
-                class="input"
-                type="text"
-                bind:value={transferForm.newOwnerId}
-                placeholder="User ID"
-              />
             </div>
 
             {#if transferErrors.length > 0}
@@ -408,51 +533,21 @@
             <button class="btn btn-secondary" type="submit" disabled={transferring}>
               {transferring ? 'Transferring…' : 'Transfer Ownership'}
             </button>
+
+            <button
+              type="button"
+              class="btn btn-tonal"
+              disabled={refreshing}
+              on:click={() => refreshPools(selectedPool.id)}
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh Pool Data'}
+            </button>
           </form>
         </div>
-
-        <div class="mt-6">
-          <h3 class="text-lg font-semibold text-content-primary">Members</h3>
-          {#if selectedPool.members.length === 0}
-            <p class="mt-2 text-sm text-content-secondary">No members found.</p>
-          {:else}
-            <div class="mt-3 overflow-x-auto">
-              <table class="min-w-full text-left text-sm">
-                <thead class="border-b border-border/60 text-xs uppercase tracking-wide text-content-secondary">
-                  <tr>
-                    <th class="px-3 py-2">Name</th>
-                    <th class="px-3 py-2">Email</th>
-                    <th class="px-3 py-2">Role</th>
-                    <th class="px-3 py-2">User ID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each selectedPool.members as member}
-                    <tr class="border-b border-border/40 last:border-b-0">
-                      <td class="px-3 py-2">{member.name ?? '—'}</td>
-                      <td class="px-3 py-2">{member.email ?? '—'}</td>
-                      <td class="px-3 py-2">{member.roleName}</td>
-                      <td class="px-3 py-2 font-mono text-xs text-content-secondary">{member.userId}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {/if}
-        </div>
       </Card>
-
-      <div class="flex items-center justify-between text-sm text-content-secondary">
-        <span>
-          Created {formatDate(selectedPool.createdAt)} · Updated {formatDate(selectedPool.updatedAt)}
-        </span>
-        {#if refreshing}
-          <span>Refreshing…</span>
-        {/if}
-      </div>
     {:else}
-      <Card className="p-6 text-center text-sm text-content-secondary">
-        Select a pool to view details.
+      <Card className="p-5">
+        <p class="text-sm text-content-secondary">Select a pool to manage.</p>
       </Card>
     {/if}
   </section>

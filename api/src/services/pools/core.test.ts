@@ -11,7 +11,7 @@ describe('PoolCoreService', () => {
   let capturedMemberInsert: any;
   let capturedUpdate: any;
   let service: PoolCoreService;
-  let ensurePoolAccessMock: ReturnType<typeof vi.fn>;
+  let ensurePoolCapabilityMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     capturedPoolInsert = undefined;
@@ -63,8 +63,8 @@ describe('PoolCoreService', () => {
     } as unknown as typeof import('../../db/index.js')['db'];
 
     service = new PoolCoreService(mockDb);
-    ensurePoolAccessMock = vi.fn().mockResolvedValue({ poolId: 'pool-123', ownerId: userId });
-    service.ensurePoolAccess = ensurePoolAccessMock as any;
+    ensurePoolCapabilityMock = vi.fn().mockResolvedValue({ poolId: 'pool-123', ownerId: userId });
+    service.ensurePoolCapability = ensurePoolCapabilityMock as any;
   });
 
   it('maps create payloads to database column names', async () => {
@@ -159,6 +159,6 @@ describe('PoolCoreService', () => {
       sanitizerType: 'bromine',
       surfaceType: 'fiberglass',
     });
-    expect(ensurePoolAccessMock).toHaveBeenCalledWith('pool-123', userId);
+    expect(ensurePoolCapabilityMock).toHaveBeenCalledWith('pool-123', userId, 'pool.update');
   });
 });

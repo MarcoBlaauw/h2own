@@ -66,4 +66,67 @@ describe('Notifications preview endpoint', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ subject: 'Inline', body: 'Inline body' });
   });
+
+  it('lists current user notifications', async () => {
+    vi.spyOn(notificationsService, 'listUserNotifications').mockResolvedValue({
+      items: [
+        {
+          notificationId: '9d99b419-f96f-48ba-a4f6-72bbba706f40',
+          message: 'Pool alert',
+          readAt: null,
+        },
+      ] as any,
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+      unreadCount: 1,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/notifications?unreadOnly=true',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      total: 1,
+      unreadCount: 1,
+    });
+    expect(notificationsService.listUserNotifications).toHaveBeenCalledWith('admin-id', {
+      unreadOnly: true,
+    });
+  });
+
+  it('returns notifications summary', async () => {
+    vi.spyOn(notificationsService, 'getUnreadCount').mockResolvedValue(3);
+    const response = await app.inject({ method: 'GET', url: '/notifications/summary' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ unreadCount: 3 });
+  });
+
+  it('marks one notification as read', async () => {
+    vi.spyOn(notificationsService, 'markNotificationRead').mockResolvedValue({
+      notificationId: '9d99b419-f96f-48ba-a4f6-72bbba706f40',
+      readAt: new Date().toISOString(),
+    } as any);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/notifications/9d99b419-f96f-48ba-a4f6-72bbba706f40/read',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().ok).toBe(true);
+  });
+
+  it('marks all notifications as read', async () => {
+    vi.spyOn(notificationsService, 'markAllRead').mockResolvedValue({ updatedCount: 4 });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/notifications/read-all',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, updatedCount: 4 });
+  });
 });

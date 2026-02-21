@@ -443,6 +443,32 @@ export class LocationsService {
 
     return this.getLocationDetail(locationId);
   }
+
+  async deleteLocation(locationId: string) {
+    const [deleted] = await this.db
+      .delete(schema.userLocations)
+      .where(eq(schema.userLocations.locationId, locationId))
+      .returning({ locationId: schema.userLocations.locationId });
+
+    return Boolean(deleted);
+  }
+
+  async purgeLegacyLocationsForUser(userId: string) {
+    const deleted = await this.db
+      .delete(schema.userLocations)
+      .where(
+        and(
+          eq(schema.userLocations.userId, userId),
+          eq(schema.userLocations.googlePlaceId, null)
+        )
+      )
+      .returning({ locationId: schema.userLocations.locationId });
+
+    return {
+      deletedCount: deleted.length,
+      deletedLocationIds: deleted.map((row) => row.locationId),
+    };
+  }
 }
 
 export const locationsService = new LocationsService();

@@ -5,10 +5,12 @@ import { optionalPoolFields, parseUpdateLocationId } from './pools.schemas.js';
 import {
   poolCoreService,
   poolAdminService,
+  poolEquipmentService,
   PoolNotFoundError,
   PoolLocationAccessError,
   type AdminPoolSummary,
 } from '../services/pools/index.js';
+import { writeAuditLog } from './audit.js';
 
 const updatePoolSchema = z
   .object({
@@ -27,6 +29,63 @@ const updatePoolSchema = z
 const transferSchema = z.object({
   newOwnerId: z.string().uuid(),
 });
+
+const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
+const energySourceSchema = z.enum(['gas', 'electric', 'heat_pump', 'solar_assisted', 'unknown']);
+const equipmentStatusSchema = z.enum(['enabled', 'disabled']);
+const temperatureUnitSchema = z.enum(['F', 'C']);
+
+const nullableTemperatureValue = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) return null;
+    return value;
+  },
+  z.coerce.number().min(-20).max(120).nullable()
+);
+
+const updateEquipmentSchema = z.object({
+  equipmentType: equipmentTypeSchema,
+  energySource: energySourceSchema.default('unknown'),
+  status: equipmentStatusSchema.default('enabled'),
+  capacityBtu: z.coerce.number().int().positive().nullable().optional().default(null),
+  metadata: z.unknown().optional().default(null),
+});
+
+const updateTemperaturePreferencesSchema = z
+  .object({
+    preferredTemp: nullableTemperatureValue,
+    minTemp: nullableTemperatureValue,
+    maxTemp: nullableTemperatureValue,
+    unit: temperatureUnitSchema.default('F'),
+  })
+  .refine(
+    (data) =>
+      data.minTemp === null || data.maxTemp === null || Number(data.minTemp) <= Number(data.maxTemp),
+    {
+      message: 'minTemp must be less than or equal to maxTemp',
+      path: ['minTemp'],
+    }
+  )
+  .refine(
+    (data) =>
+      data.preferredTemp === null ||
+      data.minTemp === null ||
+      Number(data.preferredTemp) >= Number(data.minTemp),
+    {
+      message: 'preferredTemp must be greater than or equal to minTemp',
+      path: ['preferredTemp'],
+    }
+  )
+  .refine(
+    (data) =>
+      data.preferredTemp === null ||
+      data.maxTemp === null ||
+      Number(data.preferredTemp) <= Number(data.maxTemp),
+    {
+      message: 'preferredTemp must be less than or equal to maxTemp',
+      path: ['preferredTemp'],
+    }
+  );
 
 const poolIdParams = z.object({ poolId: z.string().uuid() });
 
@@ -56,6 +115,24 @@ function serializeDetail(detail: Awaited<ReturnType<typeof poolCoreService.getPo
       testedAt: test.testedAt.toISOString(),
     })),
     lastTestedAt: detail.lastTestedAt ? detail.lastTestedAt.toISOString() : null,
+  };
+}
+
+function serializeEquipment(detail: Awaited<ReturnType<typeof poolEquipmentService.getEquipmentAsAdmin>>) {
+  return {
+    ...detail,
+    createdAt: detail.createdAt ? detail.createdAt.toISOString() : null,
+    updatedAt: detail.updatedAt ? detail.updatedAt.toISOString() : null,
+  };
+}
+
+function serializeTemperaturePreferences(
+  detail: Awaited<ReturnType<typeof poolEquipmentService.getTemperaturePreferencesAsAdmin>>
+) {
+  return {
+    ...detail,
+    createdAt: detail.createdAt ? detail.createdAt.toISOString() : null,
+    updatedAt: detail.updatedAt ? detail.updatedAt.toISOString() : null,
   };
 }
 
@@ -92,6 +169,13 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const payload = updatePoolSchema.parse(req.body ?? {});
       const pool = await poolAdminService.forceUpdatePool(poolId, payload);
+      await writeAuditLog(app, req, {
+        action: 'admin.pool.updated',
+        entity: 'pool',
+        entityId: poolId,
+        poolId,
+        data: payload,
+      });
       return reply.send(pool);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -109,11 +193,101 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get('/:poolId/equipment', async (req, reply) => {
+    try {
+      const { poolId } = poolIdParams.parse(req.params);
+      const equipment = await poolEquipmentService.getEquipmentAsAdmin(poolId);
+      return reply.send(serializeEquipment(equipment));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      if (error instanceof PoolNotFoundError) {
+        return reply.code(404).send({ error: 'NotFound' });
+      }
+      throw error;
+    }
+  });
+
+  app.put('/:poolId/equipment', async (req, reply) => {
+    try {
+      const { poolId } = poolIdParams.parse(req.params);
+      const payload = updateEquipmentSchema.parse(req.body ?? {});
+      const equipment = await poolEquipmentService.upsertEquipmentAsAdmin(poolId, {
+        ...payload,
+        metadata: payload.metadata ?? null,
+      });
+      await writeAuditLog(app, req, {
+        action: 'admin.pool.equipment.updated',
+        entity: 'pool_equipment',
+        entityId: equipment.equipmentId ?? poolId,
+        poolId,
+        data: payload,
+      });
+      return reply.send(serializeEquipment(equipment));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      if (error instanceof PoolNotFoundError) {
+        return reply.code(404).send({ error: 'NotFound' });
+      }
+      throw error;
+    }
+  });
+
+  app.get('/:poolId/temperature-preferences', async (req, reply) => {
+    try {
+      const { poolId } = poolIdParams.parse(req.params);
+      const prefs = await poolEquipmentService.getTemperaturePreferencesAsAdmin(poolId);
+      return reply.send(serializeTemperaturePreferences(prefs));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      if (error instanceof PoolNotFoundError) {
+        return reply.code(404).send({ error: 'NotFound' });
+      }
+      throw error;
+    }
+  });
+
+  app.put('/:poolId/temperature-preferences', async (req, reply) => {
+    try {
+      const { poolId } = poolIdParams.parse(req.params);
+      const payload = updateTemperaturePreferencesSchema.parse(req.body ?? {});
+      const prefs = await poolEquipmentService.upsertTemperaturePreferencesAsAdmin(poolId, payload);
+      await writeAuditLog(app, req, {
+        action: 'admin.pool.temperature_preferences.updated',
+        entity: 'pool_temperature_prefs',
+        entityId: poolId,
+        poolId,
+        data: payload,
+      });
+      return reply.send(serializeTemperaturePreferences(prefs));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      if (error instanceof PoolNotFoundError) {
+        return reply.code(404).send({ error: 'NotFound' });
+      }
+      throw error;
+    }
+  });
+
   app.post('/:poolId/transfer', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
       const { newOwnerId } = transferSchema.parse(req.body ?? {});
       const result = await poolAdminService.transferOwnership(poolId, newOwnerId);
+      await writeAuditLog(app, req, {
+        action: 'admin.pool.transfer_ownership',
+        entity: 'pool',
+        entityId: poolId,
+        poolId,
+        data: { newOwnerId },
+      });
       return reply.send(result);
     } catch (error) {
       if (error instanceof z.ZodError) {

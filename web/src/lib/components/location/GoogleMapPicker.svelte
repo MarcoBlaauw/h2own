@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import tzLookup from 'tz-lookup';
   type MapsWindow = Window &
     typeof globalThis & {
       google?: any;
@@ -13,26 +14,39 @@
   export let formattedAddress = '';
   export let googlePlaceId = '';
   export let googlePlusCode = '';
+  export let timezone = '';
   export let heightClass = 'h-56';
   export let idPrefix = 'google-location';
 
   const apiKey = import.meta.env.PUBLIC_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const mapId =
+    import.meta.env.PUBLIC_GOOGLE_MAPS_MAP_ID || import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || '';
 
   let mapEl: HTMLDivElement | null = null;
-  let searchEl: HTMLInputElement | null = null;
+  let autocompleteHostEl: HTMLDivElement | null = null;
   let isReady = false;
   let setupError: string | null = null;
 
   let map: any;
   let marker: any;
   let geocoder: any;
-  let autocomplete: any;
+  let autocompleteWidget: any;
+  let advancedMarkerLib: any;
+  let supportsAdvancedMarker = false;
 
   const getGoogle = () => (window as MapsWindow).google;
 
   const toNumber = (value: string) => {
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const detectTimezone = (lat: number, lng: number) => {
+    try {
+      timezone = tzLookup(lat, lng);
+    } catch {
+      // keep existing timezone if lookup fails
+    }
   };
 
   const updateFromPoint = async (lat: number, lng: number) => {
@@ -58,25 +72,77 @@
     if (!map) return;
     const google = getGoogle();
     const position = { lat, lng };
+    detectTimezone(lat, lng);
     if (!marker) {
-      marker = new google.maps.Marker({ map, position, draggable: true });
-      marker.addListener('dragend', async (event: any) => {
-        const nextLat = event?.latLng?.lat?.();
-        const nextLng = event?.latLng?.lng?.();
-        if (typeof nextLat === 'number' && typeof nextLng === 'number') {
-          await updateFromPoint(nextLat, nextLng);
-        }
-      });
+      if (supportsAdvancedMarker && advancedMarkerLib?.AdvancedMarkerElement) {
+        marker = new advancedMarkerLib.AdvancedMarkerElement({
+          map,
+          position,
+          gmpDraggable: true,
+        });
+        marker.addListener('dragend', async (event: any) => {
+          const maybePosition = event?.target?.position ?? marker?.position;
+          const nextLat =
+            typeof maybePosition?.lat === 'function' ? maybePosition.lat() : maybePosition?.lat;
+          const nextLng =
+            typeof maybePosition?.lng === 'function' ? maybePosition.lng() : maybePosition?.lng;
+          if (typeof nextLat === 'number' && typeof nextLng === 'number') {
+            await updateFromPoint(nextLat, nextLng);
+            detectTimezone(nextLat, nextLng);
+          }
+        });
+      } else {
+        marker = new google.maps.Marker({ map, position, draggable: true });
+        marker.addListener('dragend', async (event: any) => {
+          const nextLat = event?.latLng?.lat?.();
+          const nextLng = event?.latLng?.lng?.();
+          if (typeof nextLat === 'number' && typeof nextLng === 'number') {
+            await updateFromPoint(nextLat, nextLng);
+            detectTimezone(nextLat, nextLng);
+          }
+        });
+      }
     } else {
-      marker.setPosition(position);
+      if (typeof marker.setPosition === 'function') {
+        marker.setPosition(position);
+      } else {
+        marker.position = position;
+      }
     }
     map.setCenter(position);
     map.setZoom(17);
     await updateFromPoint(lat, lng);
   };
 
+  const handleSelectedPlace = async (rawEvent: Event) => {
+    const event = rawEvent as any;
+    const prediction = event?.placePrediction;
+    const legacyPlace = event?.place;
+
+    let place: any = legacyPlace;
+    if (!place && prediction?.toPlace) {
+      place = prediction.toPlace();
+    }
+    if (!place) return;
+
+    if (typeof place.fetchFields === 'function') {
+      await place.fetchFields({
+        fields: ['displayName', 'formattedAddress', 'location', 'id', 'plusCode'],
+      });
+    }
+
+    const point = place?.location;
+    if (!point || typeof point.lat !== 'function' || typeof point.lng !== 'function') return;
+
+    formattedAddress = place.formattedAddress ?? place.displayName ?? formattedAddress;
+    googlePlaceId = place.id ?? place.place_id ?? '';
+    googlePlusCode = place?.plusCode?.globalCode ?? place?.plusCode?.compoundCode ?? '';
+
+    await placeMarker(point.lat(), point.lng());
+  };
+
   const initMap = async () => {
-    if (!mapEl || !searchEl) return;
+    if (!mapEl || !autocompleteHostEl) return;
     const google = getGoogle();
     const lat = toNumber(latitude) ?? 37.09024;
     const lng = toNumber(longitude) ?? -95.712891;
@@ -84,28 +150,36 @@
     map = new google.maps.Map(mapEl, {
       center: { lat, lng },
       zoom: latitude && longitude ? 16 : 4,
-      mapTypeControl: false,
+      mapTypeControl: true,
+      mapTypeId: 'hybrid',
       streetViewControl: false,
       fullscreenControl: false,
+      ...(mapId ? { mapId } : {}),
     });
 
     geocoder = new google.maps.Geocoder();
-    autocomplete = new google.maps.places.Autocomplete(searchEl, {
-      fields: ['formatted_address', 'geometry', 'name', 'place_id', 'plus_code'],
-      types: ['geocode'],
-    });
+    supportsAdvancedMarker = Boolean(mapId);
+    if (supportsAdvancedMarker) {
+      advancedMarkerLib = await google.maps.importLibrary('marker');
+    }
 
-    autocomplete.addListener('place_changed', async () => {
-      const place = autocomplete.getPlace();
-      const point = place?.geometry?.location;
-      if (!point) return;
-      const latValue = point.lat();
-      const lngValue = point.lng();
-      formattedAddress = place.formatted_address ?? place.name ?? formattedAddress;
-      googlePlaceId = place.place_id ?? '';
-      const plusCode = place.plus_code?.global_code ?? place.plus_code?.compound_code ?? '';
-      googlePlusCode = plusCode;
-      await placeMarker(latValue, lngValue);
+    const placesLib = await google.maps.importLibrary('places');
+    const PlaceAutocompleteElement = placesLib?.PlaceAutocompleteElement;
+    if (!PlaceAutocompleteElement) {
+      throw new Error('Place autocomplete is unavailable. Confirm Places API (New) is enabled.');
+    }
+
+    autocompleteWidget = new PlaceAutocompleteElement();
+    autocompleteWidget.id = `${idPrefix}-search`;
+    autocompleteWidget.setAttribute('aria-label', 'Search location');
+    autocompleteWidget.setAttribute('placeholder', 'Search address, place, or city');
+    autocompleteHostEl.replaceChildren(autocompleteWidget);
+
+    autocompleteWidget.addEventListener('gmp-select', handleSelectedPlace);
+    autocompleteWidget.addEventListener('gmp-placeselect', handleSelectedPlace);
+    autocompleteWidget.addEventListener('gmp-error', () => {
+      setupError =
+        'Place lookup failed. Confirm Places API (New) is enabled and your API key allows this origin.';
     });
 
     map.addListener('click', async (event: any) => {
@@ -196,12 +270,7 @@
 
 <div class="space-y-2">
   <label class="text-sm font-medium text-content-secondary" for={`${idPrefix}-search`}>Search location</label>
-  <input
-    id={`${idPrefix}-search`}
-    class="form-control"
-    placeholder="Search address, place, or city"
-    bind:this={searchEl}
-  />
+  <div class="place-autocomplete-host" bind:this={autocompleteHostEl}></div>
   <div class={`w-full overflow-hidden rounded-lg border border-border bg-surface-subtle ${heightClass}`} bind:this={mapEl}></div>
   {#if setupError}
     <p class="text-xs text-danger">{setupError}</p>
@@ -211,3 +280,14 @@
     <p class="text-xs text-content-secondary">Click on the map or drag the pin to set exact pool coordinates.</p>
   {/if}
 </div>
+
+<style>
+  .place-autocomplete-host {
+    display: block;
+  }
+
+  .place-autocomplete-host :global(gmp-place-autocomplete) {
+    display: block;
+    width: 100%;
+  }
+</style>

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
 import { mailerService } from "../services/mailer.js";
 import { env } from "../env.js";
+import { writeAuditLog } from "./audit.js";
 
 const registerBodySchema = z.object({
   email: z
@@ -72,6 +73,15 @@ const forgotUsernameBodySchema = z.object({
       invalid_type_error: "Email must be a string",
     })
     .email("Email must be a valid email address"),
+});
+
+const verifyEmailChangeBodySchema = z.object({
+  token: z
+    .string({
+      required_error: "Token is required",
+      invalid_type_error: "Token must be a string",
+    })
+    .min(32, "Token is invalid"),
 });
 
 interface DomainError extends Error {
@@ -190,6 +200,12 @@ export async function authRoutes(app: FastifyInstance) {
           );
         }
       }
+      await writeAuditLog(app, req, {
+        action: "user.register",
+        entity: "user",
+        entityId: userId,
+        userId,
+      });
       return reply.code(201).send(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -221,6 +237,13 @@ export async function authRoutes(app: FastifyInstance) {
       // ⬇️ Create opaque server-side session + set signed 'sid' cookie
       await app.sessions.create(reply, user.userId, user.role ?? undefined);
 
+      await writeAuditLog(app, req, {
+        action: "auth.login",
+        entity: "session",
+        entityId: req.session?.id ?? null,
+        userId: user.userId,
+      });
+
       return reply.code(201).send({
         user: {
           id: user.userId,
@@ -240,6 +263,12 @@ export async function authRoutes(app: FastifyInstance) {
 
   // POST /auth/logout
   app.post("/logout", async (req, reply) => {
+    await writeAuditLog(app, req, {
+      action: "auth.logout",
+      entity: "session",
+      entityId: req.session?.id ?? null,
+      userId: req.user?.id ?? null,
+    });
     await app.sessions.destroy(reply, req.session?.id ?? null);
     return reply.send({ ok: true });
   });
@@ -275,6 +304,12 @@ export async function authRoutes(app: FastifyInstance) {
             "failed to send password reset email",
           );
         }
+        await writeAuditLog(app, req, {
+          action: "auth.password_reset.requested",
+          entity: "user",
+          entityId: user.userId,
+          userId: user.userId,
+        });
       }
 
       return reply.send({
@@ -319,6 +354,12 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       await app.redis.del(tokenKey);
+      await writeAuditLog(app, req, {
+        action: "auth.password_reset.completed",
+        entity: "user",
+        entityId: userId,
+        userId,
+      });
       return reply.send({ ok: true, message: "Password has been reset." });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -343,6 +384,12 @@ export async function authRoutes(app: FastifyInstance) {
             "failed to send username reminder email",
           );
         }
+        await writeAuditLog(app, req, {
+          action: "auth.username_reminder.requested",
+          entity: "user",
+          entityId: user.userId,
+          userId: user.userId,
+        });
       }
 
       return reply.send({
@@ -350,6 +397,63 @@ export async function authRoutes(app: FastifyInstance) {
         message:
           "If an account exists for that email, a username reminder email has been sent.",
       });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/verify-email-change", async (req, reply) => {
+    try {
+      const body = verifyEmailChangeBodySchema.parse(req.body);
+      const token = body.token.trim();
+      const tokenKey = `email-change:${token}`;
+      const payloadRaw = await app.redis.get(tokenKey);
+
+      if (!payloadRaw) {
+        return reply.code(400).send({
+          error: "InvalidToken",
+          message: "The email verification token is invalid or expired.",
+        });
+      }
+
+      const payloadSchema = z.object({
+        userId: z.string().uuid(),
+        email: z.string().email(),
+      });
+      const payload = payloadSchema.parse(JSON.parse(payloadRaw));
+
+      const existing = await authService.getUserByEmail(payload.email);
+      if (existing && existing.userId !== payload.userId) {
+        await app.redis.del(tokenKey);
+        return reply.code(409).send({
+          error: "UserAlreadyExists",
+          message: "An account with that email already exists.",
+        });
+      }
+
+      const updated = await authService.updateEmailByUserId(payload.userId, payload.email);
+      await app.redis.del(tokenKey);
+
+      if (!updated) {
+        return reply.code(400).send({
+          error: "InvalidToken",
+          message: "The email verification token is invalid or expired.",
+        });
+      }
+
+      await writeAuditLog(app, req, {
+        action: "account.email_change.completed",
+        entity: "user",
+        entityId: payload.userId,
+        userId: payload.userId,
+        data: { email: payload.email },
+      });
+
+      return reply.send({ ok: true, message: "Email address verified and updated." });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return handleValidationError(reply, error);
@@ -417,6 +521,13 @@ export async function adminApiTokenRoutes(app: FastifyInstance) {
         payload.name,
         payload.permissions,
       );
+      await writeAuditLog(app, req, {
+        action: "admin.api_token.created",
+        entity: "api_token",
+        entityId: token.tokenId,
+        userId,
+        data: { name: payload.name },
+      });
       return reply.code(201).send(token);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -438,6 +549,13 @@ export async function adminApiTokenRoutes(app: FastifyInstance) {
           .code(404)
           .send({ error: "NotFound", message: "Token not found" });
       }
+
+      await writeAuditLog(app, req, {
+        action: "admin.api_token.revoked",
+        entity: "api_token",
+        entityId: tokenId,
+        userId,
+      });
 
       return reply.status(204).send();
     } catch (error) {

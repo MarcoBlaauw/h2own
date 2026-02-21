@@ -3,20 +3,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { poolsRoutes } from './pools.js';
 import {
   poolCoreService,
+  poolEquipmentService,
   PoolForbiddenError,
   PoolNotFoundError,
+  PoolOwnerRequiredError,
+  PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
 } from '../services/pools/index.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
   const currentUserId = '2b5c4d1a-6e12-4d2a-b9f3-0a6f3a29e1f2';
+  let currentUserRole: string | undefined;
 
   beforeEach(async () => {
+    currentUserRole = undefined;
     app = Fastify();
     app.decorate('auth', {
       verifySession: vi.fn(async (req: any) => {
-        req.user = { id: currentUserId };
+        req.user = { id: currentUserId, role: currentUserRole };
       }),
       requireRole: () => async () => {},
     } as any);
@@ -142,7 +147,7 @@ describe('GET /pools/:poolId integration', () => {
   });
 
   it('returns 403 when updating a pool without access', async () => {
-    vi.spyOn(poolCoreService, 'updatePool').mockRejectedValue(new PoolForbiddenError('nope'));
+    vi.spyOn(poolCoreService, 'updatePool').mockRejectedValue(new PoolOwnerRequiredError('nope'));
 
     const id = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const response = await app.inject({
@@ -154,6 +159,66 @@ describe('GET /pools/:poolId integration', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'Forbidden' });
     expect(poolCoreService.updatePool).toHaveBeenCalledWith(id, currentUserId, { name: 'Updated' });
+  });
+
+  it('returns 403 when creating a pool for another owner as a non-business user', async () => {
+    const ownerId = 'aa2f15d7-70a8-4556-b01d-2dc8d105a92b';
+    vi.spyOn(poolCoreService, 'createPool').mockRejectedValue(new PoolCreateOwnerForbiddenError());
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/pools',
+      payload: {
+        ownerId,
+        name: 'New Pool',
+        volumeGallons: 15000,
+        sanitizerType: 'chlorine',
+        surfaceType: 'plaster',
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(poolCoreService.createPool).toHaveBeenCalledWith(
+      currentUserId,
+      expect.objectContaining({ ownerId }),
+      undefined
+    );
+  });
+
+  it('passes business role when creating a pool for another owner', async () => {
+    currentUserRole = 'business';
+    const ownerId = 'aa2f15d7-70a8-4556-b01d-2dc8d105a92b';
+    const created = {
+      poolId: '3d2e6167-2e16-483f-a4bf-8df770a11be8',
+      ownerId,
+      name: 'Owner Pool',
+      volumeGallons: 20000,
+      sanitizerType: 'salt',
+      surfaceType: 'plaster',
+      locationId: null,
+    };
+    vi.spyOn(poolCoreService, 'createPool').mockResolvedValue(created as any);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/pools',
+      payload: {
+        ownerId,
+        name: 'Owner Pool',
+        volumeGallons: 20000,
+        sanitizerType: 'salt',
+        surfaceType: 'plaster',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual(created);
+    expect(poolCoreService.createPool).toHaveBeenCalledWith(
+      currentUserId,
+      expect.objectContaining({ ownerId }),
+      'business'
+    );
   });
 
   it('returns 400 when pool location is invalid', async () => {
@@ -179,6 +244,110 @@ describe('GET /pools/:poolId integration', () => {
       error: 'InvalidLocation',
       locationId: invalidLocationId,
       message: expect.stringContaining(invalidLocationId),
+    });
+  });
+
+  it('gets and updates pool equipment', async () => {
+    const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const equipment = {
+      poolId,
+      equipmentId: '5bb8fda7-a38f-4628-a7f0-ab4be6d5a37d',
+      equipmentType: 'heater',
+      energySource: 'gas',
+      status: 'enabled',
+      capacityBtu: 180000,
+      metadata: null,
+      createdAt: new Date('2026-02-20T15:00:00.000Z'),
+      updatedAt: new Date('2026-02-20T15:10:00.000Z'),
+    };
+
+    vi.spyOn(poolEquipmentService, 'getEquipment').mockResolvedValue(equipment as any);
+
+    const getResponse = await app.inject({ method: 'GET', url: `/pools/${poolId}/equipment` });
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.json()).toEqual({
+      ...equipment,
+      createdAt: equipment.createdAt.toISOString(),
+      updatedAt: equipment.updatedAt.toISOString(),
+    });
+
+    vi.spyOn(poolEquipmentService, 'upsertEquipment').mockResolvedValue({
+      ...equipment,
+      equipmentType: 'combo',
+      energySource: 'heat_pump',
+      status: 'enabled',
+      capacityBtu: 120000,
+    } as any);
+
+    const putResponse = await app.inject({
+      method: 'PUT',
+      url: `/pools/${poolId}/equipment`,
+      payload: {
+        equipmentType: 'combo',
+        energySource: 'heat_pump',
+        status: 'enabled',
+        capacityBtu: 120000,
+      },
+    });
+    expect(putResponse.statusCode).toBe(200);
+    expect(poolEquipmentService.upsertEquipment).toHaveBeenCalledWith(poolId, currentUserId, {
+      equipmentType: 'combo',
+      energySource: 'heat_pump',
+      status: 'enabled',
+      capacityBtu: 120000,
+      metadata: null,
+    });
+  });
+
+  it('gets and updates pool temperature preferences', async () => {
+    const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const prefs = {
+      poolId,
+      preferredTemp: 84,
+      minTemp: 80,
+      maxTemp: 88,
+      unit: 'F',
+      createdAt: new Date('2026-02-20T15:00:00.000Z'),
+      updatedAt: new Date('2026-02-20T15:10:00.000Z'),
+    };
+
+    vi.spyOn(poolEquipmentService, 'getTemperaturePreferences').mockResolvedValue(prefs as any);
+
+    const getResponse = await app.inject({
+      method: 'GET',
+      url: `/pools/${poolId}/temperature-preferences`,
+    });
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.json()).toEqual({
+      ...prefs,
+      createdAt: prefs.createdAt.toISOString(),
+      updatedAt: prefs.updatedAt.toISOString(),
+    });
+
+    vi.spyOn(poolEquipmentService, 'upsertTemperaturePreferences').mockResolvedValue({
+      ...prefs,
+      preferredTemp: 29,
+      minTemp: 26,
+      maxTemp: 31,
+      unit: 'C',
+    } as any);
+
+    const putResponse = await app.inject({
+      method: 'PUT',
+      url: `/pools/${poolId}/temperature-preferences`,
+      payload: {
+        preferredTemp: 29,
+        minTemp: 26,
+        maxTemp: 31,
+        unit: 'C',
+      },
+    });
+    expect(putResponse.statusCode).toBe(200);
+    expect(poolEquipmentService.upsertTemperaturePreferences).toHaveBeenCalledWith(poolId, currentUserId, {
+      preferredTemp: 29,
+      minTemp: 26,
+      maxTemp: 31,
+      unit: 'C',
     });
   });
 });

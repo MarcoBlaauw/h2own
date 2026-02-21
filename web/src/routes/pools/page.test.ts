@@ -8,6 +8,10 @@ vi.mock('$lib/api', () => {
   const create = vi.fn();
   const patch = vi.fn();
   const del = vi.fn();
+  const equipment = vi.fn();
+  const updateEquipment = vi.fn();
+  const temperaturePreferences = vi.fn();
+  const updateTemperaturePreferences = vi.fn();
   const createLocation = vi.fn();
   return {
     api: {
@@ -16,10 +20,18 @@ vi.mock('$lib/api', () => {
         patch,
         del,
         list: vi.fn(),
+        equipment,
+        updateEquipment,
+        temperaturePreferences,
+        updateTemperaturePreferences,
       },
       userLocations: {
         create: createLocation,
         list: vi.fn(),
+        update: vi.fn(),
+        deactivate: vi.fn(),
+        delete: vi.fn(),
+        purgeLegacy: vi.fn(),
       },
     },
   };
@@ -30,8 +42,11 @@ describe('pools page', () => {
     {
       locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40c1e',
       name: 'Home',
+      formattedAddress: '809 Country Cottage Blvd, Montz, LA 70068, USA',
+      googlePlaceId: 'test-place-id',
       latitude: 34.1,
       longitude: -118.2,
+      timezone: 'America/Chicago',
     },
   ];
   const pools = [
@@ -41,22 +56,66 @@ describe('pools page', () => {
       volumeGallons: 15000,
       sanitizerType: 'chlorine',
       surfaceType: 'plaster',
-      locationId: null,
+      locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40c1e',
     },
   ];
 
   const createMock = api.pools.create as unknown as Mock;
   const patchMock = api.pools.patch as unknown as Mock;
   const deleteMock = api.pools.del as unknown as Mock;
+  const createLocationMock = api.userLocations.create as unknown as Mock;
   const listLocationsMock = api.userLocations.list as unknown as Mock;
+  const equipmentMock = api.pools.equipment as unknown as Mock;
+  const updateEquipmentMock = api.pools.updateEquipment as unknown as Mock;
+  const temperaturePreferencesMock = api.pools.temperaturePreferences as unknown as Mock;
+  const updateTemperaturePreferencesMock = api.pools.updateTemperaturePreferences as unknown as Mock;
 
   beforeEach(() => {
     createMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    createLocationMock.mockReset();
     listLocationsMock.mockReset();
+    equipmentMock.mockReset();
+    updateEquipmentMock.mockReset();
+    temperaturePreferencesMock.mockReset();
+    updateTemperaturePreferencesMock.mockReset();
     listLocationsMock.mockResolvedValue(
       new Response(JSON.stringify(locations), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    equipmentMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          equipmentType: 'none',
+          energySource: 'unknown',
+          status: 'disabled',
+          capacityBtu: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    temperaturePreferencesMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          preferredTemp: null,
+          minTemp: null,
+          maxTemp: null,
+          unit: 'F',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    updateEquipmentMock.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    updateTemperaturePreferencesMock.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -78,6 +137,7 @@ describe('pools page', () => {
 
     const alert = await findByRole('alert');
     expect(alert.textContent).toContain('Name is required.');
+    expect(alert.textContent).toContain('Timezone is required.');
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -91,6 +151,17 @@ describe('pools page', () => {
       locationId: null,
     };
 
+    createLocationMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40d00',
+        }),
+        {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
     createMock.mockResolvedValueOnce(
       new Response(JSON.stringify(created), {
         status: 201,
@@ -106,17 +177,31 @@ describe('pools page', () => {
     await fireEvent.input(getByLabelText('Volume (gallons)'), { target: { value: created.volumeGallons } });
     await fireEvent.change(getByLabelText('Sanitizer type'), { target: { value: created.sanitizerType } });
     await fireEvent.change(getByLabelText('Surface type'), { target: { value: created.surfaceType } });
+    await fireEvent.input(getByLabelText('Latitude'), { target: { value: '30.0279' } });
+    await fireEvent.input(getByLabelText('Longitude'), { target: { value: '-90.4614' } });
+    await fireEvent.change(getByLabelText('Timezone (from pin)'), {
+      target: { value: 'America/Chicago' },
+    });
 
     const submit = getByRole('button', { name: /create pool/i });
     await fireEvent.click(submit);
 
-    expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: created.name,
-        sanitizerType: created.sanitizerType,
-        surfaceType: created.surfaceType,
-      })
-    );
+    await waitFor(() => {
+      expect(createLocationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          latitude: 30.0279,
+          longitude: -90.4614,
+          timezone: 'America/Chicago',
+        })
+      );
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: created.name,
+          sanitizerType: created.sanitizerType,
+          surfaceType: created.surfaceType,
+        })
+      );
+    });
 
     const status = await findByRole('status');
     expect(status.textContent).toContain('Pool created.');
@@ -125,57 +210,19 @@ describe('pools page', () => {
     });
   });
 
-  it('creates a location for the user', async () => {
-    const location = {
-      locationId: '9b93d8f1-0e7a-4f3d-b76a-5f7a9e1a0ed1',
-      name: 'Cabin',
-      latitude: 30.02,
-      longitude: -90.46,
-    };
-
-    const createLocationMock = api.userLocations?.create as unknown as Mock;
-    const refreshedLocations = [...locations, location];
-    createLocationMock?.mockResolvedValueOnce(
-      new Response(JSON.stringify(location), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
-    listLocationsMock.mockResolvedValueOnce(
-      new Response(JSON.stringify(refreshedLocations), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
-
-    const { getByLabelText, getByRole, findByRole, queryAllByText } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
-    });
-
-    await fireEvent.input(getByLabelText('Location name'), { target: { value: location.name } });
-    await fireEvent.input(getByLabelText('Latitude (optional)'), { target: { value: location.latitude } });
-    await fireEvent.input(getByLabelText('Longitude (optional)'), { target: { value: location.longitude } });
-
-    const submit = getByRole('button', { name: /create location/i });
-    await fireEvent.click(submit);
-
-    expect(createLocationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: location.name,
-        latitude: location.latitude,
-        longitude: location.longitude,
-      })
-    );
-    const status = await findByRole('status');
-    expect(status.textContent).toContain('Location created.');
-    await waitFor(() => {
-      expect(listLocationsMock).toHaveBeenCalled();
-      expect(queryAllByText(location.name).length).toBeGreaterThan(0);
-    });
-  });
-
   it('updates a pool', async () => {
     const updated = { ...pools[0], name: 'Updated Pool' };
+    createLocationMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40d01',
+        }),
+        {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
     patchMock.mockResolvedValueOnce(
       new Response(JSON.stringify(updated), {
         status: 200,
@@ -187,7 +234,7 @@ describe('pools page', () => {
       props: { data: { session: null, pools, locations, loadError: null } },
     });
 
-    await fireEvent.click(getByRole('button', { name: /edit/i }));
+    await fireEvent.click(getByRole('button', { name: /edit pool/i }));
 
     const panel = getByText(pools[0].name).closest('.surface-panel');
     expect(panel).toBeTruthy();
@@ -196,8 +243,12 @@ describe('pools page', () => {
     });
     await fireEvent.click(getByRole('button', { name: /save changes/i }));
 
-    expect(patchMock).toHaveBeenCalledWith(updated.poolId, expect.objectContaining({ name: updated.name }));
     await waitFor(() => {
+      expect(createLocationMock).toHaveBeenCalled();
+      expect(patchMock).toHaveBeenCalledWith(
+        updated.poolId,
+        expect.objectContaining({ name: updated.name })
+      );
       expect(queryByText(updated.name)).toBeTruthy();
     });
   });
@@ -209,7 +260,7 @@ describe('pools page', () => {
       props: { data: { session: null, pools, locations, loadError: null } },
     });
 
-    const deleteButton = getByRole('button', { name: /remove/i });
+    const deleteButton = getByRole('button', { name: /remove pool/i });
     await fireEvent.click(deleteButton);
 
     expect(deleteMock).toHaveBeenCalledWith(pools[0].poolId);
@@ -226,5 +277,13 @@ describe('pools page', () => {
     expect(getByText('Manage locations')).toBeTruthy();
     const entries = getAllByText(locations[0].name);
     expect(entries.length).toBeGreaterThan(0);
+  });
+
+  it('shows timezone selection on create pool', () => {
+    const { getByLabelText } = render(Page, {
+      props: { data: { session: null, pools, locations, loadError: null } },
+    });
+
+    expect(getByLabelText('Timezone (from pin)')).toBeTruthy();
   });
 });

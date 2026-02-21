@@ -64,5 +64,8 @@
     "wait-on": "^9.0.4",
     "zod": "^3.23.8"
   },
-  "packageManager": "pnpm@10.30.0"
+  "packageManager": "pnpm@10.30.0",
+  "dependencies": {
+    "tz-lookup": "^6.1.25"
+  }
 }

@@ -1,6 +1,7 @@
 import { and, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
+import { hasSystemCapability } from './authorization.js';
 
 export class AuditLogForbiddenError extends Error {
   readonly statusCode = 403;
@@ -92,7 +93,7 @@ export class AuditLogService {
   constructor(private readonly db = dbClient) {}
 
   private ensureAdmin(role: SessionRole) {
-    if (role !== 'admin') {
+    if (!hasSystemCapability(role, 'admin.audit.read')) {
       throw new AuditLogForbiddenError();
     }
   }

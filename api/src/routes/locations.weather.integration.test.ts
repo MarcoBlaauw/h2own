@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locationsRoutes } from './locations.js';
-import { weatherService } from '../services/weather.js';
+import { weatherService, WeatherProviderRateLimitError } from '../services/weather.js';
 
 describe('GET /locations/:locationId/weather', () => {
   let app: ReturnType<typeof Fastify>;
@@ -93,5 +93,24 @@ describe('GET /locations/:locationId/weather', () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Location not found' });
+  });
+
+  it('returns 429 when weather provider is rate limited', async () => {
+    const locationId = '72d3210b-23f2-4e47-90b3-fab2a2d2a084';
+
+    vi.spyOn(weatherService, 'getWeatherForLocation').mockRejectedValue(
+      new WeatherProviderRateLimitError('Tomorrow.io request failed (429)', 180)
+    );
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/locations/${locationId}/weather?granularity=day`,
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({
+      error: 'Tomorrow.io request failed (429)',
+      retryAfterSeconds: 180,
+    });
   });
 });
