@@ -47,20 +47,37 @@ const addMemberSchema = z.object({
   role: z.string(),
 });
 
-const optionalMeasurement = z.preprocess(
-  value => {
-    if (value === '' || value === null || value === undefined) {
-      return undefined;
-    }
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed === '') return undefined;
-      return trimmed;
-    }
-    return value;
-  },
-  z.coerce.number().min(0).optional()
-);
+const testMeasurementBounds = {
+  fc: { min: 0, max: 20, label: 'Free Chlorine (FC)', unit: 'ppm' },
+  tc: { min: 0, max: 20, label: 'Total Chlorine (TC)', unit: 'ppm' },
+  ph: { min: 6.8, max: 8.6, label: 'pH', unit: 'pH' },
+  ta: { min: 0, max: 300, label: 'Total Alkalinity (TA)', unit: 'ppm' },
+  cya: { min: 0, max: 200, label: 'Cyanuric Acid (CYA)', unit: 'ppm' },
+  ch: { min: 0, max: 1000, label: 'Calcium Hardness (CH)', unit: 'ppm' },
+  salt: { min: 0, max: 6000, label: 'Salt', unit: 'ppm' },
+  temp: { min: 32, max: 110, label: 'Water Temperature', unit: '°F' },
+} as const;
+
+const optionalMeasurement = (fieldName: string, min: number, max: number, unit: string) =>
+  z.preprocess(
+    value => {
+      if (value === '' || value === null || value === undefined) {
+        return undefined;
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed === '') return undefined;
+        return trimmed;
+      }
+      return value;
+    },
+    z
+      .coerce
+      .number()
+      .min(min, `${fieldName} must be between ${min} and ${max} ${unit}.`)
+      .max(max, `${fieldName} must be between ${min} and ${max} ${unit}.`)
+      .optional()
+  );
 
 const optionalCollectedAt = z.preprocess(
   value => {
@@ -76,14 +93,54 @@ const optionalCollectedAt = z.preprocess(
 );
 
 const createTestSchema = z.object({
-  fc: optionalMeasurement,
-  tc: optionalMeasurement,
-  ph: optionalMeasurement,
-  ta: optionalMeasurement,
-  cya: optionalMeasurement,
-  ch: optionalMeasurement,
-  salt: optionalMeasurement,
-  temp: optionalMeasurement,
+  fc: optionalMeasurement(
+    testMeasurementBounds.fc.label,
+    testMeasurementBounds.fc.min,
+    testMeasurementBounds.fc.max,
+    testMeasurementBounds.fc.unit
+  ),
+  tc: optionalMeasurement(
+    testMeasurementBounds.tc.label,
+    testMeasurementBounds.tc.min,
+    testMeasurementBounds.tc.max,
+    testMeasurementBounds.tc.unit
+  ),
+  ph: optionalMeasurement(
+    testMeasurementBounds.ph.label,
+    testMeasurementBounds.ph.min,
+    testMeasurementBounds.ph.max,
+    testMeasurementBounds.ph.unit
+  ),
+  ta: optionalMeasurement(
+    testMeasurementBounds.ta.label,
+    testMeasurementBounds.ta.min,
+    testMeasurementBounds.ta.max,
+    testMeasurementBounds.ta.unit
+  ),
+  cya: optionalMeasurement(
+    testMeasurementBounds.cya.label,
+    testMeasurementBounds.cya.min,
+    testMeasurementBounds.cya.max,
+    testMeasurementBounds.cya.unit
+  ),
+  ch: optionalMeasurement(
+    testMeasurementBounds.ch.label,
+    testMeasurementBounds.ch.min,
+    testMeasurementBounds.ch.max,
+    testMeasurementBounds.ch.unit
+  ),
+  salt: optionalMeasurement(
+    testMeasurementBounds.salt.label,
+    testMeasurementBounds.salt.min,
+    testMeasurementBounds.salt.max,
+    testMeasurementBounds.salt.unit
+  ),
+  temp: optionalMeasurement(
+    testMeasurementBounds.temp.label,
+    testMeasurementBounds.temp.min,
+    testMeasurementBounds.temp.max,
+    testMeasurementBounds.temp.unit
+  ),
   collectedAt: optionalCollectedAt,
   photoId: z.string().uuid().optional(),
 });
