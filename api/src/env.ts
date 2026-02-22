@@ -1,10 +1,38 @@
 import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import dotenv from "dotenv";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, "..", "..", ".env") });
+const rootDir = join(__dirname, "..", "..");
+
+const loadEnvFiles = () => {
+  const mode = process.env.NODE_ENV || "development";
+  const candidates = [
+    ".env",
+    ".env.local",
+    `.env.${mode}`,
+    `.env.${mode}.local`,
+  ];
+  const shellDefinedKeys = new Set(Object.keys(process.env));
+  const loaded: Record<string, string> = {};
+
+  for (const candidate of candidates) {
+    const path = join(rootDir, candidate);
+    if (!existsSync(path)) continue;
+    const parsed = dotenv.parse(readFileSync(path));
+    Object.assign(loaded, parsed);
+  }
+
+  for (const [key, value] of Object.entries(loaded)) {
+    if (!shellDefinedKeys.has(key)) {
+      process.env[key] = value;
+    }
+  }
+};
+
+loadEnvFiles();
 
 const emptyToUndefined = <T>(schema: z.ZodType<T>) =>
   z.preprocess(

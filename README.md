@@ -54,6 +54,12 @@ Use Docker Compose for infrastructure only during development:
 - `docker compose up -d` — start Postgres + Redis via `docker-compose.yaml`.
 - `docker compose -f docker-compose.release.yaml up -d --build` — start the full Dockerized stack for release parity.
 
+Environment file precedence for local development:
+
+- API loads `.env`, `.env.local`, `.env.development`, `.env.development.local` (later files override earlier ones; shell env vars win).
+- Web (Vite) follows the same mode-aware precedence via `envDir: '..'`.
+- Keep production/reverse-proxy values in `.env` or deployment environment variables, and put workstation overrides in `.env.development.local`.
+
 > ℹ️ Playwright requires browser binaries. Install them once with `pnpm --dir web exec playwright install --with-deps`.
 
 ## 🚀 Frontend Onboarding Cheatsheet

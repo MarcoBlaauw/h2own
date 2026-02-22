@@ -13,7 +13,8 @@ export default defineConfig({
     allowedHosts: ['water.blaauw.rocks', 'localhost'],
     proxy: {
       '/api': {
-        target: process.env.INTERNAL_API_URL || 'http://api:3001',
+        target: process.env.INTERNAL_API_URL || 'http://localhost:3001',
+        rewrite: (path) => path.replace(/^\/api/, ''),
         changeOrigin: true,
         secure: false,
       },

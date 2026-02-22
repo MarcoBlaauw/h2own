@@ -13,7 +13,7 @@ const passthroughHeaders = [
 
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
   const publicApiBase = (env.VITE_API_URL || "/api").replace(/\/$/, "");
-  const internalApiBase = (env.INTERNAL_API_URL || "http://api:3001").replace(/\/$/, "");
+  const internalApiBase = (env.INTERNAL_API_URL || "http://localhost:3001").replace(/\/$/, "");
   const requestUrl = new URL(request.url);
   const isApiRequest =
     publicApiBase.startsWith("/") &&
