@@ -9,12 +9,17 @@
   let error = '';
 
   async function handleSubmit() {
-    const res = await api.auth.register({ name, email, password });
-    if (res.ok) {
-      await goto('/auth/login?registered=1', { replaceState: true });
-    } else {
-      const data = await res.json();
-      error = data.message;
+    error = '';
+    try {
+      const res = await api.auth.register({ name, email, password });
+      if (res.ok) {
+        await goto('/auth/login?registered=1', { replaceState: true });
+      } else {
+        const data = await res.json();
+        error = data.message;
+      }
+    } catch {
+      error = 'Unable to reach the server. Please try again.';
     }
   }
 </script>

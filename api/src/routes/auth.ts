@@ -125,6 +125,17 @@ const handleValidationError = (reply: FastifyReply, error: z.ZodError) => {
 };
 
 export async function authRoutes(app: FastifyInstance) {
+  const sendEmailInBackground = (
+    req: FastifyRequest,
+    send: () => Promise<unknown>,
+    logMessage: string,
+    context: Record<string, unknown>,
+  ) => {
+    void send().catch((mailError) => {
+      req.log.warn({ err: mailError, ...context }, logMessage);
+    });
+  };
+
   const buildRequestBaseUrl = (req: FastifyRequest) => {
     const forwardedProtoRaw = req.headers["x-forwarded-proto"];
     const forwardedHostRaw = req.headers["x-forwarded-host"];
@@ -187,18 +198,12 @@ export async function authRoutes(app: FastifyInstance) {
 
       const user = await authService.getUserById(userId);
       if (user) {
-        try {
-          await mailerService.sendWelcomeEmail(user.email, user.name ?? null);
-        } catch (mailError) {
-          req.log.warn(
-            {
-              err: mailError,
-              userId: user.userId,
-              email: user.email,
-            },
-            "failed to send welcome email",
-          );
-        }
+        sendEmailInBackground(
+          req,
+          () => mailerService.sendWelcomeEmail(user.email, user.name ?? null),
+          "failed to send welcome email",
+          { userId: user.userId, email: user.email },
+        );
       }
       await writeAuditLog(app, req, {
         action: "user.register",
@@ -292,18 +297,17 @@ export async function authRoutes(app: FastifyInstance) {
         const base = buildRequestBaseUrl(req).replace(/\/$/, "");
         const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
 
-        try {
-          await mailerService.sendPasswordResetEmail(
-            user.email,
-            resetUrl,
-            env.PASSWORD_RESET_TOKEN_TTL_SECONDS,
-          );
-        } catch (mailError) {
-          req.log.warn(
-            { err: mailError, userId: user.userId, email: user.email },
-            "failed to send password reset email",
-          );
-        }
+        sendEmailInBackground(
+          req,
+          () =>
+            mailerService.sendPasswordResetEmail(
+              user.email,
+              resetUrl,
+              env.PASSWORD_RESET_TOKEN_TTL_SECONDS,
+            ),
+          "failed to send password reset email",
+          { userId: user.userId, email: user.email },
+        );
         await writeAuditLog(app, req, {
           action: "auth.password_reset.requested",
           entity: "user",
@@ -376,14 +380,12 @@ export async function authRoutes(app: FastifyInstance) {
       const body = forgotUsernameBodySchema.parse(req.body);
       const user = await authService.getUserByEmail(body.email);
       if (user) {
-        try {
-          await mailerService.sendUsernameReminderEmail(user.email, user.email);
-        } catch (mailError) {
-          req.log.warn(
-            { err: mailError, userId: user.userId, email: user.email },
-            "failed to send username reminder email",
-          );
-        }
+        sendEmailInBackground(
+          req,
+          () => mailerService.sendUsernameReminderEmail(user.email, user.email),
+          "failed to send username reminder email",
+          { userId: user.userId, email: user.email },
+        );
         await writeAuditLog(app, req, {
           action: "auth.username_reminder.requested",
           entity: "user",

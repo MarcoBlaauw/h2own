@@ -23,7 +23,7 @@
     import.meta.env.PUBLIC_GOOGLE_MAPS_MAP_ID || import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || '';
 
   let mapEl: HTMLDivElement | null = null;
-  let autocompleteHostEl: HTMLDivElement | null = null;
+  let autocompleteEl: HTMLElement | null = null;
   let isReady = false;
   let setupError: string | null = null;
 
@@ -142,7 +142,7 @@
   };
 
   const initMap = async () => {
-    if (!mapEl || !autocompleteHostEl) return;
+    if (!mapEl || !autocompleteEl) return;
     const google = getGoogle();
     const lat = toNumber(latitude) ?? 37.09024;
     const lng = toNumber(longitude) ?? -95.712891;
@@ -169,11 +169,7 @@
       throw new Error('Place autocomplete is unavailable. Confirm Places API (New) is enabled.');
     }
 
-    autocompleteWidget = new PlaceAutocompleteElement();
-    autocompleteWidget.id = `${idPrefix}-search`;
-    autocompleteWidget.setAttribute('aria-label', 'Search location');
-    autocompleteWidget.setAttribute('placeholder', 'Search address, place, or city');
-    autocompleteHostEl.replaceChildren(autocompleteWidget);
+    autocompleteWidget = autocompleteEl;
 
     autocompleteWidget.addEventListener('gmp-select', handleSelectedPlace);
     autocompleteWidget.addEventListener('gmp-placeselect', handleSelectedPlace);
@@ -270,7 +266,14 @@
 
 <div class="space-y-2">
   <label class="text-sm font-medium text-content-secondary" for={`${idPrefix}-search`}>Search location</label>
-  <div class="place-autocomplete-host" bind:this={autocompleteHostEl}></div>
+  <div class="place-autocomplete-host">
+    <gmp-place-autocomplete
+      id={`${idPrefix}-search`}
+      aria-label="Search location"
+      placeholder="Search address, place, or city"
+      bind:this={autocompleteEl}
+    ></gmp-place-autocomplete>
+  </div>
   <div class={`w-full overflow-hidden rounded-lg border border-border bg-surface-subtle ${heightClass}`} bind:this={mapEl}></div>
   {#if setupError}
     <p class="text-xs text-danger">{setupError}</p>

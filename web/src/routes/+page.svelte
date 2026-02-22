@@ -99,6 +99,7 @@
       weatherId: string;
       locationId: string;
       recordedAt: string;
+      createdAt?: string | null;
       sunriseTime?: string | null;
       sunsetTime?: string | null;
       visibilityMi?: string | number | null;

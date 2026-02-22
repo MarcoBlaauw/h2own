@@ -1,5 +1,6 @@
 @import './lib/styles/tokens.css';
 @import 'tailwindcss';
+@import 'weather-icons/css/weather-icons.css';
 
 @layer base {
   :root {

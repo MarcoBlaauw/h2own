@@ -16,6 +16,15 @@ describe('quick test form helpers', () => {
 });
 
 describe('QuickTestForm component', () => {
+  it('renders helper text from field metadata', () => {
+    const { getByText } = render(QuickTestForm, {
+      props: { poolId: 'pool-123' },
+    });
+
+    expect(getByText('FC: ppm, acceptable 0-20 ppm, target 2.0–4.0 ppm.')).toBeTruthy();
+    expect(getByText('pH: pH, acceptable 6.8-8.6 pH, target 7.2–7.8.')).toBeTruthy();
+  });
+
   it('displays a meaningful validation error when the submission fails validation', async () => {
     const { getByLabelText, findAllByRole } = render(QuickTestForm, {
       props: { poolId: 'pool-123' },

@@ -92,17 +92,6 @@
     ? pools.find((pool) => pool.id === selectedPoolId) ?? null
     : null;
 
-  $: if (selectedPool && updateForm.poolId !== selectedPool.id) {
-    updateForm = formFromPool(selectedPool);
-    transferForm = defaultTransferForm(selectedPool);
-    thermalForm = { ...defaultThermalForm };
-    updateErrors = [];
-    transferErrors = [];
-    updateMessage = null;
-    transferMessage = null;
-    void loadThermalSettings(selectedPool.id);
-  }
-
   function formFromPool(pool: AdminPool): UpdateFormState {
     return {
       poolId: pool.id,
@@ -119,6 +108,26 @@
     return {
       newOwnerId: nextMember?.userId ?? '',
     } satisfies TransferFormState;
+  }
+
+  function applyPoolSelection(pool: AdminPool) {
+    updateForm = formFromPool(pool);
+    transferForm = defaultTransferForm(pool);
+    thermalForm = { ...defaultThermalForm };
+    updateErrors = [];
+    transferErrors = [];
+    updateMessage = null;
+    transferMessage = null;
+    void loadThermalSettings(pool.id);
+  }
+
+  function selectPool(poolId: string | null) {
+    if (poolId === selectedPoolId) return;
+    selectedPoolId = poolId;
+    const nextPool = poolId ? pools.find((pool) => pool.id === poolId) ?? null : null;
+    if (nextPool) {
+      applyPoolSelection(nextPool);
+    }
   }
 
   function formatDate(iso: string | null) {
@@ -221,10 +230,15 @@
 
       const refreshed = (await response.json()) as AdminPool[];
       pools = refreshed;
+      let nextSelectedPoolId = selectedPoolId;
       if (preferredId && refreshed.some((pool) => pool.id === preferredId)) {
-        selectedPoolId = preferredId;
+        nextSelectedPoolId = preferredId;
       } else if (selectedPoolId && !refreshed.some((pool) => pool.id === selectedPoolId)) {
-        selectedPoolId = refreshed[0]?.id ?? null;
+        nextSelectedPoolId = refreshed[0]?.id ?? null;
+      }
+
+      if (nextSelectedPoolId !== selectedPoolId) {
+        selectPool(nextSelectedPoolId);
       }
     } catch (error) {
       console.error('Failed to refresh pools', error);
@@ -338,6 +352,13 @@
       transferring = false;
     }
   }
+
+  if (selectedPoolId) {
+    const initialPool = pools.find((pool) => pool.id === selectedPoolId) ?? null;
+    if (initialPool) {
+      applyPoolSelection(initialPool);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -366,7 +387,7 @@
                     : 'bg-surface-strong/40 hover:bg-surface-strong/60'
                 }`}
                 type="button"
-                on:click={() => (selectedPoolId = pool.id)}
+                on:click={() => selectPool(pool.id)}
               >
                 <div class="font-medium">{pool.name}</div>
                 <div class="text-xs text-content-secondary">Members: {pool.memberCount}</div>

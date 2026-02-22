@@ -17,6 +17,7 @@ vi.mock('$lib/api', () => {
 describe('admin integrations page', () => {
   const listMock = api.adminIntegrations.list as unknown as Mock;
   const updateMock = api.adminIntegrations.update as unknown as Mock;
+  const session = null;
 
   const integrations = [
     {
@@ -50,7 +51,7 @@ describe('admin integrations page', () => {
 
   it('renders integration cards', () => {
     const { getByText } = render(Page, {
-      props: { data: { integrations, loadError: null } },
+      props: { data: { session, integrations, loadError: null } },
     });
 
     expect(getByText('Tomorrow.io')).toBeInTheDocument();
@@ -75,7 +76,7 @@ describe('admin integrations page', () => {
     );
 
     const { getByText, getByLabelText, getByPlaceholderText, findByRole } = render(Page, {
-      props: { data: { integrations, loadError: null } },
+      props: { data: { session, integrations, loadError: null } },
     });
 
     await fireEvent.input(getByLabelText('Cache TTL (seconds)'), { target: { value: '3600' } });
@@ -110,7 +111,7 @@ describe('admin integrations page', () => {
     );
 
     const { getByRole } = render(Page, {
-      props: { data: { integrations: [], loadError: null } },
+      props: { data: { session, integrations: [], loadError: null } },
     });
 
     await fireEvent.click(getByRole('button', { name: /refresh/i }));

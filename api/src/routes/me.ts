@@ -145,18 +145,18 @@ export async function meRoutes(app: FastifyInstance) {
       );
 
       const verifyUrl = `${env.APP_BASE_URL.replace(/\/$/, '')}/auth/verify-email-change?token=${encodeURIComponent(token)}`;
-      try {
-        await mailerService.sendEmailChangeVerificationEmail(
+      void mailerService
+        .sendEmailChangeVerificationEmail(
           requestedEmail,
           verifyUrl,
           env.EMAIL_CHANGE_TOKEN_TTL_SECONDS
-        );
-      } catch (mailError) {
-        req.log.warn(
-          { err: mailError, userId: req.user!.id, email: requestedEmail },
-          'failed to send email change verification email'
-        );
-      }
+        )
+        .catch((mailError) => {
+          req.log.warn(
+            { err: mailError, userId: req.user!.id, email: requestedEmail },
+            'failed to send email change verification email'
+          );
+        });
 
       await writeAuditLog(app, req, {
         action: 'account.email_change.requested',

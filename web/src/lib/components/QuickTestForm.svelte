@@ -1,9 +1,8 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
   import { api } from '$lib/api';
-  import { quickTestSchema, buildSubmission } from './quick-test-form-helpers.js';
+  import { quickTestSchema, buildSubmission, formatHelperText, testParameterMetadata } from './quick-test-form-helpers.js';
   import type { QuickTestSchema } from './quick-test-form-helpers.js';
-  import { measurementMetadata } from '$lib/test-measurements';
 
   export let poolId: string;
 
@@ -19,6 +18,10 @@
   let fieldErrors: Partial<Record<keyof QuickTestSchema, string[]>> = {};
 
   const fieldErrorId = (field: keyof QuickTestSchema) => `quick-test-${field}-error`;
+  const fieldHelperId = (field: keyof QuickTestSchema) => `quick-test-${field}-helper`;
+
+  const formatFieldDescription = (field: keyof QuickTestSchema) =>
+    [fieldHelperId(field), fieldMessages[field] ? fieldErrorId(field) : null].filter(Boolean).join(' ');
 
   $: fieldMessages = {
     fc: fieldErrors.fc?.[0] ?? '',
@@ -123,20 +126,23 @@
     on:submit|preventDefault={handleSubmit}
   >
     <div class="form-field">
-      <label class="form-label" data-variant="caps" for="fc">FC</label>
+      <label class="form-label" data-variant="caps" for="fc">{testParameterMetadata.fc.label}</label>
       <input
         id="fc"
         type="number"
-        min={measurementMetadata.fc.acceptedRange.min}
-        max={measurementMetadata.fc.acceptedRange.max}
-        step={measurementMetadata.fc.step}
+        min={testParameterMetadata.fc.acceptedMin}
+        max={testParameterMetadata.fc.acceptedMax}
+        step={testParameterMetadata.fc.step}
         bind:value={fc}
         class="form-control"
         data-invalid={fieldMessages.fc ? 'true' : undefined}
         aria-invalid={fieldMessages.fc ? 'true' : undefined}
-        aria-describedby={fieldMessages.fc ? fieldErrorId('fc') : undefined}
+        aria-describedby={formatFieldDescription('fc')}
         disabled={isSubmitting}
       >
+      <p class="form-message" data-state="info" id={fieldHelperId('fc')}>
+        {formatHelperText('fc')}
+      </p>
       {#if fieldMessages.fc}
         <p class="form-message" data-state="error" id={fieldErrorId('fc')} role="alert">
           {fieldMessages.fc}
@@ -144,20 +150,23 @@
       {/if}
     </div>
     <div class="form-field">
-      <label class="form-label" data-variant="caps" for="tc">TC</label>
+      <label class="form-label" data-variant="caps" for="tc">{testParameterMetadata.tc.label}</label>
       <input
         id="tc"
         type="number"
-        min={measurementMetadata.tc.acceptedRange.min}
-        max={measurementMetadata.tc.acceptedRange.max}
-        step={measurementMetadata.tc.step}
+        min={testParameterMetadata.tc.acceptedMin}
+        max={testParameterMetadata.tc.acceptedMax}
+        step={testParameterMetadata.tc.step}
         bind:value={tc}
         class="form-control"
         data-invalid={fieldMessages.tc ? 'true' : undefined}
         aria-invalid={fieldMessages.tc ? 'true' : undefined}
-        aria-describedby={fieldMessages.tc ? fieldErrorId('tc') : undefined}
+        aria-describedby={formatFieldDescription('tc')}
         disabled={isSubmitting}
       >
+      <p class="form-message" data-state="info" id={fieldHelperId('tc')}>
+        {formatHelperText('tc')}
+      </p>
       {#if fieldMessages.tc}
         <p class="form-message" data-state="error" id={fieldErrorId('tc')} role="alert">
           {fieldMessages.tc}
@@ -165,20 +174,23 @@
       {/if}
     </div>
     <div class="form-field">
-      <label class="form-label" data-variant="caps" for="ph">pH</label>
+      <label class="form-label" data-variant="caps" for="ph">{testParameterMetadata.ph.label}</label>
       <input
         id="ph"
         type="number"
-        min={measurementMetadata.ph.acceptedRange.min}
-        max={measurementMetadata.ph.acceptedRange.max}
-        step={measurementMetadata.ph.step}
+        min={testParameterMetadata.ph.acceptedMin}
+        max={testParameterMetadata.ph.acceptedMax}
+        step={testParameterMetadata.ph.step}
         bind:value={ph}
         class="form-control"
         data-invalid={fieldMessages.ph ? 'true' : undefined}
         aria-invalid={fieldMessages.ph ? 'true' : undefined}
-        aria-describedby={fieldMessages.ph ? fieldErrorId('ph') : undefined}
+        aria-describedby={formatFieldDescription('ph')}
         disabled={isSubmitting}
       >
+      <p class="form-message" data-state="info" id={fieldHelperId('ph')}>
+        {formatHelperText('ph')}
+      </p>
       {#if fieldMessages.ph}
         <p class="form-message" data-state="error" id={fieldErrorId('ph')} role="alert">
           {fieldMessages.ph}
@@ -186,19 +198,22 @@
       {/if}
     </div>
     <div class="form-field">
-      <label class="form-label" data-variant="caps" for="ta">TA</label>
+      <label class="form-label" data-variant="caps" for="ta">{testParameterMetadata.ta.label}</label>
       <input
         id="ta"
         type="number"
-        min={measurementMetadata.ta.acceptedRange.min}
-        max={measurementMetadata.ta.acceptedRange.max}
+        min={testParameterMetadata.ta.acceptedMin}
+        max={testParameterMetadata.ta.acceptedMax}
         bind:value={ta}
         class="form-control"
         data-invalid={fieldMessages.ta ? 'true' : undefined}
         aria-invalid={fieldMessages.ta ? 'true' : undefined}
-        aria-describedby={fieldMessages.ta ? fieldErrorId('ta') : undefined}
+        aria-describedby={formatFieldDescription('ta')}
         disabled={isSubmitting}
       >
+      <p class="form-message" data-state="info" id={fieldHelperId('ta')}>
+        {formatHelperText('ta')}
+      </p>
       {#if fieldMessages.ta}
         <p class="form-message" data-state="error" id={fieldErrorId('ta')} role="alert">
           {fieldMessages.ta}
@@ -206,19 +221,22 @@
       {/if}
     </div>
     <div class="form-field">
-      <label class="form-label" data-variant="caps" for="cya">CYA</label>
+      <label class="form-label" data-variant="caps" for="cya">{testParameterMetadata.cya.label}</label>
       <input
         id="cya"
         type="number"
-        min={measurementMetadata.cya.acceptedRange.min}
-        max={measurementMetadata.cya.acceptedRange.max}
+        min={testParameterMetadata.cya.acceptedMin}
+        max={testParameterMetadata.cya.acceptedMax}
         bind:value={cya}
         class="form-control"
         data-invalid={fieldMessages.cya ? 'true' : undefined}
         aria-invalid={fieldMessages.cya ? 'true' : undefined}
-        aria-describedby={fieldMessages.cya ? fieldErrorId('cya') : undefined}
+        aria-describedby={formatFieldDescription('cya')}
         disabled={isSubmitting}
       >
+      <p class="form-message" data-state="info" id={fieldHelperId('cya')}>
+        {formatHelperText('cya')}
+      </p>
       {#if fieldMessages.cya}
         <p class="form-message" data-state="error" id={fieldErrorId('cya')} role="alert">
           {fieldMessages.cya}
