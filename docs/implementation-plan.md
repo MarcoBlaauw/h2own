@@ -24,6 +24,10 @@ Capture the current feature state and outline the next implementation steps to r
 
 ### Missing (relative to MVP goals)
 - None.
+
+### Not yet started (post-MVP roadmap)
+- Calendar-based scheduling for dosage/testing events.
+- Automated reminder dispatch pipeline for scheduled events.
 ## Implementation Plan
 
 ### 1) Wire live dashboard data (Completed)
@@ -58,6 +62,12 @@ Capture the current feature state and outline the next implementation steps to r
 ### 7) Photos (Completed)
 - [x] Add presigned upload endpoint and confirm endpoint.
 - [x] Attach photos to test sessions in the UI.
+
+### 8) Calendar scheduling + reminders (Planned, post-MVP)
+- [ ] Add schedule domain model (events, recurrence rules, occurrences).
+- [ ] Add scheduler/worker pipeline for reminder generation and delivery.
+- [ ] Add calendar UI and event CRUD workflows.
+- [ ] Add delivery observability, retries, and failure handling.
 
 ## QA / Verification
 - Run `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm test:web`, and `pnpm test:web:e2e`.
