@@ -15,6 +15,17 @@ export type QuickTestSchema = {
   [K in QuickMeasurementKey]?: number;
 };
 
+export const quickTestAcceptedBounds: Record<MeasurementKey, { min: number; max: number }> =
+  Object.fromEntries(
+    quickMeasurementKeys.map((key) => [
+      key,
+      {
+        min: measurementMetadata[key].acceptedRange.min,
+        max: measurementMetadata[key].acceptedRange.max,
+      },
+    ])
+  ) as Record<MeasurementKey, { min: number; max: number }>;
+
 export const testParameterMetadata: Record<
   MeasurementKey,
   {
@@ -33,8 +44,8 @@ export const testParameterMetadata: Record<
       {
         label: shortMeasurementLabels[key],
         unit: metadata.unit,
-        acceptedMin: metadata.acceptedRange.min,
-        acceptedMax: metadata.acceptedRange.max,
+        acceptedMin: quickTestAcceptedBounds[key].min,
+        acceptedMax: quickTestAcceptedBounds[key].max,
         targetRange: metadata.targetRange,
         step: metadata.step,
       },
