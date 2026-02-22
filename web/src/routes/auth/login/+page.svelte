@@ -30,13 +30,17 @@
   async function handleSubmit() {
     error = '';
     success = '';
-    const res = await api.auth.login({ email, password });
-    if (res.ok) {
-      await invalidateAll();
-      await goto('/profile', { invalidateAll: true });
-    } else {
-      const data = await res.json();
-      error = data.message;
+    try {
+      const res = await api.auth.login({ email, password });
+      if (res.ok) {
+        await invalidateAll();
+        await goto('/profile', { invalidateAll: true });
+      } else {
+        const data = await res.json();
+        error = data.message;
+      }
+    } catch {
+      error = 'Unable to reach the server. Please try again.';
     }
   }
 </script>

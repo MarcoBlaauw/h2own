@@ -9,6 +9,16 @@ export default defineConfig({
   envDir: '..',
   envPrefix: ['VITE_', 'PUBLIC_'],
   plugins: [...plugins, svelteTesting()],
+  server: {
+    allowedHosts: ['water.blaauw.rocks', 'localhost'],
+    proxy: {
+      '/api': {
+        target: process.env.INTERNAL_API_URL || 'http://api:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.{js,ts}'],

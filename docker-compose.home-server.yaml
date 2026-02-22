@@ -1,0 +1,137 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: h2own-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-h2own}
+      POSTGRES_USER: ${POSTGRES_USER:-h2own}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./app/db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - h2own-internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: h2own-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - h2own-internal
+
+  api:
+    build:
+      context: ./app
+      dockerfile: api/Dockerfile
+    container_name: h2own-api
+    restart: unless-stopped
+    command: ["node_modules/.bin/tsx", "src/app.ts"]
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgres://${POSTGRES_USER:-h2own}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-h2own}
+      SESSION_SECRET: ${SESSION_SECRET}
+      REDIS_URL: redis://redis:6379
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-604800}
+      SESSION_PREFIX: ${SESSION_PREFIX:-session}
+      TRUST_PROXY: "true"
+      CORS_ORIGIN: https://water.blaauw.rocks
+      APP_BASE_URL: https://water.blaauw.rocks
+      PASSWORD_RESET_TOKEN_TTL_SECONDS: ${PASSWORD_RESET_TOKEN_TTL_SECONDS:-3600}
+      EMAIL_CHANGE_TOKEN_TTL_SECONDS: ${EMAIL_CHANGE_TOKEN_TTL_SECONDS:-86400}
+      TOMORROW_API_KEY: ${TOMORROW_API_KEY:-}
+      TOMORROW_API_BASE: ${TOMORROW_API_BASE:-https://api.tomorrow.io/v4}
+      WEATHER_CACHE_TTL_MINUTES: ${WEATHER_CACHE_TTL_MINUTES:-30}
+      WEATHER_RATE_LIMIT_COOLDOWN_SECONDS: ${WEATHER_RATE_LIMIT_COOLDOWN_SECONDS:-300}
+      PHOTO_PUBLIC_BASE_URL: ${PHOTO_PUBLIC_BASE_URL:-}
+      PHOTO_UPLOAD_BASE_URL: ${PHOTO_UPLOAD_BASE_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-H2Own}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      traefik-proxy:
+        priority: 1000
+      h2own-internal:
+        priority: 100
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.routers.h2own-api.rule=Host(`water.blaauw.rocks`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.h2own-api.entrypoints=websecure"
+      - "traefik.http.routers.h2own-api.middlewares=wl-disabled@file,h2own-api-strip@docker"
+      - "traefik.http.routers.h2own-api.tls.certresolver=lets-encrypt"
+      - "traefik.http.routers.h2own-api.priority=100"
+      - "traefik.http.middlewares.h2own-api-strip.stripprefix.prefixes=/api"
+      - "traefik.http.services.h2own-api.loadbalancer.server.port=3001"
+
+  web:
+    build:
+      context: ./app/web
+      dockerfile: Dockerfile
+    container_name: h2own-web
+    restart: unless-stopped
+    command: ["node_modules/.bin/vite", "--host", "--port", "3000"]
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      INTERNAL_API_URL: http://api:3001
+      VITE_API_URL: /api
+      PUBLIC_API_BASE: /api
+      PUBLIC_APP_NAME: H2Own
+      PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
+      PUBLIC_GOOGLE_MAPS_MAP_ID: ${PUBLIC_GOOGLE_MAPS_MAP_ID:-}
+      PROTOCOL_HEADER: ${PROTOCOL_HEADER:-x-forwarded-proto}
+      HOST_HEADER: ${HOST_HEADER:-x-forwarded-host}
+      ADDRESS_HEADER: ${ADDRESS_HEADER:-cf-connecting-ip}
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+    depends_on:
+      - api
+    networks:
+      traefik-proxy:
+        priority: 1000
+      h2own-internal:
+        priority: 100
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.routers.h2own.rule=Host(`water.blaauw.rocks`)"
+      - "traefik.http.routers.h2own.entrypoints=websecure"
+      - "traefik.http.routers.h2own.middlewares=wl-disabled@file"
+      - "traefik.http.routers.h2own.tls.certresolver=lets-encrypt"
+      - "traefik.http.routers.h2own.priority=10"
+      - "traefik.http.services.h2own.loadbalancer.server.port=3000"
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  h2own-internal:
+    driver: bridge
+  traefik-proxy:
+    external: true

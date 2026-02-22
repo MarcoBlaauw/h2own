@@ -9,6 +9,7 @@ describe('WeatherQualityCard', () => {
         dailyWeather: [
           {
             recordedAt: '2024-03-01T00:00:00.000Z',
+            createdAt: '2024-03-01T00:05:00.000Z',
             sunriseTime: '2024-03-01T11:10:00.000Z',
             sunsetTime: '2024-03-01T23:00:00.000Z',
             visibilityMi: '9.90',
@@ -33,6 +34,7 @@ describe('WeatherQualityCard', () => {
     expect(getByText('Pool weather quality')).toBeTruthy();
     expect(getByText(/Excellent|Good|Fair|Poor/)).toBeTruthy();
     expect(getByText('Today')).toBeTruthy();
+    expect(getByText(/Last refreshed:/)).toBeTruthy();
     expect(getByText('Solar')).toBeTruthy();
     expect(getByText('Sky')).toBeTruthy();
     expect(getByText('UV And Heat')).toBeTruthy();

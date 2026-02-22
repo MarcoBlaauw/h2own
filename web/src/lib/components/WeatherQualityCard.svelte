@@ -3,6 +3,7 @@
 
   type WeatherDay = {
     recordedAt: string | Date;
+    createdAt?: string | Date | null;
     sunriseTime?: string | Date | null;
     sunsetTime?: string | Date | null;
     visibilityMi?: string | number | null;
@@ -34,6 +35,18 @@
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime())) return '—';
     return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  const formatDateTime = (value?: string | Date | null) => {
+    if (!value) return '—';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   };
 
   const formatTime = (value?: string | Date | null) => {
@@ -80,6 +93,49 @@
   const formatDegrees = (value?: number | null) => {
     if (value === null || value === undefined) return '—';
     return `${Math.round(value)}°`;
+  };
+
+  const windDirectionLabel = (value?: number | null) => {
+    if (value === null || value === undefined) return '—';
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const normalized = ((value % 360) + 360) % 360;
+    const index = Math.round(normalized / 45) % 8;
+    return directions[index];
+  };
+
+  const windDirectionIconClass = (value?: number | null) => {
+    if (value === null || value === undefined) return 'wi-strong-wind';
+    const normalized = ((value % 360) + 360) % 360;
+    if (normalized >= 337.5 || normalized < 22.5) return 'wi-wind-north';
+    if (normalized < 67.5) return 'wi-wind-north-east';
+    if (normalized < 112.5) return 'wi-wind-east';
+    if (normalized < 157.5) return 'wi-wind-south-east';
+    if (normalized < 202.5) return 'wi-wind-south';
+    if (normalized < 247.5) return 'wi-wind-south-west';
+    if (normalized < 292.5) return 'wi-wind-west';
+    return 'wi-wind-north-west';
+  };
+
+  const beaufortFromMph = (value?: number | null) => {
+    if (value === null || value === undefined) return null;
+    if (value < 1) return 0;
+    if (value < 4) return 1;
+    if (value < 8) return 2;
+    if (value < 13) return 3;
+    if (value < 19) return 4;
+    if (value < 25) return 5;
+    if (value < 32) return 6;
+    if (value < 39) return 7;
+    if (value < 47) return 8;
+    if (value < 55) return 9;
+    if (value < 64) return 10;
+    if (value < 73) return 11;
+    return 12;
+  };
+
+  const beaufortIconClass = (value?: number | null) => {
+    const beaufort = beaufortFromMph(value);
+    return beaufort === null ? 'wi-strong-wind' : `wi-beafort-${beaufort}`;
   };
 
   const computeQuality = (day?: WeatherDay) => {
@@ -130,6 +186,20 @@
 
   const today = sorted[0];
   const quality = computeQuality(today);
+  const windDirectionIcon = windDirectionIconClass(today?.windDirectionDeg);
+  const windDirectionText =
+    today?.windDirectionDeg === null || today?.windDirectionDeg === undefined
+      ? '—'
+      : `${windDirectionLabel(today.windDirectionDeg)} (${formatDegrees(today.windDirectionDeg)})`;
+  const beaufortIcon = beaufortIconClass(today?.windSpeedMph);
+  const beaufortValue = beaufortFromMph(today?.windSpeedMph);
+  const lastRefreshedAt = dailyWeather.reduce<Date | null>((latest, day) => {
+    if (!day.createdAt) return latest;
+    const created = day.createdAt instanceof Date ? day.createdAt : new Date(day.createdAt);
+    if (Number.isNaN(created.getTime())) return latest;
+    if (!latest || created.getTime() > latest.getTime()) return created;
+    return latest;
+  }, null);
 </script>
 
 <Card>
@@ -137,6 +207,9 @@
     <div>
       <h2 class="text-lg font-semibold text-content-primary">Pool weather quality</h2>
       <p class="text-xs text-content-secondary">{quality.detail}</p>
+      <p class="text-xs text-content-secondary mt-1">
+        Last refreshed: {formatDateTime(lastRefreshedAt)}
+      </p>
     </div>
     <div class="text-right">
       <div class="text-2xl font-semibold text-content-primary">
@@ -178,13 +251,19 @@
       <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
         <div class="text-xs uppercase tracking-wide text-content-secondary">Solar</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary">
-            Sunrise:
-            <span class="font-medium text-content-primary">{formatTime(today.sunriseTime)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-sunrise text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Sunrise:
+              <span class="font-medium text-content-primary">{formatTime(today.sunriseTime)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Sunset:
-            <span class="font-medium text-content-primary">{formatTime(today.sunsetTime)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-sunset text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Sunset:
+              <span class="font-medium text-content-primary">{formatTime(today.sunsetTime)}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -192,21 +271,33 @@
       <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
         <div class="text-xs uppercase tracking-wide text-content-secondary">Sky</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary">
-            Visibility:
-            <span class="font-medium text-content-primary">{formatMiles(today.visibilityMi)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-day-haze text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Visibility:
+              <span class="font-medium text-content-primary">{formatMiles(today.visibilityMi)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Cloud cover:
-            <span class="font-medium text-content-primary">{formatPercent(today.cloudCoverPercent)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-cloudy text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Cloud cover:
+              <span class="font-medium text-content-primary">{formatPercent(today.cloudCoverPercent)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Cloud base:
-            <span class="font-medium text-content-primary">{formatKm(today.cloudBaseKm)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-cloud-down text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Cloud base:
+              <span class="font-medium text-content-primary">{formatKm(today.cloudBaseKm)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Cloud ceiling:
-            <span class="font-medium text-content-primary">{formatKm(today.cloudCeilingKm)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-cloud-up text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Cloud ceiling:
+              <span class="font-medium text-content-primary">{formatKm(today.cloudCeilingKm)}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -214,21 +305,33 @@
       <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
         <div class="text-xs uppercase tracking-wide text-content-secondary">UV And Heat</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary">
-            UV index:
-            <span class="font-medium text-content-primary">{today.uvIndex ?? '—'}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-day-sunny text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              UV index:
+              <span class="font-medium text-content-primary">{today.uvIndex ?? '—'}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            UV concern:
-            <span class="font-medium text-content-primary">{today.uvHealthConcern ?? '—'}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-hot text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              UV concern:
+              <span class="font-medium text-content-primary">{today.uvHealthConcern ?? '—'}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Apparent temp:
-            <span class="font-medium text-content-primary">{formatTemp(today.temperatureApparentF)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-thermometer text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Apparent temp:
+              <span class="font-medium text-content-primary">{formatTemp(today.temperatureApparentF)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Heat stress:
-            <span class="font-medium text-content-primary">{today.ezHeatStressIndex ?? '—'}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-thermometer-exterior text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Heat stress:
+              <span class="font-medium text-content-primary">{today.ezHeatStressIndex ?? '—'}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -236,21 +339,40 @@
       <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
         <div class="text-xs uppercase tracking-wide text-content-secondary">Wind And Air</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary">
-            Wind speed:
-            <span class="font-medium text-content-primary">{formatMph(today.windSpeedMph)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class={`wi ${beaufortIcon} text-content-primary text-base`} aria-hidden="true"></i>
+            <span>
+              Wind speed:
+              <span class="font-medium text-content-primary">{formatMph(today.windSpeedMph)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Wind direction:
-            <span class="font-medium text-content-primary">{formatDegrees(today.windDirectionDeg)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class={`wi ${windDirectionIcon} text-content-primary text-base`} aria-hidden="true"></i>
+            <span>
+              Wind direction:
+              <span class="font-medium text-content-primary">{windDirectionText}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Wind gust:
-            <span class="font-medium text-content-primary">{formatMph(today.windGustMph)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-strong-wind text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Wind gust:
+              <span class="font-medium text-content-primary">{formatMph(today.windGustMph)}</span>
+            </span>
           </div>
-          <div class="text-content-secondary">
-            Humidity:
-            <span class="font-medium text-content-primary">{formatPercent(today.humidityPercent)}</span>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class="wi wi-umbrella text-content-primary text-base" aria-hidden="true"></i>
+            <span>
+              Humidity:
+              <span class="font-medium text-content-primary">{formatPercent(today.humidityPercent)}</span>
+            </span>
+          </div>
+          <div class="text-content-secondary flex items-center gap-2">
+            <i class={`wi ${beaufortIcon} text-content-primary text-base`} aria-hidden="true"></i>
+            <span>
+              Wind force:
+              <span class="font-medium text-content-primary">{beaufortValue ?? '—'}</span>
+            </span>
           </div>
         </div>
       </div>

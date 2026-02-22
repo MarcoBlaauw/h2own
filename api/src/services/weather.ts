@@ -463,6 +463,26 @@ export class WeatherService {
       return;
     }
 
+    const toPersistedValues = (record: WeatherRecord) => ({
+      sunriseTime: record.sunriseTime ?? undefined,
+      sunsetTime: record.sunsetTime ?? undefined,
+      visibilityMi: formatDecimal(record.visibilityMi),
+      cloudCoverPercent: formatDecimal(record.cloudCoverPercent),
+      cloudBaseKm: formatDecimal(record.cloudBaseKm),
+      cloudCeilingKm: formatDecimal(record.cloudCeilingKm),
+      airTempF: formatInteger(record.airTempF),
+      temperatureApparentF: formatInteger(record.temperatureApparentF),
+      uvIndex: formatInteger(record.uvIndex),
+      uvHealthConcern: formatInteger(record.uvHealthConcern),
+      ezHeatStressIndex: formatInteger(record.ezHeatStressIndex),
+      rainfallIn: formatDecimal(record.rainfallIn),
+      windSpeedMph: formatInteger(record.windSpeedMph),
+      windDirectionDeg: formatInteger(record.windDirectionDeg),
+      windGustMph: formatInteger(record.windGustMph),
+      humidityPercent: formatInteger(record.humidityPercent),
+      pressureInhg: formatDecimal(record.pressureInhg),
+    });
+
     const recordedAtValues = records.map((record) => record.recordedAt);
     const existing = await this.db
       .select({
@@ -477,6 +497,30 @@ export class WeatherService {
       );
 
     const existingTimes = new Set(existing.map((row) => row.recordedAt.toISOString()));
+    const updates = records.filter((record) => existingTimes.has(record.recordedAt.toISOString()));
+
+    await Promise.all(
+      updates.map(async (record) => {
+        const persisted = toPersistedValues(record);
+        const patch = Object.fromEntries(
+          Object.entries(persisted).filter(([, value]) => value !== undefined)
+        );
+        if (Object.keys(patch).length === 0) {
+          return;
+        }
+
+        await this.db
+          .update(schema.weatherData)
+          .set(patch)
+          .where(
+            and(
+              eq(schema.weatherData.locationId, locationId),
+              eq(schema.weatherData.recordedAt, record.recordedAt)
+            )
+          );
+      })
+    );
+
     const inserts = records.filter(
       (record) => !existingTimes.has(record.recordedAt.toISOString())
     );
@@ -489,23 +533,7 @@ export class WeatherService {
       inserts.map((record) => ({
         locationId,
         recordedAt: record.recordedAt,
-        sunriseTime: record.sunriseTime ?? undefined,
-        sunsetTime: record.sunsetTime ?? undefined,
-        visibilityMi: formatDecimal(record.visibilityMi),
-        cloudCoverPercent: formatDecimal(record.cloudCoverPercent),
-        cloudBaseKm: formatDecimal(record.cloudBaseKm),
-        cloudCeilingKm: formatDecimal(record.cloudCeilingKm),
-        airTempF: formatInteger(record.airTempF),
-        temperatureApparentF: formatInteger(record.temperatureApparentF),
-        uvIndex: formatInteger(record.uvIndex),
-        uvHealthConcern: formatInteger(record.uvHealthConcern),
-        ezHeatStressIndex: formatInteger(record.ezHeatStressIndex),
-        rainfallIn: formatDecimal(record.rainfallIn),
-        windSpeedMph: formatInteger(record.windSpeedMph),
-        windDirectionDeg: formatInteger(record.windDirectionDeg),
-        windGustMph: formatInteger(record.windGustMph),
-        humidityPercent: formatInteger(record.humidityPercent),
-        pressureInhg: formatDecimal(record.pressureInhg),
+        ...toPersistedValues(record),
       }))
     );
   }
