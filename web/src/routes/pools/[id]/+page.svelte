@@ -134,7 +134,10 @@
       </Card>
       <Card className="shadow-card h-full md:col-span-2">
         <form class="form-grid" on:submit|preventDefault={handleSubmit}>
-          <h2 class="sm:col-span-2 text-xl font-semibold text-content-primary">Add New Test</h2>
+          <div class="sm:col-span-2 flex items-center justify-between gap-3">
+            <h2 class="text-xl font-semibold text-content-primary">Add New Test (Quick)</h2>
+            <a class="text-sm font-semibold text-accent hover:text-accent-strong" href={`/pools/${data.pool.poolId}/tests/new`}>Use detailed form</a>
+          </div>
           <div class="form-field">
             <label class="form-label" for="fc">Free Chlorine (FC)</label>
             <input

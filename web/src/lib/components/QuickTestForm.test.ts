@@ -32,7 +32,7 @@ describe('QuickTestForm component', () => {
 
     const alerts = await findAllByRole('alert');
     expect(alerts.length).toBeGreaterThan(0);
-    expect(alerts.some(alert => alert.textContent?.includes('Number must be greater than or equal to 0'))).toBe(true);
-    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: Number must be greater than or equal to 0'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('Free Chlorine (FC) must be at least 0 ppm.'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: Free Chlorine (FC) must be at least 0 ppm.'))).toBe(true);
   });
 });

@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import { quickTestSchema, buildSubmission } from './quick-test-form-helpers.js';
   import type { QuickTestSchema } from './quick-test-form-helpers.js';
+  import { measurementMetadata } from '$lib/test-measurements';
 
   export let poolId: string;
 
@@ -126,7 +127,9 @@
       <input
         id="fc"
         type="number"
-        min="0"
+        min={measurementMetadata.fc.acceptedRange.min}
+        max={measurementMetadata.fc.acceptedRange.max}
+        step={measurementMetadata.fc.step}
         bind:value={fc}
         class="form-control"
         data-invalid={fieldMessages.fc ? 'true' : undefined}
@@ -145,7 +148,9 @@
       <input
         id="tc"
         type="number"
-        min="0"
+        min={measurementMetadata.tc.acceptedRange.min}
+        max={measurementMetadata.tc.acceptedRange.max}
+        step={measurementMetadata.tc.step}
         bind:value={tc}
         class="form-control"
         data-invalid={fieldMessages.tc ? 'true' : undefined}
@@ -164,8 +169,9 @@
       <input
         id="ph"
         type="number"
-        min="0"
-        step="0.1"
+        min={measurementMetadata.ph.acceptedRange.min}
+        max={measurementMetadata.ph.acceptedRange.max}
+        step={measurementMetadata.ph.step}
         bind:value={ph}
         class="form-control"
         data-invalid={fieldMessages.ph ? 'true' : undefined}
@@ -184,7 +190,8 @@
       <input
         id="ta"
         type="number"
-        min="0"
+        min={measurementMetadata.ta.acceptedRange.min}
+        max={measurementMetadata.ta.acceptedRange.max}
         bind:value={ta}
         class="form-control"
         data-invalid={fieldMessages.ta ? 'true' : undefined}
@@ -203,7 +210,8 @@
       <input
         id="cya"
         type="number"
-        min="0"
+        min={measurementMetadata.cya.acceptedRange.min}
+        max={measurementMetadata.cya.acceptedRange.max}
         bind:value={cya}
         class="form-control"
         data-invalid={fieldMessages.cya ? 'true' : undefined}

@@ -119,6 +119,7 @@ type ApiClient = {
       body: Record<string, unknown>,
       customFetch?: FetchLike
     ) => Promise<Response>;
+    createTest: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
   };
   tests: {
     create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -346,10 +347,12 @@ export const api: ApiClient = {
         jsonRequest(body, { method: 'PUT' }),
         customFetch
       ),
+    createTest: (poolId, body) =>
+      apiFetch(`/pools/${poolId}/tests`, jsonRequest(body, { method: 'POST' })),
   },
   tests: {
     create: (poolId, body) =>
-      apiFetch(`/pools/${poolId}/tests`, jsonRequest(body, { method: 'POST' })),
+      api.pools.createTest(poolId, body),
     list: (poolId, customFetch, params = {}) => {
       const search = new URLSearchParams();
       if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
