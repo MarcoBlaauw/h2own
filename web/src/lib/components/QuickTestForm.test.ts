@@ -16,6 +16,15 @@ describe('quick test form helpers', () => {
 });
 
 describe('QuickTestForm component', () => {
+  it('renders helper text from field metadata', () => {
+    const { getByText } = render(QuickTestForm, {
+      props: { poolId: 'pool-123' },
+    });
+
+    expect(getByText('FC: ppm, acceptable 0–10 ppm, target 3–5 ppm.')).toBeTruthy();
+    expect(getByText('pH: pH, acceptable 6.8–8.2 pH, target 7.2–7.6 pH.')).toBeTruthy();
+  });
+
   it('displays a meaningful validation error when the submission fails validation', async () => {
     const { getByLabelText, findAllByRole } = render(QuickTestForm, {
       props: { poolId: 'pool-123' },
@@ -32,7 +41,7 @@ describe('QuickTestForm component', () => {
 
     const alerts = await findAllByRole('alert');
     expect(alerts.length).toBeGreaterThan(0);
-    expect(alerts.some(alert => alert.textContent?.includes('Number must be greater than or equal to 0'))).toBe(true);
-    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: Number must be greater than or equal to 0'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('FC must be at least 0 ppm.'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: FC must be at least 0 ppm.'))).toBe(true);
   });
 });

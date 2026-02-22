@@ -1,39 +1,88 @@
 import { z } from 'zod';
 
-export const measurementLabels = {
-  fc: 'FC',
-  tc: 'TC',
-  ph: 'pH',
-  ta: 'TA',
-  cya: 'CYA',
+export const testParameterMetadata = {
+  fc: {
+    label: 'FC',
+    unit: 'ppm',
+    acceptedMin: 0,
+    acceptedMax: 10,
+    targetMin: 3,
+    targetMax: 5,
+  },
+  tc: {
+    label: 'TC',
+    unit: 'ppm',
+    acceptedMin: 0,
+    acceptedMax: 10,
+    targetMin: 3,
+    targetMax: 6,
+  },
+  ph: {
+    label: 'pH',
+    unit: 'pH',
+    acceptedMin: 6.8,
+    acceptedMax: 8.2,
+    targetMin: 7.2,
+    targetMax: 7.6,
+  },
+  ta: {
+    label: 'TA',
+    unit: 'ppm',
+    acceptedMin: 0,
+    acceptedMax: 240,
+    targetMin: 80,
+    targetMax: 120,
+  },
+  cya: {
+    label: 'CYA',
+    unit: 'ppm',
+    acceptedMin: 0,
+    acceptedMax: 100,
+    targetMin: 30,
+    targetMax: 50,
+  },
 } as const;
 
-type MeasurementKey = keyof typeof measurementLabels;
+export type MeasurementKey = keyof typeof testParameterMetadata;
+
+export const measurementLabels = Object.fromEntries(
+  Object.entries(testParameterMetadata).map(([key, metadata]) => [key, metadata.label])
+) as Record<MeasurementKey, string>;
 
 type MeasurementValue = string | number | null | undefined;
 
-const optionalNumberField = z.preprocess(
-  value => {
-    if (value === '' || value === null || value === undefined) {
-      return undefined;
-    }
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed === '') return undefined;
-      const parsed = Number(trimmed);
-      return Number.isNaN(parsed) ? value : parsed;
-    }
-    return value;
-  },
-  z.number().min(0).optional()
-);
+const optionalNumberField = (key: MeasurementKey) => {
+  const { label, acceptedMin, acceptedMax } = testParameterMetadata[key];
+
+  return z.preprocess(
+    value => {
+      if (value === '' || value === null || value === undefined) {
+        return undefined;
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed === '') return undefined;
+        const parsed = Number(trimmed);
+        return Number.isNaN(parsed) ? value : parsed;
+      }
+      return value;
+    },
+    z
+      .number({
+        invalid_type_error: `${label} must be a number.`,
+      })
+      .min(acceptedMin, `${label} must be at least ${acceptedMin} ${testParameterMetadata[key].unit}.`)
+      .max(acceptedMax, `${label} must be at most ${acceptedMax} ${testParameterMetadata[key].unit}.`)
+      .optional()
+  );
+};
 
 export const quickTestSchema = z.object({
-  fc: optionalNumberField,
-  tc: optionalNumberField,
-  ph: optionalNumberField,
-  ta: optionalNumberField,
-  cya: optionalNumberField,
+  fc: optionalNumberField('fc'),
+  tc: optionalNumberField('tc'),
+  ph: optionalNumberField('ph'),
+  ta: optionalNumberField('ta'),
+  cya: optionalNumberField('cya'),
 });
 
 export type QuickTestSchema = z.infer<typeof quickTestSchema>;
@@ -57,4 +106,11 @@ export function buildSubmission(data: QuickTestSchema): SubmissionResult {
 
 export function parseFormValues(values: Record<MeasurementKey, MeasurementValue>) {
   return quickTestSchema.safeParse(values);
+}
+
+export function formatHelperText(key: MeasurementKey): string {
+  const { unit, acceptedMin, acceptedMax, targetMin, targetMax, label } = testParameterMetadata[key];
+  const accepted = `${acceptedMin}–${acceptedMax} ${unit}`;
+  const target = `${targetMin}–${targetMax} ${unit}`;
+  return `${label}: ${unit}, acceptable ${accepted}, target ${target}.`;
 }
