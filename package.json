@@ -12,12 +12,14 @@
     "format:check": "pnpm --filter h2own-api format:check && pnpm --filter h2own-web format:check",
     "test": "pnpm --filter h2own-api test",
     "test:web": "pnpm --filter h2own-web test",
+    "test:cloud": "pnpm lint && pnpm test && pnpm test:web && pnpm check && pnpm audit --prod",
     "test:web:e2e": "pnpm --filter h2own-web test:e2e",
     "test:e2e": "bash ./scripts/test-e2e.sh",
     "test:visual": "pnpm --filter h2own-web test:visual"
   },
   "pnpm": {
     "overrides": {
+      "ajv@6.12.6": "6.14.0",
       "esbuild": "0.25.0",
       "js-yaml": "4.1.1",
       "qs": "6.14.2",

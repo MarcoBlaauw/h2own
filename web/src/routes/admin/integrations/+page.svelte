@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteMap } from 'svelte/reactivity';
   import Container from '$lib/components/layout/Container.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { api } from '$lib/api';
@@ -13,9 +14,11 @@
   let busyProvider: string | null = null;
   let statusMessage: { type: 'success' | 'error'; text: string } | null = null;
 
-  const providersWithBaseUrl = new Set(['tomorrow_io', 'google_maps']);
+  const providersWithBaseUrl = ['tomorrow_io', 'google_maps'] as const;
+  const hasBaseUrlProvider = (provider: string) =>
+    providersWithBaseUrl.includes(provider as (typeof providersWithBaseUrl)[number]);
 
-  const stateByProvider = new Map<
+  const stateByProvider = new SvelteMap<
     string,
     {
       enabled: boolean;
@@ -111,7 +114,7 @@
     const rateLimitCooldownSeconds = normalizePositiveInteger(form.rateLimitCooldownSeconds);
 
     const currentConfig = asRecord(integration.config);
-    const nextConfig = providersWithBaseUrl.has(integration.provider)
+    const nextConfig = hasBaseUrlProvider(integration.provider)
       ? { ...currentConfig, baseUrl: form.baseUrl.trim() || null }
       : currentConfig;
 
@@ -237,7 +240,7 @@
                   <input class="input" type="number" min="1" bind:value={form.rateLimitCooldownSeconds} />
                 </label>
 
-                {#if providersWithBaseUrl.has(integration.provider)}
+                {#if hasBaseUrlProvider(integration.provider)}
                   <label class="text-sm sm:col-span-2">
                     <span class="mb-1 block font-medium text-content-secondary">Base URL</span>
                     <input class="input" type="url" placeholder="https://..." bind:value={form.baseUrl} />

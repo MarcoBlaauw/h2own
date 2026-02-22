@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
   import Container from '$lib/components/layout/Container.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import GoogleMapPicker from '$lib/components/location/GoogleMapPicker.svelte';
@@ -182,7 +183,7 @@
   let purgingLegacyLocations = false;
   let loadingLocations = false;
   let editingLocationId: string | null = null;
-  let expandedLocationPools = new Set<string>();
+  let expandedLocationPools = new SvelteSet<string>();
   let showAllPools = false;
   let showAllLocations = false;
   let locationSearch = '';
@@ -245,7 +246,6 @@
   $: visibleLocations = showAllLocations
     ? filteredLocations
     : filteredLocations.slice(0, 5);
-  $: availableTimezones = getTimezones();
 
   const sanitizerOptions = ['chlorine', 'salt', 'bromine', 'mineral', 'biguanide', 'other'];
   const surfaceOptions = ['plaster', 'vinyl', 'fiberglass', 'tile', 'concrete', 'other'];
@@ -283,6 +283,7 @@
     }
     return fallbackTimezones;
   };
+  const availableTimezones = getTimezones();
 
   const normalizeText = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return '';
@@ -442,7 +443,6 @@
     } else {
       expandedLocationPools.add(locationId);
     }
-    expandedLocationPools = new Set(expandedLocationPools);
   };
 
   const beginEdit = (pool: PoolSummary) => {
