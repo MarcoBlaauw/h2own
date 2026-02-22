@@ -132,6 +132,7 @@
         type="number"
         min={testParameterMetadata.fc.acceptedMin}
         max={testParameterMetadata.fc.acceptedMax}
+        step={testParameterMetadata.fc.step}
         bind:value={fc}
         class="form-control"
         data-invalid={fieldMessages.fc ? 'true' : undefined}
@@ -155,6 +156,7 @@
         type="number"
         min={testParameterMetadata.tc.acceptedMin}
         max={testParameterMetadata.tc.acceptedMax}
+        step={testParameterMetadata.tc.step}
         bind:value={tc}
         class="form-control"
         data-invalid={fieldMessages.tc ? 'true' : undefined}
@@ -178,7 +180,7 @@
         type="number"
         min={testParameterMetadata.ph.acceptedMin}
         max={testParameterMetadata.ph.acceptedMax}
-        step="0.1"
+        step={testParameterMetadata.ph.step}
         bind:value={ph}
         class="form-control"
         data-invalid={fieldMessages.ph ? 'true' : undefined}

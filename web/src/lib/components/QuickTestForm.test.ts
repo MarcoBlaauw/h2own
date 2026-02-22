@@ -21,8 +21,8 @@ describe('QuickTestForm component', () => {
       props: { poolId: 'pool-123' },
     });
 
-    expect(getByText('FC: ppm, acceptable 0–10 ppm, target 3–5 ppm.')).toBeTruthy();
-    expect(getByText('pH: pH, acceptable 6.8–8.2 pH, target 7.2–7.6 pH.')).toBeTruthy();
+    expect(getByText('FC: ppm, acceptable 0-20 ppm, target 2.0–4.0 ppm.')).toBeTruthy();
+    expect(getByText('pH: pH, acceptable 6.8-8.6 pH, target 7.2–7.8.')).toBeTruthy();
   });
 
   it('displays a meaningful validation error when the submission fails validation', async () => {
@@ -41,7 +41,7 @@ describe('QuickTestForm component', () => {
 
     const alerts = await findAllByRole('alert');
     expect(alerts.length).toBeGreaterThan(0);
-    expect(alerts.some(alert => alert.textContent?.includes('FC must be at least 0 ppm.'))).toBe(true);
-    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: FC must be at least 0 ppm.'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('Free Chlorine (FC) must be at least 0 ppm.'))).toBe(true);
+    expect(alerts.some(alert => alert.textContent?.includes('Validation failed: Free Chlorine (FC) must be at least 0 ppm.'))).toBe(true);
   });
 });
