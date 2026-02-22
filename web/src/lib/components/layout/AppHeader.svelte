@@ -14,7 +14,10 @@
   let lastPathname = '';
   let lastNotificationsFetchKey = '';
 
-  const userLinks = [{ href: '/pools', label: 'Pool Setup' }];
+  const userLinks = [
+    { href: '/pools', label: 'Pool Setup' },
+    { href: '/tests', label: 'Tests' },
+  ];
 
   function isActive(href: string) {
     const path = $page.url.pathname;
