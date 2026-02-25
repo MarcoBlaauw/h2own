@@ -77,6 +77,11 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-H2Own}
+      CAPTCHA_PROVIDER: ${CAPTCHA_PROVIDER:-}
+      CAPTCHA_SITE_KEY: ${CAPTCHA_SITE_KEY:-}
+      CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
+      AUTH_LOCKOUT_ALERT_EMAILS: ${AUTH_LOCKOUT_ALERT_EMAILS:-}
+      SUPPORT_CONTACT_EMAILS: ${SUPPORT_CONTACT_EMAILS:-support@h2own.com}
     depends_on:
       postgres:
         condition: service_healthy
