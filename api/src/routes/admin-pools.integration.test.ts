@@ -4,7 +4,7 @@ import { adminPoolsRoutes } from './admin-pools.js';
 import { poolAdminService, poolCoreService, poolEquipmentService } from '../services/pools/index.js';
 
 vi.mock('../services/pools/index.js', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import('../services/pools/index.js')>();
   return {
     ...actual,
     poolAdminService: {
@@ -100,6 +100,10 @@ describe('admin pools routes', () => {
         volumeGallons: 15000,
         surfaceType: 'plaster',
         sanitizerType: 'chlorine',
+        chlorineSource: null,
+        saltLevelPpm: null,
+        sanitizerTargetMinPpm: null,
+        sanitizerTargetMaxPpm: null,
         isActive: true,
         createdAt,
         updatedAt,
@@ -134,6 +138,10 @@ describe('admin pools routes', () => {
         volumeGallons: 15000,
         surfaceType: 'plaster',
         sanitizerType: 'chlorine',
+        chlorineSource: null,
+        saltLevelPpm: null,
+        sanitizerTargetMinPpm: null,
+        sanitizerTargetMaxPpm: null,
         isActive: true,
         createdAt: createdAt.toISOString(),
         updatedAt: updatedAt.toISOString(),
@@ -172,7 +180,10 @@ describe('admin pools routes', () => {
       volumeGallons: 15000,
       surfaceType: 'plaster',
       sanitizerType: 'chlorine',
+      chlorineSource: null,
       saltLevelPpm: null,
+      sanitizerTargetMinPpm: null,
+      sanitizerTargetMaxPpm: null,
       shadeLevel: null,
       enclosureType: null,
       hasCover: false,
@@ -238,7 +249,10 @@ describe('admin pools routes', () => {
       volumeGallons: 15000,
       surfaceType: 'plaster',
       sanitizerType: 'chlorine',
+      chlorineSource: null,
       saltLevelPpm: null,
+      sanitizerTargetMinPpm: null,
+      sanitizerTargetMaxPpm: null,
       shadeLevel: null,
       enclosureType: null,
       hasCover: false,
@@ -322,6 +336,9 @@ describe('admin pools routes', () => {
     transferOwnershipMock.mockResolvedValueOnce({
       poolId: '0b75c93b-7ae5-4a08-9a69-8191355f2175',
       ownerId: '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f',
+      previousOwnerId: 'f2081cbc-3d8d-48fb-86cc-1315d5cba29f',
+      retainExistingAccess: false,
+      revokedAccessCount: 2,
     });
 
     const response = await app.inject({
@@ -331,8 +348,21 @@ describe('admin pools routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(transferOwnershipMock).toHaveBeenCalledWith('0b75c93b-7ae5-4a08-9a69-8191355f2175', '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f');
-    expect(response.json()).toEqual({ poolId: '0b75c93b-7ae5-4a08-9a69-8191355f2175', ownerId: '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f' });
+    expect(transferOwnershipMock).toHaveBeenCalledWith(
+      '0b75c93b-7ae5-4a08-9a69-8191355f2175',
+      '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f',
+      {
+        retainExistingAccess: false,
+        transferredByUserId: 'admin-user',
+      }
+    );
+    expect(response.json()).toEqual({
+      poolId: '0b75c93b-7ae5-4a08-9a69-8191355f2175',
+      ownerId: '4c9fbc44-1f4c-4ec1-9f5d-0a1c2b3d4e5f',
+      previousOwnerId: 'f2081cbc-3d8d-48fb-86cc-1315d5cba29f',
+      retainExistingAccess: false,
+      revokedAccessCount: 2,
+    });
   });
 
   it('gets and updates equipment as admin', async () => {

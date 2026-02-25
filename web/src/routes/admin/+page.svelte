@@ -5,6 +5,7 @@
   const adminLinks = [
     { href: '/admin/pools', label: 'Pool Admin' },
     { href: '/admin/users', label: 'Users' },
+    { href: '/admin/roles', label: 'Role capabilities' },
     { href: '/admin/api-tokens', label: 'API tokens' },
     { href: '/admin/integrations', label: 'Integrations' },
     { href: '/admin/audit-log', label: 'Audit log' },
@@ -12,7 +13,7 @@
     { href: '/admin/chemicals', label: 'Chemicals' },
   ];
 
-  const businessLinks = [{ href: '/pools', label: 'Pool Setup' }];
+  const businessLinks = [{ href: '/pools', label: 'My Pools' }];
 
   $: links = data.role === 'admin' ? adminLinks : businessLinks;
 </script>

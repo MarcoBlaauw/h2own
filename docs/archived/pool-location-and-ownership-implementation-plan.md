@@ -6,11 +6,20 @@
 - Phase 1: Implemented
 - Phase 2: Implemented
 - Phase 3: Implemented
-- Phase 4: In progress (initial capability registry + policy wiring)
-- Follow-up hardening (February 20, 2026): In progress
+- Phase 4: Implemented (February 22, 2026)
+- Phase 4 update (February 22, 2026): Implemented
+  - Persisted role capability templates added (`role_capability_templates`) with seeded defaults.
+  - Admin API added for role capability template listing and updates (`/admin/role-capabilities`).
+  - Admin UI added for role template capability assignment (`/admin/roles`).
+  - Admin users page capability preview now reads from role templates instead of hardcoded labels.
+  - Runtime authorization now loads role capability templates at API startup and refreshes after admin template updates.
+- Follow-up hardening (February 20, 2026): Implemented (February 22, 2026)
   - Centralized system capability checks added for admin users/audit services.
   - Audit write path added and wired to key auth/admin/pool actions.
   - User management UI now shows role capability previews.
+  - Ownership transfer/sign-over now revokes prior non-owner pool access by default unless explicit retention is requested.
+  - Pool member add/update/remove actions now emit audit events; member grants now store `invitedBy` provenance.
+- Overall plan status: Completed and archived on February 22, 2026.
 
 ## Goals
 1. Make Google Maps location selection the primary and required source of pool location data.
@@ -156,9 +165,9 @@
 3. Ship Phase 3 policy checks before exposing business-management workflows broadly.
 
 ## Open Questions
-1. Should business users be allowed to edit non-destructive pool metadata (name/volume/surface), or only tests/dosages?
-2. On sign-over, should existing business access be automatically revoked (default recommended: yes)?
-3. Do we want owner-invoked temporary access windows for service visits (future enhancement)?
+1. Decision: Business users remain limited to operational records (tests/dosages) and cannot edit pool metadata by default.
+2. Decision: On sign-over, existing non-owner business/member access is revoked by default, with explicit retention toggle when needed.
+3. Deferred: Owner-invoked temporary access windows for service visits remain a future enhancement and are out of scope for this completed plan.
 
 ## Recommended Defaults
 1. Business users can create pools and add operational records only.

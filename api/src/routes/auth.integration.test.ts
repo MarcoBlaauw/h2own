@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authRoutes } from "./auth.js";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
+import { authLockoutService } from "../services/auth-lockout.js";
 import { mailerService } from "../services/mailer.js";
+import { env } from "../env.js";
 
 describe("POST /auth/register integration", () => {
   let app: ReturnType<typeof Fastify>;
@@ -12,6 +14,7 @@ describe("POST /auth/register integration", () => {
   let verifySessionMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
+    (env as any).AUTH_LOCKOUT_ALERT_EMAILS = "admin@example.com";
     app = Fastify();
     const tokenStore = new Map<string, string>();
     createSessionMock = vi.fn(async () => {});
@@ -27,6 +30,9 @@ describe("POST /auth/register integration", () => {
       verifySession: verifySessionMock,
       requireRole: () => async () => {},
     } as any);
+    app.decorate("audit", {
+      log: vi.fn(async () => {}),
+    } as any);
     app.decorate("redis", {
       set: vi.fn(async (key: string, value: string) => {
         tokenStore.set(key, value);
@@ -38,6 +44,25 @@ describe("POST /auth/register integration", () => {
         return existed ? 1 : 0;
       }),
     } as any);
+    vi.spyOn(authLockoutService, "getStatus").mockResolvedValue({
+      locked: false,
+      offenseLevel: 0,
+      until: null,
+      remainingSeconds: 0,
+      supportRequired: false,
+      warning: null,
+    });
+    vi.spyOn(authLockoutService, "recordFailure").mockResolvedValue({
+      locked: false,
+      offenseLevel: 0,
+      until: null,
+      remainingSeconds: 0,
+      supportRequired: false,
+      warning: null,
+      attemptsLastMinute: 1,
+      attemptsLastFiveMinutes: 1,
+    });
+    vi.spyOn(authLockoutService, "clearFailureHistory").mockResolvedValue();
 
     await app.register(authRoutes, { prefix: "/auth" });
     await app.ready();
@@ -135,6 +160,8 @@ describe("POST /auth/register integration", () => {
     });
 
     expect(response.statusCode).toBe(201);
+    expect(authLockoutService.getStatus).toHaveBeenCalled();
+    expect(authLockoutService.clearFailureHistory).toHaveBeenCalled();
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     const [replyArg, sessionUserId, sessionRole] = createSessionMock.mock.calls[0];
     expect(replyArg).toBeDefined();
@@ -152,6 +179,16 @@ describe("POST /auth/register integration", () => {
 
   it("returns 401 when credentials are invalid", async () => {
     vi.spyOn(authService, "validateCredentials").mockResolvedValueOnce(null);
+    vi.spyOn(authLockoutService, "recordFailure").mockResolvedValueOnce({
+      locked: false,
+      offenseLevel: 0,
+      until: null,
+      remainingSeconds: 0,
+      supportRequired: false,
+      warning: "Warning: one more failed attempt in the next minute will temporarily lock your account.",
+      attemptsLastMinute: 4,
+      attemptsLastFiveMinutes: 4,
+    });
 
     const response = await app.inject({
       method: "POST",
@@ -163,8 +200,86 @@ describe("POST /auth/register integration", () => {
     expect(response.json()).toEqual({
       error: "Unauthorized",
       message: "Invalid email or password",
+      warning:
+        "Warning: one more failed attempt in the next minute will temporarily lock your account.",
     });
     expect(createSessionMock).not.toHaveBeenCalled();
+    expect((app as any).audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "auth.login.failed",
+        entity: "user",
+        entityId: "admin@example.com",
+      }),
+    );
+  });
+
+  it("returns 423 when the user is already locked out", async () => {
+    const validateSpy = vi.spyOn(authService, "validateCredentials");
+    vi.spyOn(authLockoutService, "getStatus").mockResolvedValueOnce({
+      locked: true,
+      offenseLevel: 2,
+      until: "2026-01-15T10:00:00.000Z",
+      remainingSeconds: 3600,
+      supportRequired: false,
+      warning: null,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "admin@example.com", password: "wrong" },
+    });
+
+    expect(response.statusCode).toBe(423);
+    expect(response.json()).toMatchObject({
+      error: "LockedOut",
+      lockout: {
+        offenseLevel: 2,
+        until: "2026-01-15T10:00:00.000Z",
+        supportRequired: false,
+        redirectTo: "/auth/lockout",
+      },
+    });
+    expect(createSessionMock).not.toHaveBeenCalled();
+    expect(validateSpy).not.toHaveBeenCalled();
+    expect((app as any).audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "auth.lockout.blocked",
+        entity: "user",
+        entityId: "admin@example.com",
+      }),
+    );
+  });
+
+  it("returns 423 and lockout payload when a failed attempt triggers lockout", async () => {
+    vi.spyOn(authService, "validateCredentials").mockResolvedValueOnce(null);
+    vi.spyOn(authLockoutService, "recordFailure").mockResolvedValueOnce({
+      locked: true,
+      offenseLevel: 3,
+      until: "2026-01-15T23:59:59.000Z",
+      remainingSeconds: 30000,
+      supportRequired: true,
+      warning: null,
+      attemptsLastMinute: 5,
+      attemptsLastFiveMinutes: 10,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "admin@example.com", password: "wrong" },
+    });
+
+    expect(response.statusCode).toBe(423);
+    expect(response.json()).toMatchObject({
+      error: "LockedOut",
+      lockout: {
+        offenseLevel: 3,
+        until: "2026-01-15T23:59:59.000Z",
+        supportRequired: true,
+        redirectTo: "/auth/lockout",
+      },
+    });
   });
 
   it("returns the user's role from /auth/me", async () => {
@@ -307,6 +422,39 @@ describe("POST /auth/register integration", () => {
     expect(reminderSpy).toHaveBeenCalledWith(
       "member@example.com",
       "member@example.com",
+    );
+  });
+
+  it("accepts a lockout support request when third-offense lockout is active", async () => {
+    vi.spyOn(authLockoutService, "getStatus").mockResolvedValueOnce({
+      locked: true,
+      offenseLevel: 3,
+      until: "2026-01-15T23:59:59.000Z",
+      remainingSeconds: 1000,
+      supportRequired: true,
+      warning: null,
+    });
+    const supportSpy = vi
+      .spyOn(mailerService, "sendAuthLockoutSupportRequestEmail")
+      .mockResolvedValue({ sent: true, skipped: false });
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/lockout-support",
+      payload: {
+        email: "member@example.com",
+        message: "I am locked out and need urgent access for pool maintenance.",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, message: "Support request sent." });
+    expect(supportSpy).toHaveBeenCalled();
+    expect((app as any).audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "auth.lockout.support_requested",
+        entity: "user",
+        entityId: "member@example.com",
+      }),
     );
   });
 });

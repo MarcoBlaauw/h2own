@@ -20,14 +20,22 @@ import { adminAuditLogRoutes } from "./routes/admin-audit-log";
 import { adminNotificationTemplateRoutes } from "./routes/admin-notification-templates";
 import { adminReadinessRoutes } from "./routes/admin-readiness";
 import { adminIntegrationsRoutes } from "./routes/admin-integrations";
+import { adminRoleCapabilitiesRoutes } from "./routes/admin-role-capabilities";
+import { integrationsRoutes } from "./routes/integrations";
 import { notificationRoutes } from "./routes/notifications";
 import { messagesRoutes } from "./routes/messages";
 import { billingRoutes } from "./routes/billing";
+import { contactRoutes } from "./routes/contact";
 import { locationsRoutes } from "./routes/locations";
 import { photosRoutes } from "./routes/photos";
 import { meRoutes } from "./routes/me";
 import { createRedisSessionStore } from "./services/session-store.js";
 import { auditWriterService } from "./services/audit-writer.js";
+import { roleCapabilityTemplatesService } from "./services/role-capability-templates.js";
+import { applyRoleCapabilityTemplates } from "./services/authorization.js";
+import { sensorRetentionService } from "./services/sensor-retention.js";
+import { SensorRetentionWorker } from "./services/sensor-retention-worker.js";
+import { IntegrationRetryWorker } from "./services/integration-retry-worker.js";
 
 async function buildApp() {
   const app = Fastify({
@@ -86,7 +94,7 @@ async function buildApp() {
 
   // Expose a small session API for routes to use (login/logout)
   app.decorate("sessions", {
-    create: async (reply, userId: string, role?: string) => {
+    create: async (reply, userId: string, role?: string | null) => {
       const sid = randomBytes(32).toString("hex");
       const expiresAt = Math.floor(Date.now() / 1000) + sessionStore.ttlSeconds;
 
@@ -154,6 +162,20 @@ async function buildApp() {
       }
     },
   });
+
+  try {
+    const templates = await roleCapabilityTemplatesService.listTemplates();
+    applyRoleCapabilityTemplates(templates);
+    app.log.info(
+      { event: "authorization.templates.loaded", templateCount: templates.length },
+      "loaded role capability templates into runtime registry"
+    );
+  } catch (error) {
+    app.log.error(
+      { err: error, event: "authorization.templates.load_failed" },
+      "failed to load role capability templates, using defaults"
+    );
+  }
 
   // --- Load session for each request (read-only on request object) ---
   app.addHook("onRequest", async (req, reply) => {
@@ -277,13 +299,38 @@ async function buildApp() {
   });
   await app.register(adminReadinessRoutes, { prefix: "/admin/readiness" });
   await app.register(adminIntegrationsRoutes, { prefix: "/admin/integrations" });
+  await app.register(adminRoleCapabilitiesRoutes, { prefix: "/admin/role-capabilities" });
+  await app.register(integrationsRoutes, { prefix: "/integrations" });
   await app.register(notificationRoutes, { prefix: "/notifications" });
   await app.register(messagesRoutes, { prefix: "/messages" });
   await app.register(billingRoutes, { prefix: "/billing" });
+  await app.register(contactRoutes, { prefix: "/contact" });
   await app.register(photosRoutes, { prefix: "/photos" });
 
   // --- Dev convenience route ---
   app.get("/test", async () => ({ ok: true, message: "test route" }));
+
+  const sensorRetentionWorker = new SensorRetentionWorker({
+    enabled: env.SENSOR_RETENTION_ENABLED,
+    tickSeconds: env.SENSOR_RETENTION_TICK_SECONDS,
+    service: sensorRetentionService,
+    logger: app.log,
+  });
+  sensorRetentionWorker.start();
+
+  const integrationRetryWorker = new IntegrationRetryWorker({
+    enabled: env.INTEGRATION_RETRY_ENABLED,
+    tickSeconds: env.INTEGRATION_RETRY_TICK_SECONDS,
+    batchSize: env.INTEGRATION_RETRY_BATCH_SIZE,
+    maxAttempts: env.INTEGRATION_RETRY_MAX_ATTEMPTS,
+    logger: app.log,
+  });
+  integrationRetryWorker.start();
+
+  app.addHook("onClose", async () => {
+    await sensorRetentionWorker.stop();
+    await integrationRetryWorker.stop();
+  });
 
   // Finalize & print
   await app.ready();

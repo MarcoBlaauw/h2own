@@ -16,12 +16,16 @@ export class PoolMembershipService {
 
   async addPoolMember(poolId: string, requestingUserId: string, userId: string, role: string) {
     await this.core.ensurePoolCapability(poolId, requestingUserId, 'pool.members.manage');
+    const now = new Date();
     const [member] = await this.db
       .insert(schema.poolMembers)
       .values({
         poolId,
         userId,
         roleName: role,
+        invitedBy: requestingUserId,
+        invitedAt: now,
+        addedAt: now,
       })
       .returning();
     return member;

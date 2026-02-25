@@ -36,14 +36,124 @@ export class PoolCreateOwnerForbiddenError extends Error {
   }
 }
 
+export class PoolValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PoolValidationError';
+  }
+}
+
+const CHLORINE_SANITIZER_TYPE = 'chlorine';
+const BROMINE_SANITIZER_TYPE = 'bromine';
+const sanitizerTypes = new Set([CHLORINE_SANITIZER_TYPE, BROMINE_SANITIZER_TYPE]);
+
+const CHLORINE_SOURCE_MANUAL = 'manual';
+const CHLORINE_SOURCE_SWG = 'swg';
+const chlorineSources = new Set([CHLORINE_SOURCE_MANUAL, CHLORINE_SOURCE_SWG]);
+
+type ResolvePoolChemistryInput = {
+  currentSanitizerType?: string | null;
+  currentChlorineSource?: string | null;
+  currentSaltLevelPpm?: number | null;
+  currentTargetMinPpm?: string | number | null;
+  currentTargetMaxPpm?: string | number | null;
+  nextSanitizerType?: string | null;
+  nextChlorineSource?: string | null;
+  nextSaltLevelPpm?: number | null;
+  nextTargetMinPpm?: number | null;
+  nextTargetMaxPpm?: number | null;
+};
+
+const normalizeSanitizerType = (value: string | null | undefined) => {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  return sanitizerTypes.has(normalized) ? normalized : null;
+};
+
+const normalizeChlorineSource = (value: string | null | undefined) => {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  return chlorineSources.has(normalized) ? normalized : null;
+};
+
+export function resolvePoolChemistryConfig(input: ResolvePoolChemistryInput) {
+  const currentSanitizerType = normalizeSanitizerType(input.currentSanitizerType);
+  const nextSanitizerType = normalizeSanitizerType(
+    input.nextSanitizerType ?? currentSanitizerType ?? null
+  );
+  if (!nextSanitizerType) {
+    throw new PoolValidationError('Sanitizer type must be either chlorine or bromine.');
+  }
+
+  const currentChlorineSource = normalizeChlorineSource(input.currentChlorineSource);
+  const nextChlorineSource = normalizeChlorineSource(
+    input.nextChlorineSource ?? currentChlorineSource ?? null
+  );
+
+  let resolvedChlorineSource: string | null = null;
+  if (nextSanitizerType === CHLORINE_SANITIZER_TYPE) {
+    if (!nextChlorineSource) {
+      throw new PoolValidationError('Chlorine source is required for chlorine pools.');
+    }
+    resolvedChlorineSource = nextChlorineSource;
+  }
+
+  const nextTargetMin = input.nextTargetMinPpm ?? toNumber(input.currentTargetMinPpm);
+  const nextTargetMax = input.nextTargetMaxPpm ?? toNumber(input.currentTargetMaxPpm);
+  if (
+    nextTargetMin === null ||
+    nextTargetMax === null ||
+    Number.isNaN(nextTargetMin) ||
+    Number.isNaN(nextTargetMax) ||
+    nextTargetMin <= 0 ||
+    nextTargetMax <= 0 ||
+    nextTargetMin > nextTargetMax
+  ) {
+    throw new PoolValidationError(
+      'Sanitizer target range (min/max ppm) is required and must be positive with min less than or equal to max.'
+    );
+  }
+
+  let resolvedSaltLevelPpm: number | null = null;
+  if (
+    nextSanitizerType === CHLORINE_SANITIZER_TYPE &&
+    resolvedChlorineSource === CHLORINE_SOURCE_SWG
+  ) {
+    const nextSaltLevel =
+      input.nextSaltLevelPpm !== undefined ? Number(input.nextSaltLevelPpm) : input.currentSaltLevelPpm;
+    if (
+      nextSaltLevel === null ||
+      nextSaltLevel === undefined ||
+      Number.isNaN(nextSaltLevel) ||
+      nextSaltLevel <= 0
+    ) {
+      throw new PoolValidationError(
+        'Salt target ppm is required when chlorine source is SWG and must be a positive number.'
+      );
+    }
+    resolvedSaltLevelPpm = nextSaltLevel;
+  }
+
+  return {
+    sanitizerType: nextSanitizerType,
+    chlorineSource: resolvedChlorineSource,
+    saltLevelPpm: resolvedSaltLevelPpm,
+    sanitizerTargetMinPpm: nextTargetMin,
+    sanitizerTargetMaxPpm: nextTargetMax,
+  };
+}
+
 export interface CreatePoolData {
   ownerId?: string;
   name: string;
   volumeGallons: number;
   sanitizerType: string;
+  chlorineSource?: string | null;
   surfaceType: string;
   locationId?: string | null;
-  saltLevelPpm?: number;
+  saltLevelPpm?: number | null;
+  sanitizerTargetMinPpm?: number | null;
+  sanitizerTargetMaxPpm?: number | null;
   shadeLevel?: string;
   enclosureType?: string;
   hasCover?: boolean;
@@ -70,9 +180,18 @@ export function buildPoolUpdate(data: UpdatePoolData | AdminUpdatePoolData): Poo
   if (data.name !== undefined) mapped.name = data.name;
   if (data.volumeGallons !== undefined) mapped.volumeGallons = data.volumeGallons;
   if (data.sanitizerType !== undefined) mapped.sanitizerType = data.sanitizerType;
+  if (data.chlorineSource !== undefined) mapped.chlorineSource = data.chlorineSource;
   if (data.surfaceType !== undefined) mapped.surfaceType = data.surfaceType;
   if (data.locationId !== undefined) mapped.locationId = data.locationId;
   if (data.saltLevelPpm !== undefined) mapped.saltLevelPpm = data.saltLevelPpm;
+  if (data.sanitizerTargetMinPpm !== undefined) {
+    mapped.sanitizerTargetMinPpm =
+      data.sanitizerTargetMinPpm === null ? null : data.sanitizerTargetMinPpm.toString();
+  }
+  if (data.sanitizerTargetMaxPpm !== undefined) {
+    mapped.sanitizerTargetMaxPpm =
+      data.sanitizerTargetMaxPpm === null ? null : data.sanitizerTargetMaxPpm.toString();
+  }
   if (data.shadeLevel !== undefined) mapped.shadeLevel = data.shadeLevel;
   if (data.enclosureType !== undefined) mapped.enclosureType = data.enclosureType;
   if (data.hasCover !== undefined) mapped.hasCover = data.hasCover;
@@ -91,8 +210,17 @@ function mapCreatePoolData(userId: string, data: CreatePoolData): PoolInsert {
     name: data.name,
     volumeGallons: data.volumeGallons,
     sanitizerType: data.sanitizerType,
+    chlorineSource: data.chlorineSource,
     surfaceType: data.surfaceType,
     saltLevelPpm: data.saltLevelPpm,
+    sanitizerTargetMinPpm:
+      data.sanitizerTargetMinPpm === null || data.sanitizerTargetMinPpm === undefined
+        ? null
+        : data.sanitizerTargetMinPpm.toString(),
+    sanitizerTargetMaxPpm:
+      data.sanitizerTargetMaxPpm === null || data.sanitizerTargetMaxPpm === undefined
+        ? null
+        : data.sanitizerTargetMaxPpm.toString(),
     shadeLevel: data.shadeLevel,
     enclosureType: data.enclosureType,
     hasCover: data.hasCover,
@@ -163,7 +291,10 @@ export interface PoolDetail {
   volumeGallons: number;
   surfaceType: string | null;
   sanitizerType: string | null;
+  chlorineSource: string | null;
   saltLevelPpm: number | null;
+  sanitizerTargetMinPpm: number | null;
+  sanitizerTargetMaxPpm: number | null;
   shadeLevel: string | null;
   enclosureType: string | null;
   hasCover: boolean | null;
@@ -198,6 +329,10 @@ export interface AdminPoolSummary {
   volumeGallons: number;
   surfaceType: string | null;
   sanitizerType: string | null;
+  chlorineSource: string | null;
+  saltLevelPpm: number | null;
+  sanitizerTargetMinPpm: number | null;
+  sanitizerTargetMaxPpm: number | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -328,9 +463,26 @@ export class PoolCoreService {
       await this.ensureLocationAccessible(data.locationId, ownerId);
     }
 
+    const chemistry = resolvePoolChemistryConfig({
+      nextSanitizerType: data.sanitizerType,
+      nextChlorineSource: data.chlorineSource,
+      nextSaltLevelPpm: data.saltLevelPpm,
+      nextTargetMinPpm: data.sanitizerTargetMinPpm,
+      nextTargetMaxPpm: data.sanitizerTargetMaxPpm,
+    });
+
     const [pool] = await this.db
       .insert(schema.pools)
-      .values(mapCreatePoolData(ownerId, data))
+      .values(
+        mapCreatePoolData(ownerId, {
+          ...data,
+          sanitizerType: chemistry.sanitizerType,
+          chlorineSource: chemistry.chlorineSource,
+          saltLevelPpm: chemistry.saltLevelPpm,
+          sanitizerTargetMinPpm: chemistry.sanitizerTargetMinPpm,
+          sanitizerTargetMaxPpm: chemistry.sanitizerTargetMaxPpm,
+        })
+      )
       .returning();
 
     await this.db.insert(schema.poolMembers).values({
@@ -400,7 +552,10 @@ export class PoolCoreService {
         volumeGallons: schema.pools.volumeGallons,
         surfaceType: schema.pools.surfaceType,
         sanitizerType: schema.pools.sanitizerType,
+        chlorineSource: schema.pools.chlorineSource,
         saltLevelPpm: schema.pools.saltLevelPpm,
+        sanitizerTargetMinPpm: schema.pools.sanitizerTargetMinPpm,
+        sanitizerTargetMaxPpm: schema.pools.sanitizerTargetMaxPpm,
         shadeLevel: schema.pools.shadeLevel,
         enclosureType: schema.pools.enclosureType,
         hasCover: schema.pools.hasCover,
@@ -512,7 +667,10 @@ export class PoolCoreService {
       volumeGallons: poolRow.volumeGallons,
       surfaceType: poolRow.surfaceType ?? null,
       sanitizerType: poolRow.sanitizerType ?? null,
+      chlorineSource: poolRow.chlorineSource ?? null,
       saltLevelPpm: poolRow.saltLevelPpm ?? null,
+      sanitizerTargetMinPpm: toNumber(poolRow.sanitizerTargetMinPpm),
+      sanitizerTargetMaxPpm: toNumber(poolRow.sanitizerTargetMaxPpm),
       shadeLevel: poolRow.shadeLevel ?? null,
       enclosureType: poolRow.enclosureType ?? null,
       hasCover: poolRow.hasCover ?? null,
@@ -542,9 +700,45 @@ export class PoolCoreService {
       await this.ensureLocationAccessible(data.locationId, requestingUserId);
     }
 
+    const [currentPool] = await this.db
+      .select({
+        sanitizerType: schema.pools.sanitizerType,
+        chlorineSource: schema.pools.chlorineSource,
+        saltLevelPpm: schema.pools.saltLevelPpm,
+        sanitizerTargetMinPpm: schema.pools.sanitizerTargetMinPpm,
+        sanitizerTargetMaxPpm: schema.pools.sanitizerTargetMaxPpm,
+      })
+      .from(schema.pools)
+      .where(eq(schema.pools.poolId, poolId))
+      .limit(1);
+
+    if (!currentPool) {
+      throw new PoolNotFoundError(poolId);
+    }
+
+    const chemistry = resolvePoolChemistryConfig({
+      currentSanitizerType: currentPool.sanitizerType,
+      currentChlorineSource: currentPool.chlorineSource,
+      currentSaltLevelPpm: currentPool.saltLevelPpm,
+      currentTargetMinPpm: currentPool.sanitizerTargetMinPpm,
+      currentTargetMaxPpm: currentPool.sanitizerTargetMaxPpm,
+      nextSanitizerType: data.sanitizerType,
+      nextChlorineSource: data.chlorineSource,
+      nextSaltLevelPpm: data.saltLevelPpm,
+      nextTargetMinPpm: data.sanitizerTargetMinPpm,
+      nextTargetMaxPpm: data.sanitizerTargetMaxPpm,
+    });
+
+    const updatePayload = buildPoolUpdate(data);
+    updatePayload.sanitizerType = chemistry.sanitizerType;
+    updatePayload.chlorineSource = chemistry.chlorineSource;
+    updatePayload.saltLevelPpm = chemistry.saltLevelPpm;
+    updatePayload.sanitizerTargetMinPpm = chemistry.sanitizerTargetMinPpm.toString();
+    updatePayload.sanitizerTargetMaxPpm = chemistry.sanitizerTargetMaxPpm.toString();
+
     const [pool] = await this.db
       .update(schema.pools)
-      .set(buildPoolUpdate(data))
+      .set(updatePayload)
       .where(eq(schema.pools.poolId, poolId))
       .returning();
     return pool;

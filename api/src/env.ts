@@ -83,6 +83,52 @@ const envSchema = z.object({
   CAPTCHA_SECRET: z.string().optional(),
   TOMORROW_API_KEY: z.string().optional(),
   TOMORROW_API_BASE: z.string().url().optional(),
+  SENSOR_RETENTION_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value !== undefined) return value.toLowerCase() === "true";
+      return process.env.NODE_ENV !== "test";
+    }),
+  SENSOR_RETENTION_HOT_DAYS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("30"),
+  SENSOR_RETENTION_WARM_DAYS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("365"),
+  SENSOR_RETENTION_TICK_SECONDS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("3600"),
+  INTEGRATION_RETRY_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value !== undefined) return value.toLowerCase() === "true";
+      return process.env.NODE_ENV !== "test";
+    }),
+  INTEGRATION_RETRY_TICK_SECONDS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default("120"),
+  INTEGRATION_RETRY_BATCH_SIZE: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive().max(500))
+    .default("50"),
+  INTEGRATION_RETRY_MAX_ATTEMPTS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().min(1).max(20))
+    .default("5"),
+  INTEGRATION_WEBHOOK_SHARED_SECRET: emptyToUndefined(z.string().optional()),
+  WEATHER_STATION_WEBHOOK_SECRET: emptyToUndefined(z.string().optional()),
   WEATHER_CACHE_TTL_MINUTES: z
     .string()
     .transform((value) => Number(value))
@@ -107,12 +153,10 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default("86400"),
   SMTP_HOST: emptyToUndefined(z.string().optional()),
-  SMTP_PORT: emptyToUndefined(
-    z
-      .string()
-      .transform((value) => Number(value))
-      .pipe(z.number().int().min(1).max(65535))
-      .optional(),
+  SMTP_PORT: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.coerce.number().int().min(1).max(65535).optional(),
   ),
   SMTP_SECURE: emptyToUndefined(z.string().optional()).transform(
     (value) => (value ?? "false").toLowerCase() === "true",
@@ -121,6 +165,8 @@ const envSchema = z.object({
   SMTP_PASS: emptyToUndefined(z.string().optional()),
   SMTP_FROM_EMAIL: emptyToUndefined(z.string().email().optional()),
   SMTP_FROM_NAME: emptyToUndefined(z.string().optional()),
+  AUTH_LOCKOUT_ALERT_EMAILS: emptyToUndefined(z.string().optional()),
+  SUPPORT_CONTACT_EMAILS: emptyToUndefined(z.string().optional()),
 });
 
 function parseEnv() {
@@ -162,6 +208,17 @@ if (env.NODE_ENV === "development") {
   );
   console.log(
     `  TOMORROW_API_BASE: ${env.TOMORROW_API_BASE ?? "https://api.tomorrow.io/v4"}`,
+  );
+  console.log(`  SENSOR_RETENTION_ENABLED: ${env.SENSOR_RETENTION_ENABLED}`);
+  console.log(`  SENSOR_RETENTION_HOT_DAYS: ${env.SENSOR_RETENTION_HOT_DAYS}`);
+  console.log(`  SENSOR_RETENTION_WARM_DAYS: ${env.SENSOR_RETENTION_WARM_DAYS}`);
+  console.log(`  SENSOR_RETENTION_TICK_SECONDS: ${env.SENSOR_RETENTION_TICK_SECONDS}`);
+  console.log(`  INTEGRATION_RETRY_ENABLED: ${env.INTEGRATION_RETRY_ENABLED}`);
+  console.log(`  INTEGRATION_RETRY_TICK_SECONDS: ${env.INTEGRATION_RETRY_TICK_SECONDS}`);
+  console.log(`  INTEGRATION_RETRY_BATCH_SIZE: ${env.INTEGRATION_RETRY_BATCH_SIZE}`);
+  console.log(`  INTEGRATION_RETRY_MAX_ATTEMPTS: ${env.INTEGRATION_RETRY_MAX_ATTEMPTS}`);
+  console.log(
+    `  WEATHER_STATION_WEBHOOK_SECRET_CONFIGURED: ${Boolean(env.WEATHER_STATION_WEBHOOK_SECRET)}`,
   );
   console.log(`  WEATHER_CACHE_TTL_MINUTES: ${env.WEATHER_CACHE_TTL_MINUTES}`);
   console.log(

@@ -33,6 +33,7 @@
   let autocompleteWidget: any;
   let advancedMarkerLib: any;
   let supportsAdvancedMarker = false;
+  let mapMarkerCtor: any = null;
 
   const getGoogle = () => (window as MapsWindow).google;
 
@@ -92,7 +93,8 @@
           }
         });
       } else {
-        marker = new google.maps.Marker({ map, position, draggable: true });
+        const MarkerCtor = mapMarkerCtor ?? google.maps.Marker;
+        marker = new MarkerCtor({ map, position, draggable: true });
         marker.addListener('dragend', async (event: any) => {
           const nextLat = event?.latLng?.lat?.();
           const nextLng = event?.latLng?.lng?.();
@@ -144,10 +146,14 @@
   const initMap = async () => {
     if (!mapEl || !autocompleteEl) return;
     const google = getGoogle();
+    const mapsLib = await google.maps.importLibrary('maps');
+    const MapCtor = mapsLib?.Map ?? google.maps.Map;
+    const GeocoderCtor = mapsLib?.Geocoder ?? google.maps.Geocoder;
+    mapMarkerCtor = mapsLib?.Marker ?? google.maps.Marker;
     const lat = toNumber(latitude) ?? 37.09024;
     const lng = toNumber(longitude) ?? -95.712891;
 
-    map = new google.maps.Map(mapEl, {
+    map = new MapCtor(mapEl, {
       center: { lat, lng },
       zoom: latitude && longitude ? 16 : 4,
       mapTypeControl: true,
@@ -157,7 +163,7 @@
       ...(mapId ? { mapId } : {}),
     });
 
-    geocoder = new google.maps.Geocoder();
+    geocoder = new GeocoderCtor();
     supportsAdvancedMarker = Boolean(mapId);
     if (supportsAdvancedMarker) {
       advancedMarkerLib = await google.maps.importLibrary('marker');

@@ -1,14 +1,14 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminAuditLogRoutes } from './admin-audit-log.js';
-import { auditLogService } from '../services/audit-log.js';
+import { auditLogService, type AuditLogFilters } from '../services/audit-log.js';
 
 describe('admin audit log routes', () => {
   let app: ReturnType<typeof Fastify>;
   let verifySessionMock: ReturnType<typeof vi.fn>;
   let requireRoleMock: ReturnType<typeof vi.fn>;
   let roleHandlers: Array<ReturnType<typeof vi.fn>>;
-  let listEntriesSpy: ReturnType<typeof vi.spyOn>;
+  let listEntriesSpy: any;
   const adminUserId = '55d32ef4-6e6f-4fb5-9d82-2e2a7778015b';
 
   const logs = [
@@ -94,7 +94,7 @@ describe('admin audit log routes', () => {
   });
 
   it('lists audit log entries with filters and pagination', async () => {
-    listEntriesSpy.mockImplementation(async (_role, filters) => {
+    listEntriesSpy.mockImplementation(async (_role: string, filters: AuditLogFilters = {}) => {
       const page = filters.page ?? 1;
       const pageSize = filters.pageSize ?? 25;
       let filtered = logs;

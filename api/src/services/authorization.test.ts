@@ -1,14 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  applyRoleCapabilityTemplates,
   canAssignPoolOwner,
   hasAccountCapability,
   hasPoolCapability,
   hasSystemCapability,
   isSystemRole,
+  resetRoleCapabilityTemplates,
   requiresOwnerForCapability,
 } from './authorization.js';
 
 describe('authorization capability registry', () => {
+  afterEach(() => {
+    resetRoleCapabilityTemplates();
+  });
+
   it('validates supported system roles', () => {
     expect(isSystemRole('admin')).toBe(true);
     expect(isSystemRole('business')).toBe(true);
@@ -60,5 +66,28 @@ describe('authorization capability registry', () => {
       hasPoolCapability('pool.dosing.create', { isOwner: false, poolRole: 'viewer' })
     ).toBe(false);
     expect(hasPoolCapability('pool.delete', { isOwner: true, poolRole: 'member' })).toBe(true);
+  });
+
+  it('applies persisted role capability templates to runtime checks', () => {
+    expect(hasSystemCapability('business', 'admin.users.read')).toBe(false);
+    expect(hasAccountCapability('member', 'billing.manage')).toBe(false);
+
+    applyRoleCapabilityTemplates([
+      {
+        role: 'business',
+        systemCapabilities: ['admin.pools.manage', 'admin.users.read'],
+        accountCapabilities: ['account.profile.read'],
+      },
+      {
+        role: 'member',
+        systemCapabilities: [],
+        accountCapabilities: ['billing.manage'],
+      },
+    ]);
+
+    expect(hasSystemCapability('business', 'admin.users.read')).toBe(true);
+    expect(hasSystemCapability('business', 'admin.audit.read')).toBe(false);
+    expect(hasAccountCapability('member', 'billing.manage')).toBe(true);
+    expect(hasAccountCapability('member', 'messages.send')).toBe(false);
   });
 });

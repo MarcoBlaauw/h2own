@@ -6,6 +6,7 @@ import {
   PoolOwnerRequiredError,
   PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
+  PoolValidationError,
 } from '../services/pools/index.js';
 
 export function handleZodError(reply: FastifyReply, error: unknown) {
@@ -46,6 +47,15 @@ export function handlePoolAccessError(reply: FastifyReply, error: unknown) {
   return false;
 }
 
+export function handlePoolValidationError(reply: FastifyReply, error: unknown) {
+  if (error instanceof PoolValidationError) {
+    reply.code(400).send({ error: 'ValidationError', details: [{ message: error.message }] });
+    return true;
+  }
+
+  return false;
+}
+
 type RouteHandler = (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
 
 type WrapPoolRouteOptions = {
@@ -66,6 +76,10 @@ export function wrapPoolRoute(handler: RouteHandler, options: WrapPoolRouteOptio
       }
 
       if (handlePoolLocationAccessError(reply, error)) {
+        return;
+      }
+
+      if (handlePoolValidationError(reply, error)) {
         return;
       }
 

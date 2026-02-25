@@ -55,6 +55,9 @@ describe('pools page', () => {
       name: 'Backyard Pool',
       volumeGallons: 15000,
       sanitizerType: 'chlorine',
+      chlorineSource: 'manual',
+      sanitizerTargetMinPpm: 2,
+      sanitizerTargetMaxPpm: 4,
       surfaceType: 'plaster',
       locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40c1e',
     },
@@ -129,7 +132,7 @@ describe('pools page', () => {
 
   it('validates required fields before creating', async () => {
     const { getByRole, findByRole } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
+      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
     const submit = getByRole('button', { name: /create pool/i });
@@ -146,7 +149,11 @@ describe('pools page', () => {
       poolId: 'c6ffb1fd-5ee3-4a6f-a581-d848e87f6761',
       name: 'Lap Pool',
       volumeGallons: 20000,
-      sanitizerType: 'salt',
+      sanitizerType: 'chlorine',
+      chlorineSource: 'swg',
+      saltLevelPpm: 3200,
+      sanitizerTargetMinPpm: 2,
+      sanitizerTargetMaxPpm: 4,
       surfaceType: 'plaster',
       locationId: null,
     };
@@ -169,13 +176,23 @@ describe('pools page', () => {
       })
     );
 
-    const { getByLabelText, getByRole, findByRole, queryByText } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
+    const { getByLabelText, getByRole, findByRole, queryAllByText } = render(Page, {
+      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
     await fireEvent.input(getByLabelText('Name'), { target: { value: created.name } });
     await fireEvent.input(getByLabelText('Volume (gallons)'), { target: { value: created.volumeGallons } });
     await fireEvent.change(getByLabelText('Sanitizer type'), { target: { value: created.sanitizerType } });
+    await fireEvent.change(getByLabelText('Chlorine source'), { target: { value: created.chlorineSource } });
+    await fireEvent.input(getByLabelText(/salt target \(ppm\)/i), {
+      target: { value: created.saltLevelPpm },
+    });
+    await fireEvent.input(getByLabelText('Sanitizer target min (ppm)'), {
+      target: { value: created.sanitizerTargetMinPpm },
+    });
+    await fireEvent.input(getByLabelText(/sanitizer target max \(ppm\)/i), {
+      target: { value: created.sanitizerTargetMaxPpm },
+    });
     await fireEvent.change(getByLabelText('Surface type'), { target: { value: created.surfaceType } });
     await fireEvent.input(getByLabelText('Latitude'), { target: { value: '30.0279' } });
     await fireEvent.input(getByLabelText('Longitude'), { target: { value: '-90.4614' } });
@@ -194,10 +211,14 @@ describe('pools page', () => {
           timezone: 'America/Chicago',
         })
       );
-      expect(createMock).toHaveBeenCalledWith(
+        expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
           name: created.name,
           sanitizerType: created.sanitizerType,
+          chlorineSource: created.chlorineSource,
+          saltLevelPpm: created.saltLevelPpm,
+          sanitizerTargetMinPpm: created.sanitizerTargetMinPpm,
+          sanitizerTargetMaxPpm: created.sanitizerTargetMaxPpm,
           surfaceType: created.surfaceType,
         })
       );
@@ -206,7 +227,7 @@ describe('pools page', () => {
     const status = await findByRole('status');
     expect(status.textContent).toContain('Pool created.');
     await waitFor(() => {
-      expect(queryByText(created.name)).toBeTruthy();
+      expect(queryAllByText(created.name).length).toBeGreaterThan(0);
     });
   });
 
@@ -230,13 +251,15 @@ describe('pools page', () => {
       })
     );
 
-    const { getByRole, getByText, queryByText } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
+    const { getByRole, getAllByText, queryAllByText } = render(Page, {
+      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
     await fireEvent.click(getByRole('button', { name: /edit pool/i }));
 
-    const panel = getByText(pools[0].name).closest('.surface-panel');
+    const panel = getAllByText(pools[0].name)
+      .map((node) => node.closest('.surface-panel'))
+      .find((node): node is HTMLElement => Boolean(node));
     expect(panel).toBeTruthy();
     await fireEvent.input(within(panel as HTMLElement).getByLabelText('Name'), {
       target: { value: updated.name },
@@ -249,7 +272,7 @@ describe('pools page', () => {
         updated.poolId,
         expect.objectContaining({ name: updated.name })
       );
-      expect(queryByText(updated.name)).toBeTruthy();
+      expect(queryAllByText(updated.name).length).toBeGreaterThan(0);
     });
   });
 
@@ -257,7 +280,7 @@ describe('pools page', () => {
     deleteMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const { getByRole, queryByText } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
+      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
     const deleteButton = getByRole('button', { name: /remove pool/i });
@@ -271,7 +294,7 @@ describe('pools page', () => {
 
   it('shows a manage locations section', () => {
     const { getByText, getAllByText } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
+      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
     expect(getByText('Manage locations')).toBeTruthy();
@@ -281,7 +304,7 @@ describe('pools page', () => {
 
   it('shows timezone selection on create pool', () => {
     const { getByLabelText } = render(Page, {
-      props: { data: { session: null, pools, locations, loadError: null } },
+      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
     expect(getByLabelText('Timezone (from pin)')).toBeTruthy();

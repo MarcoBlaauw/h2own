@@ -16,6 +16,7 @@ import {
 } from '../services/pools/index.js';
 import { photosService } from '../services/photos.js';
 import { recommenderService } from '../services/recommender.js';
+import { accountIntegrationsService } from '../services/account-integrations.js';
 import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
 
@@ -231,6 +232,9 @@ const getCostSummaryQuery = z.object({
 const getDosingQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
+const getSensorReadingsQuery = z.object({
+  limit: z.coerce.number().int().positive().max(500).default(100),
+});
 
 const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
 const energySourceSchema = z.enum(['gas', 'electric', 'heat_pump', 'solar_assisted', 'unknown']);
@@ -317,7 +321,7 @@ export async function poolsRoutes(app: FastifyInstance) {
     wrapPoolRoute(async (req, reply) => {
       const userId = req.user!.id; // set by verifySession
       const data = createPoolSchema.parse(req.body);
-      const pool = await poolCoreService.createPool(userId, data, req.user?.role);
+      const pool = await poolCoreService.createPool(userId, data, req.user?.role ?? undefined);
       await writeAuditLog(app, req, {
         action: 'pool.created',
         entity: 'pool',
@@ -398,6 +402,14 @@ export async function poolsRoutes(app: FastifyInstance) {
       const requestingUserId = req.user!.id;
       const { userId, role } = addMemberSchema.parse(req.body);
       const member = await poolMembershipService.addPoolMember(poolId, requestingUserId, userId, role);
+      await writeAuditLog(app, req, {
+        action: 'pool.member.added',
+        entity: 'pool_member',
+        entityId: `${poolId}:${userId}`,
+        userId: requestingUserId,
+        poolId,
+        data: { targetUserId: userId, role },
+      });
       return reply.code(201).send(member);
     })
   );
@@ -421,6 +433,14 @@ export async function poolsRoutes(app: FastifyInstance) {
       const requestingUserId = req.user!.id;
       const { role } = updateMemberSchema.parse(req.body);
       const member = await poolMembershipService.updatePoolMember(poolId, requestingUserId, userId, role);
+      await writeAuditLog(app, req, {
+        action: 'pool.member.updated',
+        entity: 'pool_member',
+        entityId: `${poolId}:${userId}`,
+        userId: requestingUserId,
+        poolId,
+        data: { targetUserId: userId, role },
+      });
       return reply.send(member);
     })
   );
@@ -614,6 +634,18 @@ export async function poolsRoutes(app: FastifyInstance) {
     })
   );
 
+  // GET /pools/:poolId/sensors/readings
+  app.get(
+    '/:poolId/sensors/readings',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const { limit } = getSensorReadingsQuery.parse(req.query);
+      const readings = await accountIntegrationsService.listPoolSensorReadings(poolId, userId, limit);
+      return reply.send({ items: readings });
+    })
+  );
+
   // PUT /pools/:poolId/temperature-preferences
   app.put(
     '/:poolId/temperature-preferences',
@@ -736,6 +768,14 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId, userId } = poolMemberParams.parse(req.params);
       const requestingUserId = req.user!.id;
       await poolMembershipService.removePoolMember(poolId, requestingUserId, userId);
+      await writeAuditLog(app, req, {
+        action: 'pool.member.removed',
+        entity: 'pool_member',
+        entityId: `${poolId}:${userId}`,
+        userId: requestingUserId,
+        poolId,
+        data: { targetUserId: userId },
+      });
       return reply.code(204).send();
     })
   );

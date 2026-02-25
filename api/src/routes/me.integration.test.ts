@@ -156,6 +156,7 @@ describe('me routes', () => {
       measurementSystem: 'imperial',
       currency: 'USD',
       preferredPoolTemp: 84,
+      defaultPoolId: null,
       notificationEmailEnabled: true,
       notificationSmsEnabled: false,
       notificationPushEnabled: false,
@@ -180,6 +181,7 @@ describe('me routes', () => {
       measurementSystem: 'metric',
       currency: 'EUR',
       preferredPoolTemp: 27,
+      defaultPoolId: null,
       notificationEmailEnabled: true,
       notificationSmsEnabled: false,
       notificationPushEnabled: true,
@@ -199,6 +201,26 @@ describe('me routes', () => {
     expect(preferencesService.updatePreferences).toHaveBeenCalledWith(currentUserId, {
       theme: 'dark',
       temperatureUnit: 'C',
+    });
+  });
+
+  it('returns 400 when default pool selection is invalid', async () => {
+    const error = new Error('Default pool must be a pool you can access.') as Error & { code?: string };
+    error.code = 'ValidationError';
+    vi.spyOn(preferencesService, 'updatePreferences').mockRejectedValueOnce(error);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/me/preferences',
+      payload: {
+        defaultPoolId: '11111111-1111-1111-1111-111111111111',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'ValidationError',
+      message: 'Default pool must be a pool you can access.',
     });
   });
 

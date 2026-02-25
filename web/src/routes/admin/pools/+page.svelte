@@ -16,6 +16,10 @@
     name: string;
     volumeGallons: string;
     sanitizerType: string;
+    chlorineSource: string;
+    saltTargetPpm: string;
+    sanitizerTargetMinPpm: string;
+    sanitizerTargetMaxPpm: string;
     surfaceType: string;
     isActive: boolean;
   };
@@ -33,6 +37,7 @@
 
   type TransferFormState = {
     newOwnerId: string;
+    retainExistingAccess: boolean;
   };
 
   const defaultUpdateForm: UpdateFormState = {
@@ -40,6 +45,10 @@
     name: '',
     volumeGallons: '',
     sanitizerType: '',
+    chlorineSource: '',
+    saltTargetPpm: '',
+    sanitizerTargetMinPpm: '',
+    sanitizerTargetMaxPpm: '',
     surfaceType: '',
     isActive: true,
   };
@@ -76,7 +85,7 @@
 
   let updateForm: UpdateFormState = { ...defaultUpdateForm };
   let thermalForm: ThermalFormState = { ...defaultThermalForm };
-  let transferForm: TransferFormState = { newOwnerId: '' };
+  let transferForm: TransferFormState = { newOwnerId: '', retainExistingAccess: false };
 
   let updateErrors: string[] = [];
   let transferErrors: string[] = [];
@@ -98,6 +107,19 @@
       name: pool.name,
       volumeGallons: pool.volumeGallons.toString(),
       sanitizerType: pool.sanitizerType ?? '',
+      chlorineSource: pool.chlorineSource ?? '',
+      saltTargetPpm:
+        pool.saltLevelPpm === null || pool.saltLevelPpm === undefined
+          ? ''
+          : String(pool.saltLevelPpm),
+      sanitizerTargetMinPpm:
+        pool.sanitizerTargetMinPpm === null || pool.sanitizerTargetMinPpm === undefined
+          ? ''
+          : String(pool.sanitizerTargetMinPpm),
+      sanitizerTargetMaxPpm:
+        pool.sanitizerTargetMaxPpm === null || pool.sanitizerTargetMaxPpm === undefined
+          ? ''
+          : String(pool.sanitizerTargetMaxPpm),
       surfaceType: pool.surfaceType ?? '',
       isActive: pool.isActive,
     };
@@ -107,6 +129,7 @@
     const nextMember = pool.members.find((member) => member.userId !== pool.ownerId);
     return {
       newOwnerId: nextMember?.userId ?? '',
+      retainExistingAccess: false,
     } satisfies TransferFormState;
   }
 
@@ -137,12 +160,26 @@
     return date.toLocaleString();
   }
 
-  const parseOptionalNumber = (value: string) => {
-    const trimmed = value.trim();
+  const parseOptionalNumber = (value: string | number | null | undefined) => {
+    const trimmed = value === null || value === undefined ? '' : String(value).trim();
     if (!trimmed) return null;
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? null : parsed;
   };
+
+  const isChlorineSanitizer = (value: string | null | undefined) =>
+    typeof value === 'string' && value.trim().toLowerCase() === 'chlorine';
+  const isBromineSanitizer = (value: string | null | undefined) =>
+    typeof value === 'string' && value.trim().toLowerCase() === 'bromine';
+  const showsSanitizerTargetRange = (value: string | null | undefined) =>
+    typeof value === 'string' && ['chlorine', 'bromine'].includes(value.trim().toLowerCase());
+  const isSwgChlorinePool = (
+    sanitizerType: string | null | undefined,
+    chlorineSource: string | null | undefined
+  ) =>
+    isChlorineSanitizer(sanitizerType) &&
+    typeof chlorineSource === 'string' &&
+    chlorineSource.trim().toLowerCase() === 'swg';
 
   const hydrateThermalForm = (equipmentInput: unknown, prefsInput: unknown): ThermalFormState => {
     const equipment = (equipmentInput ?? {}) as Record<string, unknown>;
@@ -275,12 +312,55 @@
     if (volumeValue !== selectedPool.volumeGallons) payload.volumeGallons = volumeValue;
 
     const sanitizer = updateForm.sanitizerType.trim();
+    const chlorineSource = updateForm.chlorineSource.trim();
+    const saltTarget = parseOptionalNumber(updateForm.saltTargetPpm);
+    const sanitizerTargetMin = parseOptionalNumber(updateForm.sanitizerTargetMinPpm);
+    const sanitizerTargetMax = parseOptionalNumber(updateForm.sanitizerTargetMaxPpm);
+    if (!showsSanitizerTargetRange(sanitizer)) {
+      updateErrors.push('Sanitizer type must be chlorine or bromine.');
+    }
+    if (isChlorineSanitizer(sanitizer) && !chlorineSource) {
+      updateErrors.push('Chlorine source is required for chlorine pools.');
+    }
+    if (isSwgChlorinePool(sanitizer, chlorineSource) && (saltTarget === null || saltTarget <= 0)) {
+      updateErrors.push('Salt target (ppm) is required for SWG chlorine pools and must be a positive number.');
+    }
+    if (showsSanitizerTargetRange(sanitizer)) {
+      if (sanitizerTargetMin === null || sanitizerTargetMax === null) {
+        updateErrors.push('Sanitizer target range requires both minimum and maximum ppm values.');
+      } else if (sanitizerTargetMin <= 0 || sanitizerTargetMax <= 0 || sanitizerTargetMin > sanitizerTargetMax) {
+        updateErrors.push('Sanitizer target range must be positive and min must be less than or equal to max.');
+      }
+    }
     if (sanitizer !== (selectedPool.sanitizerType ?? '')) payload.sanitizerType = sanitizer;
+    if (isChlorineSanitizer(sanitizer)) {
+      if (chlorineSource !== (selectedPool.chlorineSource ?? '')) payload.chlorineSource = chlorineSource;
+    } else if (selectedPool.chlorineSource !== null) {
+      payload.chlorineSource = null;
+    }
+    if (isSwgChlorinePool(sanitizer, chlorineSource)) {
+      if (saltTarget !== selectedPool.saltLevelPpm) payload.saltLevelPpm = saltTarget;
+    } else if (selectedPool.saltLevelPpm !== null) {
+      payload.saltLevelPpm = null;
+    }
+    if (showsSanitizerTargetRange(sanitizer)) {
+      if (sanitizerTargetMin !== selectedPool.sanitizerTargetMinPpm) {
+        payload.sanitizerTargetMinPpm = sanitizerTargetMin;
+      }
+      if (sanitizerTargetMax !== selectedPool.sanitizerTargetMaxPpm) {
+        payload.sanitizerTargetMaxPpm = sanitizerTargetMax;
+      }
+    } else {
+      if (selectedPool.sanitizerTargetMinPpm !== null) payload.sanitizerTargetMinPpm = null;
+      if (selectedPool.sanitizerTargetMaxPpm !== null) payload.sanitizerTargetMaxPpm = null;
+    }
 
     const surface = updateForm.surfaceType.trim();
     if (surface !== (selectedPool.surfaceType ?? '')) payload.surfaceType = surface;
 
     if (updateForm.isActive !== selectedPool.isActive) payload.isActive = updateForm.isActive;
+
+    if (updateErrors.length > 0) return;
 
     updating = true;
     try {
@@ -334,7 +414,10 @@
 
     transferring = true;
     try {
-      const response = await api.adminPools.transfer(selectedPool.id, { newOwnerId });
+      const response = await api.adminPools.transfer(selectedPool.id, {
+        newOwnerId,
+        retainExistingAccess: transferForm.retainExistingAccess,
+      });
       if (!response.ok) {
         transferMessage = { type: 'error', text: `Transfer failed (${response.status}).` };
         return;
@@ -428,7 +511,67 @@
                 <input id="pool-volume" class="input" type="number" min="1" bind:value={updateForm.volumeGallons} required />
 
                 <label class="text-sm font-medium text-content-secondary" for="pool-sanitizer">Sanitizer</label>
-                <input id="pool-sanitizer" class="input" type="text" bind:value={updateForm.sanitizerType} placeholder="e.g. Chlorine" />
+                <select id="pool-sanitizer" class="input" bind:value={updateForm.sanitizerType}>
+                  <option value="">Select sanitizer</option>
+                  <option value="chlorine">chlorine</option>
+                  <option value="bromine">bromine</option>
+                </select>
+                {#if isChlorineSanitizer(updateForm.sanitizerType)}
+                  <label class="text-sm font-medium text-content-secondary" for="pool-chlorine-source">Chlorine source</label>
+                  <select id="pool-chlorine-source" class="input" bind:value={updateForm.chlorineSource}>
+                    <option value="">Select chlorine source</option>
+                    <option value="manual">manual</option>
+                    <option value="swg">swg</option>
+                  </select>
+                {/if}
+                {#if isSwgChlorinePool(updateForm.sanitizerType, updateForm.chlorineSource)}
+                  <label class="text-sm font-medium text-content-secondary" for="pool-salt-target">Salt target (ppm)</label>
+                  <div>
+                    <input
+                      id="pool-salt-target"
+                      class="input"
+                      type="number"
+                      min="1"
+                      bind:value={updateForm.saltTargetPpm}
+                      placeholder="e.g. 3200"
+                    />
+                    <p class="mt-1 text-xs text-content-secondary/80">
+                      SWG generator salt configuration target, not a test reading.
+                    </p>
+                  </div>
+                {/if}
+                {#if showsSanitizerTargetRange(updateForm.sanitizerType)}
+                  <label class="text-sm font-medium text-content-secondary" for="pool-sanitizer-target-min">
+                    Sanitizer target min (ppm)
+                  </label>
+                  <input
+                    id="pool-sanitizer-target-min"
+                    class="input"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    bind:value={updateForm.sanitizerTargetMinPpm}
+                    placeholder="e.g. 3"
+                  />
+
+                  <label class="text-sm font-medium text-content-secondary" for="pool-sanitizer-target-max">
+                    Sanitizer target max (ppm)
+                  </label>
+                  <div>
+                    <input
+                      id="pool-sanitizer-target-max"
+                      class="input"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      bind:value={updateForm.sanitizerTargetMaxPpm}
+                      placeholder="e.g. 5"
+                    />
+                    <p class="mt-1 text-xs text-content-secondary/80">
+                      Required target policy range for sanitizer residual in ppm.
+                    </p>
+                  </div>
+                {/if}
 
                 <label class="text-sm font-medium text-content-secondary" for="pool-surface">Surface</label>
                 <input id="pool-surface" class="input" type="text" bind:value={updateForm.surfaceType} placeholder="e.g. Plaster" />
@@ -529,6 +672,15 @@
                   {/if}
                 {/each}
               </select>
+              <label class="mt-1 flex items-start gap-2 text-sm text-content-secondary">
+                <input type="checkbox" bind:checked={transferForm.retainExistingAccess} />
+                <span>
+                  Retain existing member access after transfer
+                  <span class="block text-xs text-content-secondary/80">
+                    When unchecked, prior non-owner access is revoked by default during sign-over.
+                  </span>
+                </span>
+              </label>
             </div>
 
             {#if transferErrors.length > 0}

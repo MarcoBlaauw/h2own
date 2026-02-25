@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PoolCoreService, type CreatePoolData, PoolLocationAccessError } from './core.js';
+import {
+  PoolCoreService,
+  type CreatePoolData,
+  PoolLocationAccessError,
+  PoolValidationError,
+} from './core.js';
 import * as schema from '../../db/schema/index.js';
 
 describe('PoolCoreService', () => {
@@ -72,6 +77,9 @@ describe('PoolCoreService', () => {
       name: 'Backyard Pool',
       volumeGallons: 15000,
       sanitizerType: 'chlorine',
+      chlorineSource: 'manual',
+      sanitizerTargetMinPpm: 2,
+      sanitizerTargetMaxPpm: 4,
       surfaceType: 'plaster',
       shadeLevel: 'partial',
       hasCover: true,
@@ -86,6 +94,9 @@ describe('PoolCoreService', () => {
       name: payload.name,
       volumeGallons: payload.volumeGallons,
       sanitizerType: payload.sanitizerType,
+      chlorineSource: payload.chlorineSource,
+      sanitizerTargetMinPpm: '2',
+      sanitizerTargetMaxPpm: '4',
       surfaceType: payload.surfaceType,
       shadeLevel: payload.shadeLevel,
       hasCover: payload.hasCover,
@@ -116,7 +127,11 @@ describe('PoolCoreService', () => {
     const payload: CreatePoolData = {
       name: 'Club Pool',
       volumeGallons: 20000,
-      sanitizerType: 'salt',
+      sanitizerType: 'chlorine',
+      chlorineSource: 'swg',
+      saltLevelPpm: 3200,
+      sanitizerTargetMinPpm: 2,
+      sanitizerTargetMaxPpm: 4,
       surfaceType: 'fiberglass',
       locationId: 'loc-1',
     };
@@ -141,7 +156,10 @@ describe('PoolCoreService', () => {
       service.createPool(userId, {
         name: 'Club Pool',
         volumeGallons: 20000,
-        sanitizerType: 'salt',
+        sanitizerType: 'chlorine',
+        chlorineSource: 'manual',
+        sanitizerTargetMinPpm: 2,
+        sanitizerTargetMaxPpm: 4,
         surfaceType: 'fiberglass',
         locationId: 'loc-1',
       })
@@ -150,15 +168,98 @@ describe('PoolCoreService', () => {
   });
 
   it('maps update payloads to database column names', async () => {
+    selectSpy.mockImplementationOnce(() => ({
+      from: () => ({
+        where: () => ({
+          limit: () =>
+            Promise.resolve([
+              {
+                sanitizerType: 'chlorine',
+                chlorineSource: 'manual',
+                saltLevelPpm: null,
+                sanitizerTargetMinPpm: '2',
+                sanitizerTargetMaxPpm: '4',
+              },
+            ]),
+        }),
+      }),
+    }));
+
     await service.updatePool('pool-123', userId, {
       sanitizerType: 'bromine',
+      sanitizerTargetMinPpm: 3,
+      sanitizerTargetMaxPpm: 5,
       surfaceType: 'fiberglass',
     });
 
     expect(capturedUpdate).toEqual({
       sanitizerType: 'bromine',
+      chlorineSource: null,
+      saltLevelPpm: null,
+      sanitizerTargetMinPpm: '3',
+      sanitizerTargetMaxPpm: '5',
       surfaceType: 'fiberglass',
     });
     expect(ensurePoolCapabilityMock).toHaveBeenCalledWith('pool-123', userId, 'pool.update');
+  });
+
+  it('requires salt target ppm when chlorine source is swg', async () => {
+    await expect(
+      service.createPool(userId, {
+        name: 'SWG Pool',
+        volumeGallons: 18000,
+        sanitizerType: 'chlorine',
+        chlorineSource: 'swg',
+        sanitizerTargetMinPpm: 2,
+        sanitizerTargetMaxPpm: 4,
+        surfaceType: 'plaster',
+      })
+    ).rejects.toBeInstanceOf(PoolValidationError);
+
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('clears chlorine source and salt target when switching to bromine', async () => {
+    selectSpy.mockImplementationOnce(() => ({
+      from: () => ({
+        where: () => ({
+          limit: () =>
+            Promise.resolve([
+              {
+                sanitizerType: 'chlorine',
+                chlorineSource: 'swg',
+                saltLevelPpm: 3200,
+                sanitizerTargetMinPpm: '2',
+                sanitizerTargetMaxPpm: '4',
+              },
+            ]),
+        }),
+      }),
+    }));
+
+    await service.updatePool('pool-123', userId, {
+      sanitizerType: 'bromine',
+      sanitizerTargetMinPpm: 3,
+      sanitizerTargetMaxPpm: 5,
+    });
+
+    expect(capturedUpdate).toEqual({
+      sanitizerType: 'bromine',
+      chlorineSource: null,
+      saltLevelPpm: null,
+      sanitizerTargetMinPpm: '3',
+      sanitizerTargetMaxPpm: '5',
+    });
+  });
+
+  it('requires sanitizer residual range when creating bromine pools', async () => {
+    await expect(
+      service.createPool(userId, {
+        name: 'Bromine Pool',
+        volumeGallons: 18000,
+        sanitizerType: 'bromine',
+        surfaceType: 'plaster',
+      })
+    ).rejects.toBeInstanceOf(PoolValidationError);
   });
 });

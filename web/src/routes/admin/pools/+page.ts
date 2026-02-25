@@ -17,6 +17,10 @@ export type AdminPool = {
   volumeGallons: number;
   surfaceType: string | null;
   sanitizerType: string | null;
+  chlorineSource: string | null;
+  saltLevelPpm: number | null;
+  sanitizerTargetMinPpm: number | null;
+  sanitizerTargetMaxPpm: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

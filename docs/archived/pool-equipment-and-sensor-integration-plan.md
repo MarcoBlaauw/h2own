@@ -2,13 +2,23 @@
 
 ## Status
 - Drafted: February 20, 2026
-- Scope: Add heater/cooler support now, and design a clean integration path for weather stations and pool sensors (including Govee API).
+- Updated: February 24, 2026
+- Scope: Add heater/cooler support now, and design a clean integration path for weather stations and pool sensors via provider-agnostic integrations.
+
+## Delivery Status Snapshot (February 24, 2026)
+- Phase 1: Implemented
+- Phase 2: Implemented
+- Phase 3: Implemented
+- Phase 4 (Govee pilot): Closed and decommissioned (unsupported thermometer API exposure)
+- Phase 5: Implemented
+- Supporting docs:
+  - Provider onboarding contract: `docs/provider-integration-onboarding-contract.md`
 
 ## Goals
 1. Track pool heating/cooling capabilities and operating preferences.
 2. Improve recommendations using equipment and ambient conditions.
 3. Add a provider-agnostic integration framework for external devices.
-4. Support staged rollout for Govee and future vendors without schema rewrites.
+4. Support staged rollout for future vendors without schema rewrites.
 
 ## Core Product Decisions
 
@@ -33,11 +43,18 @@
 
 ### 3) Integration Architecture
 - Introduce an integration provider abstraction:
-  - `provider` (e.g. `govee`, `weather_station_x`)
+  - `provider` (e.g. `weather_station_x`, future pool hardware vendors)
   - `account_link` / auth credentials
   - `device_registry` (mapped to user/pool)
   - `ingestion_pipeline` for telemetry snapshots
 - Keep vendor adapters isolated from domain logic.
+
+### 4) Pool Chemistry Model Separation
+- Distinguish policy/config from measured readings:
+  - Measured sanitizer residuals remain in test-session readings.
+  - Pool stores sanitizer target policy range (`min/max ppm`).
+  - Pool stores chlorine source (`manual` or `swg`) separately from sanitizer type.
+  - Salt target remains SWG generator configuration, not sanitizer type.
 
 ### 4) Data Quality Rules
 - Distinguish:
@@ -110,15 +127,14 @@
 ### Acceptance
 - New provider can be added with an adapter only.
 
-## Phase 4: Govee Pilot
-- Build Govee adapter:
-  - Auth/link flow based on Govee API model
-  - Device discovery
-  - Reading ingestion + normalization
-- Link Govee sensor device to pool.
+## Phase 4: Provider Pilot
+- Run a limited provider pilot behind feature flags.
+- Validate device discovery and ingestion quality before expanding provider availability.
+- Decommission unsupported providers quickly when API/device coverage is insufficient.
 
 ### Acceptance
-- Govee readings appear in pool telemetry timeline with source tagging.
+- Pilot provider telemetry appears in pool timeline with source tagging.
+- Unsupported providers can be decommissioned without architectural rework.
 
 ## Phase 5: Weather Station Expansion
 - Add station adapters (self-hosted/local vendor APIs as available).
@@ -147,9 +163,10 @@
 2. Do we allow multiple active integrations per provider per user?
 3. Should sensor ingestion be near-real-time push, scheduled pull, or hybrid?
 4. Do we need historical retention tiers (hot/warm/cold) from day one?
+5. Which provider should be the next pilot after Govee decommissioning?
 
 ## Recommended Defaults
 1. Normalize storage to a canonical unit internally, render in user preference units.
 2. Make provider adapters stateless and queue-driven.
-3. Start with Govee read-only ingestion; avoid write/control commands in first release.
+3. Keep pilot integrations read-only until device coverage and reliability are proven.
 4. Add feature flags for each provider rollout.

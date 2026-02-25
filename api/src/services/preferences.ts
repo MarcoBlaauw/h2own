@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 
@@ -9,6 +9,7 @@ export type PreferencesData = {
   measurementSystem: 'imperial' | 'metric';
   currency: string;
   preferredPoolTemp: number | null;
+  defaultPoolId: string | null;
   notificationEmailEnabled: boolean;
   notificationSmsEnabled: boolean;
   notificationPushEnabled: boolean;
@@ -24,6 +25,7 @@ const defaultPreferences = (userId: string, email: string): PreferencesData => (
   measurementSystem: 'imperial',
   currency: 'USD',
   preferredPoolTemp: null,
+  defaultPoolId: null,
   notificationEmailEnabled: true,
   notificationSmsEnabled: false,
   notificationPushEnabled: false,
@@ -45,6 +47,30 @@ const normalizeEmail = (value: string | null | undefined) => {
 export class PreferencesService {
   constructor(private readonly db = dbClient) {}
 
+  private async validateDefaultPool(userId: string, defaultPoolId: string | null | undefined) {
+    if (defaultPoolId === undefined || defaultPoolId === null) {
+      return defaultPoolId ?? null;
+    }
+
+    const [member] = await this.db
+      .select({ poolId: schema.poolMembers.poolId })
+      .from(schema.poolMembers)
+      .where(
+        and(eq(schema.poolMembers.userId, userId), eq(schema.poolMembers.poolId, defaultPoolId))
+      )
+      .limit(1);
+
+    if (!member) {
+      const error = new Error('Default pool must be a pool you can access.') as Error & {
+        code?: string;
+      };
+      error.code = 'ValidationError';
+      throw error;
+    }
+
+    return defaultPoolId;
+  }
+
   async getPreferences(userId: string): Promise<PreferencesData | null> {
     const [user] = await this.db
       .select({ userId: schema.users.userId, email: schema.users.email })
@@ -62,6 +88,7 @@ export class PreferencesService {
         measurementSystem: schema.userPreferences.measurementSystem,
         currency: schema.userPreferences.currency,
         preferredPoolTemp: schema.userPreferences.preferredPoolTemp,
+        defaultPoolId: schema.userPreferences.defaultPoolId,
         notificationEmailEnabled: schema.userPreferences.notificationEmailEnabled,
         notificationSmsEnabled: schema.userPreferences.notificationSmsEnabled,
         notificationPushEnabled: schema.userPreferences.notificationPushEnabled,
@@ -80,6 +107,7 @@ export class PreferencesService {
       measurementSystem: (row.measurementSystem as PreferencesData['measurementSystem']) ?? 'imperial',
       currency: row.currency ?? 'USD',
       preferredPoolTemp: row.preferredPoolTemp === null ? null : Number(row.preferredPoolTemp),
+      defaultPoolId: row.defaultPoolId ?? null,
       notificationEmailEnabled: row.notificationEmailEnabled ?? true,
       notificationSmsEnabled: row.notificationSmsEnabled ?? false,
       notificationPushEnabled: row.notificationPushEnabled ?? false,
@@ -96,6 +124,10 @@ export class PreferencesService {
       ...data,
       currency: normalizeCurrency(data.currency) ?? current.currency,
       notificationEmailAddress: normalizeEmail(data.notificationEmailAddress) ?? current.notificationEmailAddress,
+      defaultPoolId: await this.validateDefaultPool(
+        userId,
+        data.defaultPoolId !== undefined ? data.defaultPoolId : current.defaultPoolId
+      ),
     };
 
     const [existing] = await this.db
@@ -113,6 +145,7 @@ export class PreferencesService {
           measurementSystem: merged.measurementSystem,
           currency: merged.currency,
           preferredPoolTemp: merged.preferredPoolTemp === null ? null : String(merged.preferredPoolTemp),
+          defaultPoolId: merged.defaultPoolId,
           notificationEmailEnabled: merged.notificationEmailEnabled,
           notificationSmsEnabled: merged.notificationSmsEnabled,
           notificationPushEnabled: merged.notificationPushEnabled,
@@ -128,6 +161,7 @@ export class PreferencesService {
         measurementSystem: merged.measurementSystem,
         currency: merged.currency,
         preferredPoolTemp: merged.preferredPoolTemp === null ? null : String(merged.preferredPoolTemp),
+        defaultPoolId: merged.defaultPoolId,
         notificationEmailEnabled: merged.notificationEmailEnabled,
         notificationSmsEnabled: merged.notificationSmsEnabled,
         notificationPushEnabled: merged.notificationPushEnabled,

@@ -1,0 +1,146 @@
+import { api } from '$lib/api';
+import { redirect } from '@sveltejs/kit';
+
+export async function load({ fetch, url, parent }) {
+  const { session } = await parent();
+  if (!session?.user) {
+    throw redirect(302, '/auth/login');
+  }
+  try {
+    const requestedPoolId = url.searchParams.get('poolId');
+    const owner = url.searchParams.get('owner') === 'true';
+    const [res, preferencesRes] = await Promise.all([
+      api.pools.list(fetch, owner),
+      api.me.preferences(fetch),
+    ]);
+    if (res.ok) {
+      const pools = await res.json();
+      const preferences = preferencesRes.ok ? await preferencesRes.json() : null;
+      const defaultPoolId =
+        typeof preferences?.defaultPoolId === 'string' ? preferences.defaultPoolId : null;
+      let highlightedPool: { id: string; locationId?: string | null } | null = null;
+      let latestTest = null;
+      let recommendations = null;
+      let recommendationHistory = [];
+      let dosingHistory = [];
+      let costs = [];
+      let costSummary = null;
+      let weatherDaily = [];
+      let weatherError: string | null = null;
+      if (pools.length > 0) {
+        const selectedPoolId =
+          requestedPoolId && pools.some((pool: { poolId?: string }) => pool.poolId === requestedPoolId)
+            ? requestedPoolId
+            : defaultPoolId && pools.some((pool: { poolId?: string }) => pool.poolId === defaultPoolId)
+              ? defaultPoolId
+              : null;
+        const highlightedCandidate =
+          (selectedPoolId
+            ? pools.find((pool: { poolId?: string }) => pool.poolId === selectedPoolId)
+            : null) ??
+          pools.find(
+            (pool: { poolId?: string; locationId?: string | null }) =>
+              typeof pool.poolId === 'string' && Boolean(pool.locationId)
+          ) ?? pools[0];
+        const detailRes = await api.pools.show(highlightedCandidate.poolId, fetch);
+        if (detailRes.ok) {
+          highlightedPool = await detailRes.json();
+        }
+      }
+      if (highlightedPool) {
+        const [testsRes, recsRes, historyRes, dosingRes, costsRes, summaryRes] = await Promise.all([
+          api.tests.list(highlightedPool.id, fetch, { limit: 1 }),
+          api.recommendations.preview(highlightedPool.id, fetch),
+          api.recommendations.list(highlightedPool.id, fetch, { limit: 5 }),
+          api.dosing.list(highlightedPool.id, fetch, { limit: 5 }),
+          api.costs.list(highlightedPool.id, fetch, { limit: 5 }),
+          api.costs.summary(highlightedPool.id, fetch, { window: 'month' }),
+        ]);
+        if (testsRes.ok) {
+          const testsPayload = await testsRes.json();
+          latestTest = testsPayload.items?.[0] ?? null;
+        }
+        if (recsRes.ok) {
+          recommendations = await recsRes.json();
+        }
+        if (historyRes.ok) {
+          const historyPayload = await historyRes.json();
+          recommendationHistory = historyPayload.items ?? [];
+        }
+        if (dosingRes.ok) {
+          const dosingPayload = await dosingRes.json();
+          dosingHistory = dosingPayload.items ?? [];
+        }
+        if (costsRes.ok) {
+          const costsPayload = await costsRes.json();
+          costs = costsPayload.items ?? [];
+        }
+        if (summaryRes.ok) {
+          costSummary = await summaryRes.json();
+        }
+      }
+      if (highlightedPool?.locationId) {
+        const now = new Date();
+        const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const end = new Date(start);
+        end.setUTCDate(start.getUTCDate() + 6);
+        const weatherRes = await api.weather.list(highlightedPool.locationId, fetch, {
+          from: start.toISOString(),
+          to: end.toISOString(),
+          granularity: 'day',
+          refresh: true,
+        });
+        if (weatherRes.ok) {
+          const payload = await weatherRes.json();
+          weatherDaily = payload.items ?? [];
+        } else {
+          const payload = await weatherRes.json().catch(() => ({}));
+          weatherError =
+            payload?.error ??
+            payload?.message ??
+            `Unable to load weather data (${weatherRes.status}).`;
+        }
+      }
+      return {
+        pools,
+        highlightedPool,
+        defaultPoolId,
+        latestTest,
+        recommendations,
+        recommendationHistory,
+        dosingHistory,
+        costs,
+        costSummary,
+        weatherDaily,
+        weatherError,
+      };
+    }
+    return {
+      pools: [],
+      highlightedPool: null,
+      defaultPoolId: null,
+      latestTest: null,
+      recommendations: null,
+      recommendationHistory: [],
+      dosingHistory: [],
+      costs: [],
+      costSummary: null,
+      weatherDaily: [],
+      weatherError: null,
+    };
+  } catch (err) {
+    return {
+      pools: [],
+      highlightedPool: null,
+      defaultPoolId: null,
+      latestTest: null,
+      recommendations: null,
+      recommendationHistory: [],
+      dosingHistory: [],
+      costs: [],
+      costSummary: null,
+      weatherDaily: [],
+      weatherError: null,
+    };
+  }
+}

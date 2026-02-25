@@ -1,5 +1,76 @@
 <script lang="ts">
   import Container from "$lib/components/layout/Container.svelte";
+  import Captcha from '$lib/components/Captcha.svelte';
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api';
+
+  let name = '';
+  let email = '';
+  let message = '';
+  let error = '';
+  let success = '';
+  let submitting = false;
+  let captchaEnabled = false;
+  let captchaProvider: 'turnstile' | 'hcaptcha' | null = null;
+  let captchaSiteKey = '';
+  let captchaToken = '';
+
+  onMount(() => {
+    void loadCaptchaConfig();
+  });
+
+  async function loadCaptchaConfig() {
+    try {
+      const res = await api.auth.captchaConfig();
+      if (!res.ok) return;
+      const payload = await res.json().catch(() => ({}));
+      captchaEnabled = Boolean(payload?.enabled);
+      captchaProvider =
+        payload?.provider === 'turnstile' || payload?.provider === 'hcaptcha'
+          ? payload.provider
+          : null;
+      captchaSiteKey = typeof payload?.siteKey === 'string' ? payload.siteKey : '';
+    } catch {
+      captchaEnabled = false;
+    }
+  }
+
+  async function handleSubmit() {
+    error = '';
+    success = '';
+    if (!name.trim() || !email.trim() || message.trim().length < 10) {
+      error = 'Please provide your name, email, and a message (at least 10 characters).';
+      return;
+    }
+    if (captchaEnabled && !captchaToken) {
+      error = 'Please complete the CAPTCHA challenge.';
+      return;
+    }
+
+    submitting = true;
+    try {
+      const res = await api.contact.submit({
+        name: name.trim(),
+        email: email.trim(),
+        message: message.trim(),
+        captchaToken: captchaToken || undefined,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        error = payload?.message ?? `Failed to submit (${res.status}).`;
+        return;
+      }
+      success = payload?.message ?? 'Message sent.';
+      name = '';
+      email = '';
+      message = '';
+      captchaToken = '';
+    } catch {
+      error = 'Unable to submit your message right now. Please try again later.';
+    } finally {
+      submitting = false;
+    }
+  }
 </script>
 
 <Container>
@@ -39,11 +110,12 @@
       <div class="rounded-2xl border border-border/60 bg-surface p-6 shadow-sm">
         <h2 class="text-lg font-semibold text-content-primary">Send a message</h2>
         <p class="mt-2 text-sm text-content-secondary">We’ll route your request to the right team.</p>
-        <div class="mt-4 space-y-4 text-sm">
+        <form class="mt-4 space-y-4 text-sm" on:submit|preventDefault={handleSubmit}>
           <div>
             <label class="text-content-secondary" for="contact-name">Name</label>
             <input
               id="contact-name"
+              bind:value={name}
               class="mt-2 w-full rounded-xl border border-border/70 bg-surface px-3 py-2 text-content-primary shadow-sm focus:border-accent focus:outline-none"
               placeholder="Your name"
             />
@@ -52,6 +124,8 @@
             <label class="text-content-secondary" for="contact-email">Email</label>
             <input
               id="contact-email"
+              type="email"
+              bind:value={email}
               class="mt-2 w-full rounded-xl border border-border/70 bg-surface px-3 py-2 text-content-primary shadow-sm focus:border-accent focus:outline-none"
               placeholder="you@company.com"
             />
@@ -61,17 +135,34 @@
             <textarea
               id="contact-message"
               rows="4"
+              bind:value={message}
               class="mt-2 w-full rounded-xl border border-border/70 bg-surface px-3 py-2 text-content-primary shadow-sm focus:border-accent focus:outline-none"
               placeholder="Tell us how we can help."
             ></textarea>
           </div>
-        </div>
-        <a
-          href="mailto:support@h2own.com"
-          class="mt-6 inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-strong"
-        >
-          Email support
-        </a>
+          {#if captchaEnabled && captchaProvider && captchaSiteKey}
+            <Captcha
+              provider={captchaProvider}
+              siteKey={captchaSiteKey}
+              on:token={(event) => {
+                captchaToken = event.detail ?? '';
+              }}
+            />
+          {/if}
+          {#if error}
+            <p class="form-message" data-state="error">{error}</p>
+          {/if}
+          {#if success}
+            <p class="form-message" data-state="success">{success}</p>
+          {/if}
+          <button
+            type="submit"
+            class="btn btn-base btn-primary"
+            disabled={submitting}
+          >
+            {submitting ? 'Sending…' : 'Send message'}
+          </button>
+        </form>
       </div>
     </div>
   </section>

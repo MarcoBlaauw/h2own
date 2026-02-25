@@ -181,9 +181,11 @@ export class TomorrowIoProvider implements WeatherProvider {
 
     return daily.map((entry) => {
       const values = entry.values ?? {};
+      const precipitationAccumulation = toNullableNumber(values.precipitationAccumulation);
+      const precipitationIntensityAvg = toNullableNumber(values.precipitationIntensityAvg);
       const precipitation =
-        values.precipitationAccumulation ??
-        (values.precipitationIntensityAvg != null ? values.precipitationIntensityAvg * 24 : null);
+        precipitationAccumulation ??
+        (precipitationIntensityAvg !== null ? precipitationIntensityAvg * 24 : null);
       const temperature =
         values.temperatureAvg ?? values.temperatureMax ?? values.temperatureMin ?? null;
 
@@ -311,14 +313,14 @@ export class WeatherService {
     locationId: string,
     options: { from?: Date; to?: Date; granularity: WeatherGranularity }
   ) {
-    let whereClause = eq(schema.weatherData.locationId, locationId);
-
+    const conditions = [eq(schema.weatherData.locationId, locationId)];
     if (options.from) {
-      whereClause = and(whereClause, gte(schema.weatherData.recordedAt, options.from));
+      conditions.push(gte(schema.weatherData.recordedAt, options.from));
     }
     if (options.to) {
-      whereClause = and(whereClause, lte(schema.weatherData.recordedAt, options.to));
+      conditions.push(lte(schema.weatherData.recordedAt, options.to));
     }
+    const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions)!;
 
     const items = await this.db
       .select()

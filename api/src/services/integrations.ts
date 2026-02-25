@@ -8,7 +8,6 @@ export const INTEGRATION_PROVIDERS = [
   'google_maps',
   'captcha',
   'billing',
-  'govee',
 ] as const;
 
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
@@ -58,7 +57,6 @@ const DEFAULT_DISPLAY_NAMES: Record<IntegrationProvider, string> = {
   google_maps: 'Google Maps',
   captcha: 'CAPTCHA Provider',
   billing: 'Billing Provider',
-  govee: 'Govee',
 };
 
 type IntegrationSeed = {

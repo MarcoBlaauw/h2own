@@ -3,6 +3,7 @@ import type {} from "../types/fastify.d.ts";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
+import { authLockoutService } from "../services/auth-lockout.js";
 import { mailerService } from "../services/mailer.js";
 import { env } from "../env.js";
 import { writeAuditLog } from "./audit.js";
@@ -25,6 +26,7 @@ const registerBodySchema = z.object({
     .trim()
     .min(1, "Name must not be empty")
     .optional(),
+  captchaToken: z.string().trim().min(1).optional(),
 });
 
 const loginBodySchema = z.object({
@@ -40,6 +42,7 @@ const loginBodySchema = z.object({
       invalid_type_error: "Password must be a string",
     })
     .min(1, "Password is required"),
+  captchaToken: z.string().trim().min(1).optional(),
 });
 
 const forgotPasswordBodySchema = z.object({
@@ -49,6 +52,7 @@ const forgotPasswordBodySchema = z.object({
       invalid_type_error: "Email must be a string",
     })
     .email("Email must be a valid email address"),
+  captchaToken: z.string().trim().min(1).optional(),
 });
 
 const resetPasswordBodySchema = z.object({
@@ -64,6 +68,7 @@ const resetPasswordBodySchema = z.object({
       invalid_type_error: "Password must be a string",
     })
     .min(8, "Password must be at least 8 characters long"),
+  captchaToken: z.string().trim().min(1).optional(),
 });
 
 const forgotUsernameBodySchema = z.object({
@@ -73,6 +78,7 @@ const forgotUsernameBodySchema = z.object({
       invalid_type_error: "Email must be a string",
     })
     .email("Email must be a valid email address"),
+  captchaToken: z.string().trim().min(1).optional(),
 });
 
 const verifyEmailChangeBodySchema = z.object({
@@ -82,6 +88,23 @@ const verifyEmailChangeBodySchema = z.object({
       invalid_type_error: "Token must be a string",
     })
     .min(32, "Token is invalid"),
+});
+
+const lockoutSupportBodySchema = z.object({
+  email: z
+    .string({
+      required_error: "Email is required",
+      invalid_type_error: "Email must be a string",
+    })
+    .email("Email must be a valid email address"),
+  message: z
+    .string({
+      required_error: "Message is required",
+      invalid_type_error: "Message must be a string",
+    })
+    .trim()
+    .min(10, "Message must be at least 10 characters long")
+    .max(2000, "Message must be at most 2000 characters"),
 });
 
 interface DomainError extends Error {
@@ -125,6 +148,104 @@ const handleValidationError = (reply: FastifyReply, error: z.ZodError) => {
 };
 
 export async function authRoutes(app: FastifyInstance) {
+  const lockoutAlertRecipients = (env.AUTH_LOCKOUT_ALERT_EMAILS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const getSourceIp = (req: FastifyRequest) => req.ip || "unknown";
+
+  const verifyCaptchaIfRequired = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    action: string,
+    email: string | null,
+    captchaToken?: string,
+  ) => {
+    const captchaConfigured = Boolean(env.CAPTCHA_PROVIDER && env.CAPTCHA_SECRET);
+    if (!captchaConfigured) {
+      return true;
+    }
+
+    if (!captchaToken) {
+      await writeAuditLog(app, req, {
+        action: "auth.captcha.required",
+        entity: "auth_flow",
+        entityId: action,
+        data: { action, email },
+      });
+      reply.code(400).send({
+        error: "CaptchaRequired",
+        message: "CAPTCHA verification is required.",
+      });
+      return false;
+    }
+
+    if (!captchaToken) {
+      return true;
+    }
+
+    const captchaValid = await authService.verifyCaptcha(captchaToken);
+    if (!captchaValid) {
+      await writeAuditLog(app, req, {
+        action: "auth.captcha.failed",
+        entity: "auth_flow",
+        entityId: action,
+        data: { action, email },
+      });
+      reply.code(400).send({
+        error: "InvalidCaptcha",
+        message: "CAPTCHA verification failed.",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const sendLockoutEscalationEmails = (
+    req: FastifyRequest,
+    details: {
+      email: string;
+      ipAddress: string;
+      offenseLevel: 2 | 3;
+      lockoutUntil: string;
+    },
+  ) => {
+    if (lockoutAlertRecipients.length === 0) {
+      return;
+    }
+
+    for (const recipient of lockoutAlertRecipients) {
+      sendEmailInBackground(
+        req,
+        () => mailerService.sendAuthLockoutEscalationEmail(recipient, details),
+        "failed to send lockout escalation alert",
+        { recipient, ...details },
+      );
+    }
+  };
+
+  const lockoutMessageForLevel = (offenseLevel: 1 | 2 | 3) => {
+    if (offenseLevel === 1) {
+      return "Too many failed sign-in attempts. Please try again in 15 minutes.";
+    }
+    if (offenseLevel === 2) {
+      return "Too many failed sign-in attempts. Please try again in 1 hour.";
+    }
+    return "Too many failed sign-in attempts. Access is locked for the rest of today.";
+  };
+
+  app.get("/captcha-config", async () => {
+    const configured = Boolean(env.CAPTCHA_PROVIDER && env.CAPTCHA_SITE_KEY);
+    const enabled = configured;
+    return {
+      enabled,
+      provider: enabled ? env.CAPTCHA_PROVIDER : null,
+      siteKey: enabled ? env.CAPTCHA_SITE_KEY : null,
+    };
+  });
+
   const sendEmailInBackground = (
     req: FastifyRequest,
     send: () => Promise<unknown>,
@@ -188,6 +309,16 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/register", async (req, reply) => {
     try {
       const body = registerBodySchema.parse(req.body);
+      const captchaOk = await verifyCaptchaIfRequired(
+        req,
+        reply,
+        "register",
+        body.email,
+        body.captchaToken,
+      );
+      if (!captchaOk) {
+        return;
+      }
 
       let userId: string;
       try {
@@ -224,6 +355,47 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/login", async (req, reply) => {
     try {
       const body = loginBodySchema.parse(req.body);
+      const sourceIp = getSourceIp(req);
+      const captchaOk = await verifyCaptchaIfRequired(
+        req,
+        reply,
+        "login",
+        body.email,
+        body.captchaToken,
+      );
+      if (!captchaOk) {
+        return;
+      }
+
+      const lockoutState = await authLockoutService.getStatus(
+        app.redis as any,
+        body.email,
+        sourceIp,
+      );
+      if (lockoutState.locked && lockoutState.until) {
+        await writeAuditLog(app, req, {
+          action: "auth.lockout.blocked",
+          entity: "user",
+          entityId: body.email,
+          data: {
+            email: body.email,
+            offenseLevel: lockoutState.offenseLevel,
+            lockoutUntil: lockoutState.until,
+            sourceIp,
+          },
+        });
+        return reply.code(423).send({
+          error: "LockedOut",
+          message: lockoutMessageForLevel(lockoutState.offenseLevel as 1 | 2 | 3),
+          lockout: {
+            offenseLevel: lockoutState.offenseLevel,
+            until: lockoutState.until,
+            remainingSeconds: lockoutState.remainingSeconds,
+            supportRequired: lockoutState.supportRequired,
+            redirectTo: "/auth/lockout",
+          },
+        });
+      }
 
       let user;
       try {
@@ -233,11 +405,63 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       if (!user) {
+        const failureState = await authLockoutService.recordFailure(
+          app.redis as any,
+          body.email,
+          sourceIp,
+        );
+        if (failureState.locked && failureState.until) {
+          await writeAuditLog(app, req, {
+            action: "auth.lockout.triggered",
+            entity: "user",
+            entityId: body.email,
+            data: {
+              email: body.email,
+              offenseLevel: failureState.offenseLevel,
+              lockoutUntil: failureState.until,
+              sourceIp,
+            },
+          });
+          if (failureState.offenseLevel >= 2) {
+            sendLockoutEscalationEmails(req, {
+              email: body.email,
+              ipAddress: sourceIp,
+              offenseLevel: failureState.offenseLevel as 2 | 3,
+              lockoutUntil: failureState.until,
+            });
+          }
+
+          return reply.code(423).send({
+            error: "LockedOut",
+            message: lockoutMessageForLevel(failureState.offenseLevel as 1 | 2 | 3),
+            lockout: {
+              offenseLevel: failureState.offenseLevel,
+              until: failureState.until,
+              remainingSeconds: failureState.remainingSeconds,
+              supportRequired: failureState.supportRequired,
+              redirectTo: "/auth/lockout",
+            },
+          });
+        }
+
+        await writeAuditLog(app, req, {
+          action: "auth.login.failed",
+          entity: "user",
+          entityId: body.email,
+          data: {
+            email: body.email,
+            sourceIp,
+            warning: failureState.warning,
+          },
+        });
         return reply.code(401).send({
           error: "Unauthorized",
           message: "Invalid email or password",
+          warning: failureState.warning,
         });
       }
+
+      await authLockoutService.clearFailureHistory(app.redis as any, body.email, sourceIp);
 
       // ⬇️ Create opaque server-side session + set signed 'sid' cookie
       await app.sessions.create(reply, user.userId, user.role ?? undefined);
@@ -282,6 +506,16 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/forgot-password", async (req, reply) => {
     try {
       const body = forgotPasswordBodySchema.parse(req.body);
+      const captchaOk = await verifyCaptchaIfRequired(
+        req,
+        reply,
+        "forgot_password",
+        body.email,
+        body.captchaToken,
+      );
+      if (!captchaOk) {
+        return;
+      }
 
       const user = await authService.getUserByEmail(body.email);
       if (user) {
@@ -334,6 +568,16 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/reset-password", async (req, reply) => {
     try {
       const body = resetPasswordBodySchema.parse(req.body);
+      const captchaOk = await verifyCaptchaIfRequired(
+        req,
+        reply,
+        "reset_password",
+        null,
+        body.captchaToken,
+      );
+      if (!captchaOk) {
+        return;
+      }
       const normalizedToken = normalizeResetToken(body.token);
       const tokenKey = `password-reset:${normalizedToken}`;
       const userId = await app.redis.get(tokenKey);
@@ -378,6 +622,16 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/forgot-username", async (req, reply) => {
     try {
       const body = forgotUsernameBodySchema.parse(req.body);
+      const captchaOk = await verifyCaptchaIfRequired(
+        req,
+        reply,
+        "forgot_username",
+        body.email,
+        body.captchaToken,
+      );
+      if (!captchaOk) {
+        return;
+      }
       const user = await authService.getUserByEmail(body.email);
       if (user) {
         sendEmailInBackground(
@@ -480,6 +734,72 @@ export async function authRoutes(app: FastifyInstance) {
         role: user.role,
       },
     };
+  });
+
+  app.post("/lockout-support", async (req, reply) => {
+    try {
+      const body = lockoutSupportBodySchema.parse(req.body);
+      const sourceIp = getSourceIp(req);
+      const lockoutState = await authLockoutService.getStatus(
+        app.redis as any,
+        body.email,
+        sourceIp,
+      );
+
+      if (!lockoutState.locked || lockoutState.offenseLevel < 3) {
+        await writeAuditLog(app, req, {
+          action: "auth.lockout.support_rejected",
+          entity: "user",
+          entityId: body.email,
+          data: { email: body.email, sourceIp },
+        });
+        return reply.code(409).send({
+          error: "LockoutSupportUnavailable",
+          message: "Support requests are available only during a third-offense lockout.",
+        });
+      }
+
+      if (lockoutAlertRecipients.length === 0) {
+        await writeAuditLog(app, req, {
+          action: "auth.lockout.support_unavailable",
+          entity: "user",
+          entityId: body.email,
+          data: { email: body.email, sourceIp },
+        });
+        return reply.code(503).send({
+          error: "SupportUnavailable",
+          message: "Support contact is not configured.",
+        });
+      }
+
+      for (const recipient of lockoutAlertRecipients) {
+        sendEmailInBackground(
+          req,
+          () =>
+            mailerService.sendAuthLockoutSupportRequestEmail(recipient, {
+              email: body.email,
+              ipAddress: sourceIp,
+              message: body.message,
+            }),
+          "failed to send lockout support request",
+          { recipient, email: body.email, ipAddress: sourceIp },
+        );
+      }
+
+      await writeAuditLog(app, req, {
+        action: "auth.lockout.support_requested",
+        entity: "user",
+        entityId: body.email,
+        data: { email: body.email, sourceIp },
+      });
+      return reply.send({ ok: true, message: "Support request sent." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
+
+      throw error;
+    }
   });
 }
 

@@ -33,11 +33,7 @@
     { label: 'Inactive', value: 'inactive' },
   ];
 
-  const roleCapabilityPreview: Record<string, string[]> = {
-    admin: ['Users read/manage', 'Audit log read', 'API tokens manage', 'Admin pools manage', 'Billing manage', 'Messages send'],
-    business: ['Admin pools manage', 'Billing manage', 'Messages send'],
-    member: ['Messages send', 'Billing read'],
-  };
+  const roleCapabilityPreview: Record<string, string[]> = data.roleCapabilityPreview ?? {};
 
   function toBoolean(value: 'all' | 'active' | 'inactive') {
     if (value === 'all') return undefined;
@@ -258,7 +254,7 @@
                     {/each}
                   </select>
                   <p class="mt-1 text-xs text-content-secondary">
-                    {roleCapabilityPreview[user.role ?? 'member']?.join(' · ') ?? 'No admin capabilities'}
+                    {roleCapabilityPreview[user.role ?? 'member']?.join(' · ') ?? 'No assigned capabilities'}
                   </p>
                 </td>
                 <td class="px-4 py-3">

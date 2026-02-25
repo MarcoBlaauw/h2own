@@ -35,6 +35,10 @@ describe('admin pools page', () => {
     volumeGallons: 18000,
     surfaceType: 'plaster',
     sanitizerType: 'chlorine',
+    chlorineSource: 'manual',
+    saltLevelPpm: null,
+    sanitizerTargetMinPpm: 2,
+    sanitizerTargetMaxPpm: 4,
     isActive: true,
     createdAt: new Date('2024-01-01T00:00:00.000Z').toISOString(),
     updatedAt: new Date('2024-01-02T00:00:00.000Z').toISOString(),
@@ -230,7 +234,10 @@ describe('admin pools page', () => {
     await fireEvent.click(getByRole('button', { name: /transfer ownership/i }));
 
     await waitFor(() => {
-      expect(adminPoolsApi.transfer).toHaveBeenCalledWith(basePool.id, { newOwnerId: 'member-2' });
+      expect(adminPoolsApi.transfer).toHaveBeenCalledWith(basePool.id, {
+        newOwnerId: 'member-2',
+        retainExistingAccess: false,
+      });
     });
 
     await waitFor(() => {
@@ -238,5 +245,42 @@ describe('admin pools page', () => {
     });
 
     expect(await findByText(/Owner:\s*member@example\.com/i)).toBeInTheDocument();
+  });
+
+  it('can retain existing access during ownership transfer', async () => {
+    adminPoolsApi.transfer.mockResolvedValueOnce(
+      new Response(JSON.stringify({ poolId: basePool.id, ownerId: 'member-2' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    adminPoolsApi.list.mockResolvedValueOnce(
+      new Response(JSON.stringify([basePool]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    const { getByLabelText, getByRole } = render(Page, {
+      props: {
+        data: {
+          session: adminSession,
+          pools: [basePool],
+          loadError: null,
+        } as any,
+      },
+    });
+
+    const select = getByLabelText('New owner') as HTMLSelectElement;
+    await fireEvent.change(select, { target: { value: 'member-2' } });
+    await fireEvent.click(getByLabelText(/retain existing member access after transfer/i));
+    await fireEvent.click(getByRole('button', { name: /transfer ownership/i }));
+
+    await waitFor(() => {
+      expect(adminPoolsApi.transfer).toHaveBeenCalledWith(basePool.id, {
+        newOwnerId: 'member-2',
+        retainExistingAccess: true,
+      });
+    });
   });
 });

@@ -77,15 +77,14 @@ export class PoolCostsService {
   ) {
     await this.core.ensurePoolAccess(poolId, requestingUserId);
 
-    let whereClause = eq(schema.costs.poolId, poolId);
-
+    const conditions = [eq(schema.costs.poolId, poolId)];
     if (options.from) {
-      whereClause = and(whereClause, gte(schema.costs.incurredAt, options.from));
+      conditions.push(gte(schema.costs.incurredAt, options.from));
     }
-
     if (options.to) {
-      whereClause = and(whereClause, lte(schema.costs.incurredAt, options.to));
+      conditions.push(lte(schema.costs.incurredAt, options.to));
     }
+    const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions)!;
 
     const items = await this.db
       .select({

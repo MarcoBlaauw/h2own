@@ -94,32 +94,30 @@ async function seed() {
     if (sanitizers) {
       const chlorine = await db
         .insert(schema.products)
-        .values([
-          {
-            categoryId: sanitizers.categoryId,
-            brand: 'Generic',
-            name: 'Liquid Chlorine 12.5%',
-            productType: 'liquid_chlorine',
-            activeIngredients: { sodium_hypochlorite: 12.5 },
-            concentrationPercent: '12.5',
-            phEffect: '0.1',
-            strengthFactor: '1.0',
-            dosePer10kGallons: '10.0',
-            doseUnit: 'oz_fl',
-            affectsFc: true,
-            affectsPh: true,
-            affectsTa: false,
-            affectsCya: false,
-            fcChangePerDose: '0.5',
-            phChangePerDose: '0.05',
-            taChangePerDose: '0',
-            cyaChangePerDose: '0',
-            form: 'liquid',
-            packageSizes: ['1 gal', '2.5 gal'],
-            isActive: true,
-            averageCostPerUnit: '4.50',
-          },
-        ])
+        .values({
+          categoryId: sanitizers.categoryId,
+          brand: 'Generic',
+          name: 'Liquid Chlorine 12.5%',
+          productType: 'liquid_chlorine',
+          activeIngredients: { sodium_hypochlorite: 12.5 },
+          concentrationPercent: '12.5',
+          phEffect: '0.1',
+          strengthFactor: '1.0',
+          dosePer10kGallons: '10.0',
+          doseUnit: 'oz_fl',
+          affectsFc: true,
+          affectsPh: true,
+          affectsTa: false,
+          affectsCya: false,
+          fcChangePerDose: '0.5',
+          phChangePerDose: '0.05',
+          taChangePerDose: '0',
+          cyaChangePerDose: '0',
+          form: 'liquid',
+          packageSizes: ['1 gal', '2.5 gal'],
+          isActive: true,
+          averageCostPerUnit: '4.50',
+        } as any)
         .onConflictDoNothing()
         .returning();
       products.push(...chlorine);
@@ -128,32 +126,30 @@ async function seed() {
     if (balancers) {
       const acid = await db
         .insert(schema.products)
-        .values([
-          {
-            categoryId: balancers.categoryId,
-            brand: 'Generic',
-            name: 'Muriatic Acid 31.45%',
-            productType: 'muriatic_acid',
-            activeIngredients: { hydrochloric_acid: 31.45 },
-            concentrationPercent: '31.45',
-            phEffect: '-0.8',
-            strengthFactor: '1.0',
-            dosePer10kGallons: '8.0',
-            doseUnit: 'oz_fl',
-            affectsFc: false,
-            affectsPh: true,
-            affectsTa: true,
-            affectsCya: false,
-            fcChangePerDose: '0',
-            phChangePerDose: '-0.4',
-            taChangePerDose: '-10',
-            cyaChangePerDose: '0',
-            form: 'liquid',
-            packageSizes: ['1 gal'],
-            isActive: true,
-            averageCostPerUnit: '8.50',
-          },
-        ])
+        .values({
+          categoryId: balancers.categoryId,
+          brand: 'Generic',
+          name: 'Muriatic Acid 31.45%',
+          productType: 'muriatic_acid',
+          activeIngredients: { hydrochloric_acid: 31.45 },
+          concentrationPercent: '31.45',
+          phEffect: '-0.8',
+          strengthFactor: '1.0',
+          dosePer10kGallons: '8.0',
+          doseUnit: 'oz_fl',
+          affectsFc: false,
+          affectsPh: true,
+          affectsTa: true,
+          affectsCya: false,
+          fcChangePerDose: '0',
+          phChangePerDose: '-0.4',
+          taChangePerDose: '-10',
+          cyaChangePerDose: '0',
+          form: 'liquid',
+          packageSizes: ['1 gal'],
+          isActive: true,
+          averageCostPerUnit: '8.50',
+        } as any)
         .onConflictDoNothing()
         .returning();
       products.push(...acid);

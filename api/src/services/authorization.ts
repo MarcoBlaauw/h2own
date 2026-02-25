@@ -60,13 +60,19 @@ export const ACCOUNT_CAPABILITIES = [
 ] as const;
 export type AccountCapability = (typeof ACCOUNT_CAPABILITIES)[number];
 
-const systemRoleCapabilities: Record<SystemRole, ReadonlySet<SystemCapability>> = {
+export const DEFAULT_SYSTEM_ROLE_CAPABILITIES: Record<
+  SystemRole,
+  ReadonlySet<SystemCapability>
+> = {
   admin: new Set(SYSTEM_CAPABILITIES),
   business: new Set(['admin.pools.manage']),
   member: new Set([]),
 };
 
-const accountRoleCapabilities: Record<SystemRole, ReadonlySet<AccountCapability>> = {
+export const DEFAULT_ACCOUNT_ROLE_CAPABILITIES: Record<
+  SystemRole,
+  ReadonlySet<AccountCapability>
+> = {
   admin: new Set(ACCOUNT_CAPABILITIES),
   business: new Set(ACCOUNT_CAPABILITIES),
   member: new Set([
@@ -84,24 +90,86 @@ const accountRoleCapabilities: Record<SystemRole, ReadonlySet<AccountCapability>
   ]),
 };
 
+type RoleCapabilityTemplateInput = {
+  role: SystemRole;
+  systemCapabilities: string[];
+  accountCapabilities: string[];
+};
+
+const runtimeSystemRoleCapabilities: Record<SystemRole, Set<SystemCapability>> = {
+  admin: new Set(DEFAULT_SYSTEM_ROLE_CAPABILITIES.admin),
+  business: new Set(DEFAULT_SYSTEM_ROLE_CAPABILITIES.business),
+  member: new Set(DEFAULT_SYSTEM_ROLE_CAPABILITIES.member),
+};
+
+const runtimeAccountRoleCapabilities: Record<SystemRole, Set<AccountCapability>> = {
+  admin: new Set(DEFAULT_ACCOUNT_ROLE_CAPABILITIES.admin),
+  business: new Set(DEFAULT_ACCOUNT_ROLE_CAPABILITIES.business),
+  member: new Set(DEFAULT_ACCOUNT_ROLE_CAPABILITIES.member),
+};
+
+function isSystemCapability(value: string): value is SystemCapability {
+  return SYSTEM_CAPABILITIES.includes(value as SystemCapability);
+}
+
+function isAccountCapability(value: string): value is AccountCapability {
+  return ACCOUNT_CAPABILITIES.includes(value as AccountCapability);
+}
+
+export function resetRoleCapabilityTemplates() {
+  for (const role of SYSTEM_ROLES) {
+    runtimeSystemRoleCapabilities[role] = new Set(DEFAULT_SYSTEM_ROLE_CAPABILITIES[role]);
+    runtimeAccountRoleCapabilities[role] = new Set(DEFAULT_ACCOUNT_ROLE_CAPABILITIES[role]);
+  }
+}
+
+export function applyRoleCapabilityTemplates(templates: RoleCapabilityTemplateInput[]) {
+  resetRoleCapabilityTemplates();
+
+  for (const template of templates) {
+    runtimeSystemRoleCapabilities[template.role] = new Set(
+      template.systemCapabilities.filter((capability): capability is SystemCapability =>
+        isSystemCapability(capability)
+      )
+    );
+    runtimeAccountRoleCapabilities[template.role] = new Set(
+      template.accountCapabilities.filter((capability): capability is AccountCapability =>
+        isAccountCapability(capability)
+      )
+    );
+  }
+}
+
+export function getSystemCapabilitiesForRole(role: SystemRole): SystemCapability[] {
+  return [...runtimeSystemRoleCapabilities[role]];
+}
+
+export function getAccountCapabilitiesForRole(role: SystemRole): AccountCapability[] {
+  return [...runtimeAccountRoleCapabilities[role]];
+}
+
 export function hasSystemCapability(
   role: string | null | undefined,
-  capability: SystemCapability
+  capability: SystemCapability,
+  roleCapabilities?: ReadonlySet<SystemCapability>
 ) {
   if (!isSystemRole(role)) {
     return false;
   }
-  return systemRoleCapabilities[role].has(capability);
+  const capabilities = roleCapabilities ?? runtimeSystemRoleCapabilities[role];
+  return capabilities.has(capability);
 }
 
 export function hasAccountCapability(
   role: string | null | undefined,
-  capability: AccountCapability
+  capability: AccountCapability,
+  roleCapabilities?: ReadonlySet<AccountCapability>
 ) {
   if (!isSystemRole(role)) {
     return false;
   }
-  return accountRoleCapabilities[role].has(capability);
+  const capabilities = roleCapabilities ?? runtimeAccountRoleCapabilities[role];
+  return capabilities.has(capability);
 }
 
 export function canAssignPoolOwner(systemRole: string | null | undefined) {

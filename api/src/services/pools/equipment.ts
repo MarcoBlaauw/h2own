@@ -193,14 +193,17 @@ export class PoolEquipmentService {
     return this.getTemperaturePreferencesRecord(poolId);
   }
 
-  private async getTemperaturePreferencesRecord(poolId: string, userId?: string) {
+  private async getTemperaturePreferencesRecord(
+    poolId: string,
+    userId?: string
+  ): Promise<PoolTemperaturePreferencesDetail> {
     const [prefs] = await this.db
       .select()
       .from(schema.poolTemperaturePrefs)
       .where(eq(schema.poolTemperaturePrefs.poolId, poolId))
       .limit(1);
 
-    const fallbackUnit = userId ? await this.getUserTemperatureUnit(userId) : 'F';
+    const fallbackUnit: TemperatureUnit = userId ? await this.getUserTemperatureUnit(userId) : 'F';
 
     if (!prefs) {
       return {
@@ -214,7 +217,7 @@ export class PoolEquipmentService {
       };
     }
 
-    const unit = prefs.unit === 'C' ? 'C' : 'F';
+    const unit: TemperatureUnit = prefs.unit === 'C' ? 'C' : 'F';
 
     return {
       poolId,

@@ -1,17 +1,52 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import Captcha from '$lib/components/Captcha.svelte';
 
   let name = '';
   let email = '';
   let password = '';
   let error = '';
+  let captchaEnabled = false;
+  let captchaProvider: 'turnstile' | 'hcaptcha' | null = null;
+  let captchaSiteKey = '';
+  let captchaToken = '';
+
+  onMount(() => {
+    void loadCaptchaConfig();
+  });
+
+  async function loadCaptchaConfig() {
+    try {
+      const res = await api.auth.captchaConfig();
+      if (!res.ok) return;
+      const payload = await res.json().catch(() => ({}));
+      captchaEnabled = Boolean(payload?.enabled);
+      captchaProvider =
+        payload?.provider === 'turnstile' || payload?.provider === 'hcaptcha'
+          ? payload.provider
+          : null;
+      captchaSiteKey = typeof payload?.siteKey === 'string' ? payload.siteKey : '';
+    } catch {
+      captchaEnabled = false;
+    }
+  }
 
   async function handleSubmit() {
     error = '';
+    if (captchaEnabled && !captchaToken) {
+      error = 'Please complete the CAPTCHA challenge.';
+      return;
+    }
     try {
-      const res = await api.auth.register({ name, email, password });
+      const res = await api.auth.register({
+        name,
+        email,
+        password,
+        captchaToken: captchaToken || undefined
+      });
       if (res.ok) {
         await goto('/auth/login?registered=1', { replaceState: true });
       } else {
@@ -62,6 +97,15 @@
             bind:value={password}
           >
         </div>
+        {#if captchaEnabled && captchaProvider && captchaSiteKey}
+          <Captcha
+            provider={captchaProvider}
+            siteKey={captchaSiteKey}
+            on:token={(event) => {
+              captchaToken = event.detail ?? '';
+            }}
+          />
+        {/if}
         {#if error}
           <p class="form-message" data-state="error">{error}</p>
         {/if}

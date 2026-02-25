@@ -90,11 +90,18 @@
   let pools: PoolSummary[] = data.pools ?? [];
   let locations: LocationSummary[] = normalizeLocations(data.locations);
   let loadError = data.loadError;
+  let activePoolId = data.defaultPoolId ?? '';
+  let activePoolMessage: { type: 'success' | 'error'; text: string } | null = null;
+  let savingActivePool = false;
 
   type FormState = {
     name: string;
     volumeGallons: string;
     sanitizerType: string;
+    chlorineSource: string;
+    saltTargetPpm: string;
+    sanitizerTargetMinPpm: string;
+    sanitizerTargetMaxPpm: string;
     surfaceType: string;
     locationId?: string;
   };
@@ -119,6 +126,10 @@
     name: '',
     volumeGallons: '',
     sanitizerType: '',
+    chlorineSource: '',
+    saltTargetPpm: '',
+    sanitizerTargetMinPpm: '',
+    sanitizerTargetMaxPpm: '',
     surfaceType: '',
   };
 
@@ -246,8 +257,12 @@
   $: visibleLocations = showAllLocations
     ? filteredLocations
     : filteredLocations.slice(0, 5);
+  $: if (activePoolId && !pools.some((pool) => pool.poolId === activePoolId)) {
+    activePoolId = '';
+  }
 
-  const sanitizerOptions = ['chlorine', 'salt', 'bromine', 'mineral', 'biguanide', 'other'];
+  const sanitizerOptions = ['chlorine', 'bromine'];
+  const chlorineSourceOptions = ['manual', 'swg'];
   const surfaceOptions = ['plaster', 'vinyl', 'fiberglass', 'tile', 'concrete', 'other'];
   const equipmentTypeOptions: Array<{ value: EquipmentType; label: string }> = [
     { value: 'none', label: 'None' },
@@ -290,17 +305,45 @@
     return typeof value === 'string' ? value : String(value);
   };
 
+  const isChlorineSanitizer = (value: string) => value.trim().toLowerCase() === 'chlorine';
+  const isBromineSanitizer = (value: string) => value.trim().toLowerCase() === 'bromine';
+  const isSwgChlorinePool = (sanitizerType: string, chlorineSource: string) =>
+    isChlorineSanitizer(sanitizerType) && chlorineSource.trim().toLowerCase() === 'swg';
+  const showsSanitizerTargetRange = (value: string) =>
+    ['chlorine', 'bromine'].includes(value.trim().toLowerCase());
+
   const validateForm = (form: FormState) => {
     const errors: string[] = [];
     if (!normalizeText(form.name).trim()) errors.push('Name is required.');
     if (!normalizeText(form.volumeGallons).trim()) errors.push('Volume is required.');
     if (!normalizeText(form.sanitizerType).trim()) errors.push('Sanitizer type is required.');
+    if (!showsSanitizerTargetRange(form.sanitizerType)) {
+      errors.push('Sanitizer type must be chlorine or bromine.');
+    }
+    if (isChlorineSanitizer(form.sanitizerType) && !form.chlorineSource.trim()) {
+      errors.push('Chlorine source is required for chlorine pools.');
+    }
+    if (isSwgChlorinePool(form.sanitizerType, form.chlorineSource)) {
+      const saltTarget = parseOptionalNumber(form.saltTargetPpm);
+      if (saltTarget === null || saltTarget <= 0) {
+        errors.push('Salt target (ppm) is required for SWG chlorine pools and must be a positive number.');
+      }
+    }
+    if (showsSanitizerTargetRange(form.sanitizerType)) {
+      const sanitizerMin = parseOptionalNumber(form.sanitizerTargetMinPpm);
+      const sanitizerMax = parseOptionalNumber(form.sanitizerTargetMaxPpm);
+      if (sanitizerMin === null || sanitizerMax === null) {
+        errors.push('Sanitizer target range requires both minimum and maximum ppm values.');
+      } else if (sanitizerMin <= 0 || sanitizerMax <= 0 || sanitizerMin > sanitizerMax) {
+        errors.push('Sanitizer target range must be positive and min must be less than or equal to max.');
+      }
+    }
     if (!normalizeText(form.surfaceType).trim()) errors.push('Surface type is required.');
     return errors;
   };
 
-  const parseOptionalNumber = (value: string) => {
-    const trimmed = value.trim();
+  const parseOptionalNumber = (value: string | number | null | undefined) => {
+    const trimmed = normalizeText(value).trim();
     if (!trimmed) return null;
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? null : parsed;
@@ -376,6 +419,16 @@
     name: form.name.trim(),
     volumeGallons: Number(form.volumeGallons),
     sanitizerType: form.sanitizerType.trim(),
+    chlorineSource: isChlorineSanitizer(form.sanitizerType) ? form.chlorineSource.trim() : null,
+    saltLevelPpm: isSwgChlorinePool(form.sanitizerType, form.chlorineSource)
+      ? parseOptionalNumber(form.saltTargetPpm)
+      : null,
+    sanitizerTargetMinPpm: showsSanitizerTargetRange(form.sanitizerType)
+      ? parseOptionalNumber(form.sanitizerTargetMinPpm)
+      : null,
+    sanitizerTargetMaxPpm: showsSanitizerTargetRange(form.sanitizerType)
+      ? parseOptionalNumber(form.sanitizerTargetMaxPpm)
+      : null,
     surfaceType: form.surfaceType.trim(),
     locationId: form.locationId?.trim() || undefined,
   });
@@ -396,6 +449,28 @@
       timezone: '',
     };
     locationErrors = [];
+  };
+
+  const saveActivePool = async () => {
+    savingActivePool = true;
+    activePoolMessage = null;
+    try {
+      const payload = { defaultPoolId: activePoolId || null };
+      const res = await api.me.updatePreferences(payload);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        activePoolMessage = {
+          type: 'error',
+          text: body.message ?? body.error ?? `Unable to save active pool (${res.status}).`,
+        };
+        return;
+      }
+      activePoolMessage = { type: 'success', text: 'Active pool updated.' };
+    } catch {
+      activePoolMessage = { type: 'error', text: 'Unable to save active pool.' };
+    } finally {
+      savingActivePool = false;
+    }
   };
 
   const refreshLocations = async () => {
@@ -454,6 +529,19 @@
       name: pool.name ?? '',
       volumeGallons: pool.volumeGallons?.toString() ?? '',
       sanitizerType: pool.sanitizerType ?? '',
+      chlorineSource: pool.chlorineSource ?? '',
+      saltTargetPpm:
+        pool.saltLevelPpm === null || pool.saltLevelPpm === undefined
+          ? ''
+          : String(pool.saltLevelPpm),
+      sanitizerTargetMinPpm:
+        pool.sanitizerTargetMinPpm === null || pool.sanitizerTargetMinPpm === undefined
+          ? ''
+          : String(pool.sanitizerTargetMinPpm),
+      sanitizerTargetMaxPpm:
+        pool.sanitizerTargetMaxPpm === null || pool.sanitizerTargetMaxPpm === undefined
+          ? ''
+          : String(pool.sanitizerTargetMaxPpm),
       surfaceType: pool.surfaceType ?? '',
       locationId: pool.locationId ?? '',
     };
@@ -867,7 +955,7 @@
 <Container>
 <section class="mx-auto w-full max-w-6xl space-y-6 py-6">
   <header>
-    <h1 class="text-2xl font-semibold text-content-primary">Pool setup</h1>
+    <h1 class="text-2xl font-semibold text-content-primary">My Pools</h1>
     <p class="mt-1 text-sm text-content-secondary">
       Create and manage pools tied to your account.
     </p>
@@ -878,6 +966,50 @@
       <p class="text-sm">{loadError}</p>
     </Card>
   {/if}
+
+  <Card>
+    <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div class="space-y-3">
+        <h2 class="text-lg font-semibold text-content-primary">Active Pool</h2>
+        <p class="text-sm text-content-secondary">
+          Choose the pool used as your default context in Pool Overview and related workflows.
+        </p>
+        <label class="text-sm font-medium text-content-secondary">
+          Active pool
+          <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={activePoolId}>
+            <option value="">No default pool</option>
+            {#each pools as pool}
+              <option value={pool.poolId}>{pool.name}</option>
+            {/each}
+          </select>
+        </label>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-sm btn-primary" on:click={saveActivePool} disabled={savingActivePool}>
+            {savingActivePool ? 'Saving...' : 'Save active pool'}
+          </button>
+          <a
+            class="btn btn-sm btn-secondary"
+            href={activePoolId ? `/overview?poolId=${activePoolId}` : '/overview'}
+          >
+            Open Pool Overview
+          </a>
+        </div>
+        {#if activePoolMessage}
+          <p class={`text-sm ${activePoolMessage.type === 'success' ? 'text-success' : 'text-danger'}`}>
+            {activePoolMessage.text}
+          </p>
+        {/if}
+      </div>
+      <div>
+        <LocationPinsMap
+          locations={filteredLocations}
+          idPrefix="pool-locations-active"
+          heightClass="h-56"
+          activePoolId={activePoolId || null}
+        />
+      </div>
+    </div>
+  </Card>
 
   <Card>
     <h2 class="text-lg font-semibold text-content-primary">Create new pool</h2>
@@ -902,6 +1034,59 @@
               {/each}
             </select>
           </label>
+          {#if isChlorineSanitizer(createForm.sanitizerType)}
+            <label class="text-sm font-medium text-content-secondary">
+              Chlorine source
+              <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={createForm.chlorineSource}>
+                <option value="">Select chlorine source</option>
+                {#each chlorineSourceOptions as option}
+                  <option value={option}>{option}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+          {#if isSwgChlorinePool(createForm.sanitizerType, createForm.chlorineSource)}
+            <label class="text-sm font-medium text-content-secondary">
+              Salt target (ppm)
+              <input
+                class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                type="number"
+                min="1"
+                bind:value={createForm.saltTargetPpm}
+                placeholder="e.g. 3200"
+              />
+              <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                SWG generator salt configuration target, not a test reading.
+              </span>
+            </label>
+          {/if}
+          {#if showsSanitizerTargetRange(createForm.sanitizerType)}
+            <label class="text-sm font-medium text-content-secondary">
+              Sanitizer target min (ppm)
+              <input
+                class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                type="number"
+                min="0"
+                step="0.1"
+                bind:value={createForm.sanitizerTargetMinPpm}
+                placeholder="e.g. 3"
+              />
+            </label>
+            <label class="text-sm font-medium text-content-secondary">
+              Sanitizer target max (ppm)
+              <input
+                class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                type="number"
+                min="0"
+                step="0.1"
+                bind:value={createForm.sanitizerTargetMaxPpm}
+                placeholder="e.g. 5"
+              />
+              <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                Required target policy range for sanitizer residual in ppm.
+              </span>
+            </label>
+          {/if}
           <label class="text-sm font-medium text-content-secondary">
             Surface type
             <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={createForm.surfaceType}>
@@ -1079,6 +1264,59 @@
                         {/each}
                       </select>
                     </label>
+                    {#if isChlorineSanitizer(editForm.sanitizerType)}
+                      <label class="text-sm font-medium text-content-secondary">
+                        Chlorine source
+                        <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={editForm.chlorineSource}>
+                          <option value="">Select chlorine source</option>
+                          {#each chlorineSourceOptions as option}
+                            <option value={option}>{option}</option>
+                          {/each}
+                        </select>
+                      </label>
+                    {/if}
+                    {#if isSwgChlorinePool(editForm.sanitizerType, editForm.chlorineSource)}
+                      <label class="text-sm font-medium text-content-secondary">
+                        Salt target (ppm)
+                        <input
+                          class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                          type="number"
+                          min="1"
+                          bind:value={editForm.saltTargetPpm}
+                          placeholder="e.g. 3200"
+                        />
+                        <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                          SWG generator salt configuration target, not a test reading.
+                        </span>
+                      </label>
+                    {/if}
+                    {#if showsSanitizerTargetRange(editForm.sanitizerType)}
+                      <label class="text-sm font-medium text-content-secondary">
+                        Sanitizer target min (ppm)
+                        <input
+                          class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          bind:value={editForm.sanitizerTargetMinPpm}
+                          placeholder="e.g. 3"
+                        />
+                      </label>
+                      <label class="text-sm font-medium text-content-secondary">
+                        Sanitizer target max (ppm)
+                        <input
+                          class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          bind:value={editForm.sanitizerTargetMaxPpm}
+                          placeholder="e.g. 5"
+                        />
+                        <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                          Required target policy range for sanitizer residual in ppm.
+                        </span>
+                      </label>
+                    {/if}
                     <label class="text-sm font-medium text-content-secondary">
                       Surface type
                       <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={editForm.surfaceType}>
@@ -1263,7 +1501,11 @@
     </div>
 
     <div class="mt-4">
-      <LocationPinsMap locations={filteredLocations} idPrefix="pool-locations-overview" />
+      <LocationPinsMap
+        locations={filteredLocations}
+        idPrefix="pool-locations-overview"
+        activePoolId={activePoolId || null}
+      />
     </div>
 
     <p class="mt-3 text-xs text-content-secondary">

@@ -8,6 +8,7 @@ import {
   AdminPoolSummary,
   AdminUpdatePoolData,
   buildPoolUpdate,
+  resolvePoolChemistryConfig,
 } from './core.js';
 
 export class PoolAdminService {
@@ -25,6 +26,10 @@ export class PoolAdminService {
         volumeGallons: schema.pools.volumeGallons,
         surfaceType: schema.pools.surfaceType,
         sanitizerType: schema.pools.sanitizerType,
+        chlorineSource: schema.pools.chlorineSource,
+        saltLevelPpm: schema.pools.saltLevelPpm,
+        sanitizerTargetMinPpm: schema.pools.sanitizerTargetMinPpm,
+        sanitizerTargetMaxPpm: schema.pools.sanitizerTargetMaxPpm,
         isActive: schema.pools.isActive,
         createdAt: schema.pools.createdAt,
         updatedAt: schema.pools.updatedAt,
@@ -102,6 +107,16 @@ export class PoolAdminService {
       volumeGallons: row.volumeGallons,
       surfaceType: row.surfaceType ?? null,
       sanitizerType: row.sanitizerType ?? null,
+      chlorineSource: row.chlorineSource ?? null,
+      saltLevelPpm: row.saltLevelPpm ?? null,
+      sanitizerTargetMinPpm:
+        row.sanitizerTargetMinPpm === null || row.sanitizerTargetMinPpm === undefined
+          ? null
+          : Number(row.sanitizerTargetMinPpm),
+      sanitizerTargetMaxPpm:
+        row.sanitizerTargetMaxPpm === null || row.sanitizerTargetMaxPpm === undefined
+          ? null
+          : Number(row.sanitizerTargetMaxPpm),
       isActive: row.isActive ?? true,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -133,9 +148,45 @@ export class PoolAdminService {
       await this.core.ensureLocationAccessible(data.locationId, poolOwner.ownerId);
     }
 
+    const [currentPool] = await this.db
+      .select({
+        sanitizerType: schema.pools.sanitizerType,
+        chlorineSource: schema.pools.chlorineSource,
+        saltLevelPpm: schema.pools.saltLevelPpm,
+        sanitizerTargetMinPpm: schema.pools.sanitizerTargetMinPpm,
+        sanitizerTargetMaxPpm: schema.pools.sanitizerTargetMaxPpm,
+      })
+      .from(schema.pools)
+      .where(eq(schema.pools.poolId, poolId))
+      .limit(1);
+
+    if (!currentPool) {
+      throw new PoolNotFoundError(poolId);
+    }
+
+    const chemistry = resolvePoolChemistryConfig({
+      currentSanitizerType: currentPool.sanitizerType,
+      currentChlorineSource: currentPool.chlorineSource,
+      currentSaltLevelPpm: currentPool.saltLevelPpm,
+      currentTargetMinPpm: currentPool.sanitizerTargetMinPpm,
+      currentTargetMaxPpm: currentPool.sanitizerTargetMaxPpm,
+      nextSanitizerType: data.sanitizerType,
+      nextChlorineSource: data.chlorineSource,
+      nextSaltLevelPpm: data.saltLevelPpm,
+      nextTargetMinPpm: data.sanitizerTargetMinPpm,
+      nextTargetMaxPpm: data.sanitizerTargetMaxPpm,
+    });
+
+    const updatePayload = buildPoolUpdate(data);
+    updatePayload.sanitizerType = chemistry.sanitizerType;
+    updatePayload.chlorineSource = chemistry.chlorineSource;
+    updatePayload.saltLevelPpm = chemistry.saltLevelPpm;
+    updatePayload.sanitizerTargetMinPpm = chemistry.sanitizerTargetMinPpm.toString();
+    updatePayload.sanitizerTargetMaxPpm = chemistry.sanitizerTargetMaxPpm.toString();
+
     const [pool] = await this.db
       .update(schema.pools)
-      .set(buildPoolUpdate(data))
+      .set(updatePayload)
       .where(eq(schema.pools.poolId, poolId))
       .returning();
 
@@ -146,7 +197,15 @@ export class PoolAdminService {
     return pool;
   }
 
-  async transferOwnership(poolId: string, newOwnerId: string) {
+  async transferOwnership(
+    poolId: string,
+    newOwnerId: string,
+    options?: {
+      retainExistingAccess?: boolean;
+      transferredByUserId?: string | null;
+    }
+  ) {
+    const retainExistingAccess = options?.retainExistingAccess ?? false;
     return this.db.transaction(async (tx) => {
       const [pool] = await tx
         .select({ ownerId: schema.pools.ownerId })
@@ -159,7 +218,13 @@ export class PoolAdminService {
       }
 
       if (pool.ownerId === newOwnerId) {
-        return { poolId, ownerId: newOwnerId };
+        return {
+          poolId,
+          ownerId: newOwnerId,
+          previousOwnerId: pool.ownerId,
+          retainExistingAccess,
+          revokedAccessCount: 0,
+        };
       }
 
       await tx
@@ -183,15 +248,56 @@ export class PoolAdminService {
           poolId,
           userId: newOwnerId,
           roleName: 'owner',
+          invitedBy: options?.transferredByUserId ?? null,
         });
       }
 
-      await tx
-        .update(schema.poolMembers)
-        .set({ roleName: 'manager' })
-        .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, pool.ownerId)));
+      let revokedAccessCount = 0;
+      if (retainExistingAccess) {
+        await tx
+          .update(schema.poolMembers)
+          .set({ roleName: 'manager' })
+          .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, pool.ownerId)));
+      } else {
+        await tx
+          .delete(schema.poolMembers)
+          .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, pool.ownerId)));
 
-      return { poolId, ownerId: newOwnerId };
+        const remainingMembersToRevoke = await tx
+          .select({ userId: schema.poolMembers.userId })
+          .from(schema.poolMembers)
+          .where(eq(schema.poolMembers.poolId, poolId));
+
+        const revokeUserIds = remainingMembersToRevoke
+          .map((member) => member.userId)
+          .filter((userId) => userId !== newOwnerId);
+
+        if (revokeUserIds.length > 0) {
+          await tx
+            .delete(schema.poolMembers)
+            .where(
+              and(
+                eq(schema.poolMembers.poolId, poolId),
+                inArray(schema.poolMembers.userId, revokeUserIds)
+              )
+            );
+        }
+
+        const distinctRevoked = new Set<string>([
+          pool.ownerId,
+          ...revokeUserIds,
+        ]);
+        distinctRevoked.delete(newOwnerId);
+        revokedAccessCount = distinctRevoked.size;
+      }
+
+      return {
+        poolId,
+        ownerId: newOwnerId,
+        previousOwnerId: pool.ownerId,
+        retainExistingAccess,
+        revokedAccessCount,
+      };
     });
   }
 }

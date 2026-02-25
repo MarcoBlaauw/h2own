@@ -78,7 +78,7 @@ export class PoolTestingService {
   ) {
     await this.core.ensurePoolAccess(poolId, requestingUserId);
 
-    let whereClause = eq(schema.testSessions.poolId, poolId);
+    const conditions = [eq(schema.testSessions.poolId, poolId)];
 
     if (cursor) {
       const paginationDate = cursor.testedAt;
@@ -87,17 +87,18 @@ export class PoolTestingService {
       }
 
       const paginationCondition = cursor.sessionId
-        ? or(
+        ? (or(
             lt(schema.testSessions.testedAt, paginationDate),
             and(
               eq(schema.testSessions.testedAt, paginationDate),
               lt(schema.testSessions.sessionId, cursor.sessionId)
             )
-          )
+          ) ?? lt(schema.testSessions.testedAt, paginationDate))
         : lt(schema.testSessions.testedAt, paginationDate);
 
-      whereClause = and(whereClause, paginationCondition);
+      conditions.push(paginationCondition);
     }
+    const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions)!;
 
     const query = this.db
       .select()

@@ -11,11 +11,19 @@
     measurementSystem: 'imperial' | 'metric';
     currency: string;
     preferredPoolTemp: number | null;
+    defaultPoolId: string | null;
     notificationEmailEnabled: boolean;
     notificationSmsEnabled: boolean;
     notificationPushEnabled: boolean;
     notificationEmailAddress: string;
   };
+
+  type PoolSummary = {
+    poolId: string;
+    name: string;
+  };
+
+  const poolOptions: PoolSummary[] = Array.isArray(data?.pools) ? data.pools : [];
 
   const initialPreferences: Preferences = {
     theme: data?.preferences?.theme ?? 'light',
@@ -23,6 +31,7 @@
     measurementSystem: data?.preferences?.measurementSystem ?? 'imperial',
     currency: data?.preferences?.currency ?? 'USD',
     preferredPoolTemp: data?.preferences?.preferredPoolTemp ?? null,
+    defaultPoolId: data?.preferences?.defaultPoolId ?? null,
     notificationEmailEnabled: data?.preferences?.notificationEmailEnabled ?? true,
     notificationSmsEnabled: data?.preferences?.notificationSmsEnabled ?? false,
     notificationPushEnabled: data?.preferences?.notificationPushEnabled ?? false,
@@ -30,6 +39,7 @@
   };
 
   let preferences = { ...initialPreferences };
+  let defaultPoolSelection = preferences.defaultPoolId ?? '';
   let saving = false;
   let message: { type: 'success' | 'error'; text: string } | null = null;
 
@@ -57,6 +67,7 @@
           preferences.preferredPoolTemp === null || Number.isNaN(Number(preferences.preferredPoolTemp))
             ? null
             : Number(preferences.preferredPoolTemp),
+        defaultPoolId: preferences.defaultPoolId ?? null,
         notificationEmailAddress: preferences.notificationEmailAddress.trim() || null,
       };
 
@@ -75,6 +86,7 @@
         ...updated,
         notificationEmailAddress: updated.notificationEmailAddress ?? data?.session?.user?.email ?? '',
       };
+      defaultPoolSelection = preferences.defaultPoolId ?? '';
 
       localStorage.setItem('theme', preferences.theme);
       applyTheme(preferences.theme);
@@ -85,6 +97,8 @@
       saving = false;
     }
   }
+
+  $: preferences.defaultPoolId = defaultPoolSelection || null;
 </script>
 
 <Container>
@@ -129,6 +143,19 @@
         <label class="form-field sm:col-span-2">
           <span class="form-label">Preferred pool water temperature</span>
           <input class="form-control" type="number" min="40" max="110" step="0.5" bind:value={preferences.preferredPoolTemp} />
+        </label>
+
+        <label class="form-field sm:col-span-2">
+          <span class="form-label">Default active pool</span>
+          <select
+            class="form-control"
+            bind:value={defaultPoolSelection}
+          >
+            <option value="">No default pool</option>
+            {#each poolOptions as pool}
+              <option value={pool.poolId}>{pool.name}</option>
+            {/each}
+          </select>
         </label>
       </div>
 

@@ -1,5 +1,6 @@
 import { pgTable, uuid, varchar, char, boolean, numeric, timestamp } from 'drizzle-orm/pg-core';
 import { users } from './users';
+import { pools } from './pools';
 
 export const userPreferences = pgTable('user_preferences', {
   userId: uuid('user_id')
@@ -10,6 +11,7 @@ export const userPreferences = pgTable('user_preferences', {
   measurementSystem: varchar('measurement_system', { length: 16 }).notNull().default('imperial'),
   currency: char('currency', { length: 3 }).notNull().default('USD'),
   preferredPoolTemp: numeric('preferred_pool_temp', { precision: 5, scale: 2 }),
+  defaultPoolId: uuid('default_pool_id').references(() => pools.poolId, { onDelete: 'set null' }),
   notificationEmailEnabled: boolean('notification_email_enabled').notNull().default(true),
   notificationSmsEnabled: boolean('notification_sms_enabled').notNull().default(false),
   notificationPushEnabled: boolean('notification_push_enabled').notNull().default(false),

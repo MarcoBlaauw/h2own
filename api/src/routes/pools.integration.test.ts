@@ -9,7 +9,9 @@ import {
   PoolOwnerRequiredError,
   PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
+  PoolValidationError,
 } from '../services/pools/index.js';
+import { accountIntegrationsService } from '../services/account-integrations.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
@@ -43,8 +45,11 @@ describe('GET /pools/:poolId integration', () => {
       name: 'Community Pool',
       volumeGallons: 25000,
       surfaceType: 'plaster',
-      sanitizerType: 'salt',
+      sanitizerType: 'chlorine',
+      chlorineSource: 'swg',
       saltLevelPpm: 3200,
+      sanitizerTargetMinPpm: 2,
+      sanitizerTargetMaxPpm: 4,
       shadeLevel: 'partial',
       enclosureType: null,
       hasCover: true,
@@ -113,7 +118,7 @@ describe('GET /pools/:poolId integration', () => {
         ...member,
         invitedAt: member.invitedAt.toISOString(),
         addedAt: member.addedAt.toISOString(),
-        lastAccessAt: member.lastAccessAt ? member.lastAccessAt.toISOString() : null,
+        lastAccessAt: null,
       })),
       tests: poolDetail.tests.map((test) => ({
         ...test,
@@ -194,7 +199,8 @@ describe('GET /pools/:poolId integration', () => {
       ownerId,
       name: 'Owner Pool',
       volumeGallons: 20000,
-      sanitizerType: 'salt',
+      sanitizerType: 'chlorine',
+      chlorineSource: 'manual',
       surfaceType: 'plaster',
       locationId: null,
     };
@@ -207,7 +213,7 @@ describe('GET /pools/:poolId integration', () => {
         ownerId,
         name: 'Owner Pool',
         volumeGallons: 20000,
-        sanitizerType: 'salt',
+        sanitizerType: 'chlorine',
         surfaceType: 'plaster',
       },
     });
@@ -244,6 +250,36 @@ describe('GET /pools/:poolId integration', () => {
       error: 'InvalidLocation',
       locationId: invalidLocationId,
       message: expect.stringContaining(invalidLocationId),
+    });
+  });
+
+  it('returns 400 when salt target validation fails', async () => {
+    vi.spyOn(poolCoreService, 'createPool').mockRejectedValue(
+      new PoolValidationError(
+        'Salt target ppm is required when chlorine source is SWG and must be a positive number.'
+      )
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/pools',
+      payload: {
+        name: 'SWG Pool',
+        volumeGallons: 18000,
+        sanitizerType: 'chlorine',
+        chlorineSource: 'swg',
+        surfaceType: 'plaster',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'ValidationError',
+      details: [
+        {
+          message: 'Salt target ppm is required when chlorine source is SWG and must be a positive number.',
+        },
+      ],
     });
   });
 
@@ -349,5 +385,30 @@ describe('GET /pools/:poolId integration', () => {
       maxTemp: 31,
       unit: 'C',
     });
+  });
+
+  it('lists pool sensor readings for authorized users', async () => {
+    const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+    const listSpy = vi
+      .spyOn(accountIntegrationsService, 'listPoolSensorReadings')
+      .mockResolvedValue([
+        {
+          readingId: 1,
+          poolId,
+          metric: 'water_temp_f',
+          value: '82.1000',
+          unit: 'F',
+          source: 'govee',
+          recordedAt: new Date('2026-02-22T10:00:00.000Z'),
+        },
+      ] as any);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/pools/${poolId}/sensors/readings?limit=25`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(listSpy).toHaveBeenCalledWith(poolId, currentUserId, 25);
+    expect(response.json().items).toHaveLength(1);
   });
 });

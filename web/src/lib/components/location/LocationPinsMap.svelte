@@ -21,6 +21,7 @@
   export let locations: LocationPin[] = [];
   export let idPrefix = 'location-pins-map';
   export let heightClass = 'h-72';
+  export let activePoolId: string | null = null;
 
   const dispatch = createEventDispatcher<{ select: { locationId: string } }>();
   const apiKey =
@@ -120,6 +121,8 @@
     if (!map) return;
     clearMarkers();
     const google = getGoogle();
+    const markerLib = await google.maps.importLibrary('marker');
+    const MarkerCtor = markerLib?.Marker ?? google.maps.Marker;
     const bounds = new google.maps.LatLngBounds();
     const withCoordinates = locations.filter(
       (location) => location.latitude !== null && location.longitude !== null
@@ -130,10 +133,15 @@
         lat: Number(location.latitude),
         lng: Number(location.longitude),
       };
-      const marker = new google.maps.Marker({
+      const marker = new MarkerCtor({
         map,
         position,
         title: location.name,
+        icon: {
+          url: location.pools?.some((pool) => pool.poolId === activePoolId)
+            ? 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
+            : 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        },
       });
 
       marker.addListener('click', () => {
@@ -178,7 +186,10 @@
       if (!mapEl) return;
       await loadMaps();
       const google = getGoogle();
-      map = new google.maps.Map(mapEl, {
+      const mapsLib = await google.maps.importLibrary('maps');
+      const MapCtor = mapsLib?.Map ?? google.maps.Map;
+      const InfoWindowCtor = mapsLib?.InfoWindow ?? google.maps.InfoWindow;
+      map = new MapCtor(mapEl, {
         center: { lat: 37.09024, lng: -95.712891 },
         zoom: 4,
         mapTypeControl: true,
@@ -187,7 +198,7 @@
         fullscreenControl: false,
         ...(mapId ? { mapId } : {}),
       });
-      infoWindow = new google.maps.InfoWindow();
+      infoWindow = new InfoWindowCtor();
       await renderMarkers();
     } catch (error) {
       setupError =
@@ -212,6 +223,8 @@
   {#if setupError}
     <p class="text-xs text-danger">{setupError}</p>
   {:else}
-    <p class="text-xs text-content-secondary">Click a pin to preview location and pools.</p>
+    <p class="text-xs text-content-secondary">
+      Green pins contain the active pool; red pins are other locations.
+    </p>
   {/if}
 </div>

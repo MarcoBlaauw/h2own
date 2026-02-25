@@ -1,19 +1,52 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { onMount } from 'svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import Captcha from '$lib/components/Captcha.svelte';
 
   let email = '';
   let error = '';
   let success = '';
   let isSubmitting = false;
+  let captchaEnabled = false;
+  let captchaProvider: 'turnstile' | 'hcaptcha' | null = null;
+  let captchaSiteKey = '';
+  let captchaToken = '';
+
+  onMount(() => {
+    void loadCaptchaConfig();
+  });
+
+  async function loadCaptchaConfig() {
+    try {
+      const res = await api.auth.captchaConfig();
+      if (!res.ok) return;
+      const payload = await res.json().catch(() => ({}));
+      captchaEnabled = Boolean(payload?.enabled);
+      captchaProvider =
+        payload?.provider === 'turnstile' || payload?.provider === 'hcaptcha'
+          ? payload.provider
+          : null;
+      captchaSiteKey = typeof payload?.siteKey === 'string' ? payload.siteKey : '';
+    } catch {
+      captchaEnabled = false;
+    }
+  }
 
   async function handleSubmit() {
     error = '';
     success = '';
+    if (captchaEnabled && !captchaToken) {
+      error = 'Please complete the CAPTCHA challenge.';
+      return;
+    }
     isSubmitting = true;
 
     try {
-      const res = await api.auth.forgotPassword({ email: email.trim() });
+      const res = await api.auth.forgotPassword({
+        email: email.trim(),
+        captchaToken: captchaToken || undefined
+      });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         error = payload?.message ?? 'Unable to submit password reset request.';
@@ -45,6 +78,15 @@
           <label class="form-label" for="email">Email</label>
           <input class="form-control" id="email" type="email" bind:value={email} placeholder="Email">
         </div>
+        {#if captchaEnabled && captchaProvider && captchaSiteKey}
+          <Captcha
+            provider={captchaProvider}
+            siteKey={captchaSiteKey}
+            on:token={(event) => {
+              captchaToken = event.detail ?? '';
+            }}
+          />
+        {/if}
         {#if error}
           <p class="form-message" data-state="error">{error}</p>
         {/if}

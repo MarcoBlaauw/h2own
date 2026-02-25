@@ -8,10 +8,10 @@ describe('admin locations routes', () => {
   let verifySessionMock: ReturnType<typeof vi.fn>;
   let requireRoleMock: ReturnType<typeof vi.fn>;
   let roleHandlers: Array<ReturnType<typeof vi.fn>>;
-  let listLocationsSpy: ReturnType<typeof vi.spyOn>;
-  let createLocationSpy: ReturnType<typeof vi.spyOn>;
-  let updateLocationSpy: ReturnType<typeof vi.spyOn>;
-  let deactivateLocationSpy: ReturnType<typeof vi.spyOn>;
+  let listLocationsSpy: any;
+  let createLocationSpy: any;
+  let updateLocationSpy: any;
+  let deactivateLocationSpy: any;
   const currentUserId = 'aa1208ab-1cda-4a0c-9f12-9b8a5717e4c9';
   const baseLocationId = '5e4f2a8c-6c41-4c60-b3f6-bb34a91d9c1a';
   const secondaryLocationId = '7d3d4432-5d3f-4c02-8c24-3edb6249d6c7';

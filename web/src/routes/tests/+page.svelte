@@ -19,7 +19,7 @@
           <p class="text-sm text-content-secondary">
             Log key readings quickly from your dashboard using the streamlined quick test form.
           </p>
-          <a href="/" class="btn btn-base btn-primary mt-auto w-fit">Quick Update</a>
+          <a href="/overview" class="btn btn-base btn-primary mt-auto w-fit">Quick Update</a>
         </div>
       </Card>
 
@@ -29,7 +29,7 @@
           <p class="text-sm text-content-secondary">
             Open a pool workspace and add a complete test entry with full chemistry details.
           </p>
-          <a href="/pools" class="btn btn-base btn-secondary mt-auto w-fit">Guided Full Test</a>
+          <a href="/overview" class="btn btn-base btn-secondary mt-auto w-fit">Guided Full Test</a>
         </div>
       </Card>
     </div>

@@ -111,7 +111,10 @@ describe('AppHeader', () => {
 
     expect(queryAllByText('Chemicals')).toHaveLength(0);
     expect(queryAllByText('Users')).toHaveLength(0);
-    expect(queryAllByText('Pool Setup').length).toBeGreaterThan(0);
+    expect(queryAllByText('My Pools').length).toBeGreaterThan(0);
+    expect(queryAllByText('Pool Overview').length).toBeGreaterThan(0);
+    expect(queryAllByText('Inventory').length).toBeGreaterThan(0);
+    expect(queryAllByText('Integrations').length).toBeGreaterThan(0);
     expect(getByLabelText(/open user menu/i)).toBeInTheDocument();
   });
 

@@ -60,12 +60,10 @@ function buildConditions(filters: AuditLogFilters): SQL | undefined {
 
   if (filters.user) {
     const pattern = `%${filters.user}%`;
-    conditions.push(
-      or(
-        ilike(schema.users.email, pattern),
-        ilike(schema.users.name, pattern)
-      )
-    );
+    const userCondition = or(ilike(schema.users.email, pattern), ilike(schema.users.name, pattern));
+    if (userCondition) {
+      conditions.push(userCondition);
+    }
   }
 
   if (filters.action) {
@@ -104,39 +102,59 @@ export class AuditLogService {
     const { page, pageSize, offset } = normalizePagination(filters);
     const where = buildConditions(filters);
 
-    let countQuery = this.db
-      .select({
-        count: sql<number>`count(*)::int`,
-      })
-      .from(schema.auditLog)
-      .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.userId));
+    const countQuery = where
+      ? this.db
+          .select({
+            count: sql<number>`count(*)::int`,
+          })
+          .from(schema.auditLog)
+          .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.userId))
+          .where(where)
+      : this.db
+          .select({
+            count: sql<number>`count(*)::int`,
+          })
+          .from(schema.auditLog)
+          .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.userId));
 
-    if (where) {
-      countQuery = countQuery.where(where);
-    }
-
-    let listQuery = this.db
-      .select({
-        auditId: schema.auditLog.auditId,
-        at: schema.auditLog.at,
-        action: schema.auditLog.action,
-        entity: schema.auditLog.entity,
-        entityId: schema.auditLog.entityId,
-        userId: schema.auditLog.userId,
-        poolId: schema.auditLog.poolId,
-        ipAddress: schema.auditLog.ipAddress,
-        userAgent: schema.auditLog.userAgent,
-        sessionId: schema.auditLog.sessionId,
-        data: schema.auditLog.data,
-        userEmail: schema.users.email,
-        userName: schema.users.name,
-      })
-      .from(schema.auditLog)
-      .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.userId));
-
-    if (where) {
-      listQuery = listQuery.where(where);
-    }
+    const listQuery = where
+      ? this.db
+          .select({
+            auditId: schema.auditLog.auditId,
+            at: schema.auditLog.at,
+            action: schema.auditLog.action,
+            entity: schema.auditLog.entity,
+            entityId: schema.auditLog.entityId,
+            userId: schema.auditLog.userId,
+            poolId: schema.auditLog.poolId,
+            ipAddress: schema.auditLog.ipAddress,
+            userAgent: schema.auditLog.userAgent,
+            sessionId: schema.auditLog.sessionId,
+            data: schema.auditLog.data,
+            userEmail: schema.users.email,
+            userName: schema.users.name,
+          })
+          .from(schema.auditLog)
+          .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.userId))
+          .where(where)
+      : this.db
+          .select({
+            auditId: schema.auditLog.auditId,
+            at: schema.auditLog.at,
+            action: schema.auditLog.action,
+            entity: schema.auditLog.entity,
+            entityId: schema.auditLog.entityId,
+            userId: schema.auditLog.userId,
+            poolId: schema.auditLog.poolId,
+            ipAddress: schema.auditLog.ipAddress,
+            userAgent: schema.auditLog.userAgent,
+            sessionId: schema.auditLog.sessionId,
+            data: schema.auditLog.data,
+            userEmail: schema.users.email,
+            userName: schema.users.name,
+          })
+          .from(schema.auditLog)
+          .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.userId));
 
     const [totalResult, rows] = await Promise.all([
       countQuery,

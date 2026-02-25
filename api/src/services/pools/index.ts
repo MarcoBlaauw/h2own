@@ -7,6 +7,7 @@ import {
   PoolOwnerRequiredError,
   PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
+  PoolValidationError,
   type CreatePoolData,
   type UpdatePoolData,
   type AdminUpdatePoolData,
@@ -52,6 +53,7 @@ export {
   PoolOwnerRequiredError,
   PoolCreateOwnerForbiddenError,
   PoolLocationAccessError,
+  PoolValidationError,
 };
 
 export type {

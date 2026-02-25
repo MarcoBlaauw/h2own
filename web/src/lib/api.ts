@@ -55,6 +55,8 @@ type ApiClient = {
     login: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     logout: (customFetch?: FetchLike) => Promise<Response>;
     me: (customFetch?: FetchLike) => Promise<Response>;
+    captchaConfig: (customFetch?: FetchLike) => Promise<Response>;
+    lockoutSupport: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     forgotPassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     resetPassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     forgotUsername: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
@@ -120,6 +122,11 @@ type ApiClient = {
       customFetch?: FetchLike
     ) => Promise<Response>;
     createTest: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
+    sensorReadings: (
+      poolId: string,
+      customFetch?: FetchLike,
+      params?: { limit?: number }
+    ) => Promise<Response>;
   };
   tests: {
     create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -206,6 +213,40 @@ type ApiClient = {
     get: (provider: string, customFetch?: FetchLike) => Promise<Response>;
     update: (provider: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
+  integrations: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    connect: (
+      provider: string,
+      body?: { payload?: Record<string, unknown> },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    callback: (
+      provider: string,
+      body?: { payload?: Record<string, unknown> },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    disconnect: (integrationId: string, customFetch?: FetchLike) => Promise<Response>;
+    listDevices: (integrationId: string, customFetch?: FetchLike) => Promise<Response>;
+    discoverDevices: (
+      integrationId: string,
+      body?: { payload?: Record<string, unknown> },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    linkPool: (
+      integrationId: string,
+      deviceId: string,
+      body: { poolId: string },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+  };
+  roleCapabilities: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    update: (
+      role: string,
+      body: { systemCapabilities?: string[]; accountCapabilities?: string[] },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+  };
   auditLog: {
     list: (
       customFetch?: FetchLike,
@@ -235,6 +276,9 @@ type ApiClient = {
     summary: (customFetch?: FetchLike) => Promise<Response>;
     createPortalSession: (customFetch?: FetchLike) => Promise<Response>;
   };
+  contact: {
+    submit: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+  };
   weather: {
     list: (
       locationId: string,
@@ -260,6 +304,9 @@ export const api: ApiClient = {
       apiFetch('/auth/login', jsonRequest(body, { method: 'POST' }), customFetch),
     logout: (customFetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
     me: (customFetch) => apiFetch('/auth/me', {}, customFetch),
+    captchaConfig: (customFetch) => apiFetch('/auth/captcha-config', {}, customFetch),
+    lockoutSupport: (body, customFetch) =>
+      apiFetch('/auth/lockout-support', jsonRequest(body, { method: 'POST' }), customFetch),
     forgotPassword: (body, customFetch) =>
       apiFetch('/auth/forgot-password', jsonRequest(body, { method: 'POST' }), customFetch),
     resetPassword: (body, customFetch) =>
@@ -349,6 +396,13 @@ export const api: ApiClient = {
       ),
     createTest: (poolId, body) =>
       apiFetch(`/pools/${poolId}/tests`, jsonRequest(body, { method: 'POST' })),
+    sensorReadings: (poolId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      const path = `/pools/${poolId}/sensors/readings${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
   },
   tests: {
     create: (poolId, body) =>
@@ -460,6 +514,34 @@ export const api: ApiClient = {
     update: (provider, body, customFetch) =>
       apiFetch(`/admin/integrations/${provider}`, jsonRequest(body, { method: 'PATCH' }), customFetch),
   },
+  integrations: {
+    list: (customFetch) => apiFetch('/integrations', {}, customFetch),
+    connect: (provider, body, customFetch) =>
+      apiFetch(`/integrations/${provider}/connect`, jsonRequest(body ?? {}, { method: 'POST' }), customFetch),
+    callback: (provider, body, customFetch) =>
+      apiFetch(`/integrations/${provider}/callback`, jsonRequest(body ?? {}, { method: 'POST' }), customFetch),
+    disconnect: (integrationId, customFetch) =>
+      apiFetch(`/integrations/${integrationId}`, { method: 'DELETE' }, customFetch),
+    listDevices: (integrationId, customFetch) =>
+      apiFetch(`/integrations/${integrationId}/devices`, {}, customFetch),
+    discoverDevices: (integrationId, body, customFetch) =>
+      apiFetch(
+        `/integrations/${integrationId}/devices/discover`,
+        jsonRequest(body ?? {}, { method: 'POST' }),
+        customFetch
+      ),
+    linkPool: (integrationId, deviceId, body, customFetch) =>
+      apiFetch(
+        `/integrations/${integrationId}/devices/${deviceId}/link-pool`,
+        jsonRequest(body, { method: 'POST' }),
+        customFetch
+      ),
+  },
+  roleCapabilities: {
+    list: (customFetch) => apiFetch('/admin/role-capabilities', {}, customFetch),
+    update: (role, body, customFetch) =>
+      apiFetch(`/admin/role-capabilities/${role}`, jsonRequest(body, { method: 'PATCH' }), customFetch),
+  },
   auditLog: {
     list: (customFetch, params = {}) => {
       const search = new URLSearchParams();
@@ -508,6 +590,10 @@ export const api: ApiClient = {
   billing: {
     summary: (customFetch) => apiFetch('/billing/summary', {}, customFetch),
     createPortalSession: (customFetch) => apiFetch('/billing/portal-session', { method: 'POST' }, customFetch),
+  },
+  contact: {
+    submit: (body, customFetch) =>
+      apiFetch('/contact/submit', jsonRequest(body, { method: 'POST' }), customFetch),
   },
   weather: {
     list: (locationId, customFetch, params = {}) => {

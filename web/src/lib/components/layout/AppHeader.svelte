@@ -15,8 +15,9 @@
   let lastNotificationsFetchKey = '';
 
   const userLinks = [
-    { href: '/pools', label: 'Pool Setup' },
-    { href: '/tests', label: 'Tests' },
+    { href: '/pools', label: 'My Pools' },
+    { href: '/overview', label: 'Pool Overview' },
+    { href: '/inventory', label: 'Inventory' },
   ];
 
   function isActive(href: string) {
@@ -141,7 +142,7 @@
 <header class="sticky top-0 z-40 border-b border-border/60 bg-surface/90 backdrop-blur supports-[backdrop-filter]:bg-surface/75 dark:border-border-strong/60">
   <div class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-start">
-      <a href="/" class="flex items-center gap-3">
+      <a href={isAuthenticated ? '/overview' : '/'} class="flex items-center gap-3">
         <div class="h-9 w-9 rounded-xl bg-accent shadow-card"></div>
         <span class="text-lg font-semibold tracking-tight text-content-primary dark:text-content-primary">H2Own</span>
       </a>
@@ -243,6 +244,13 @@
                 on:click={handleMenuSelection}
               >
                 Billing
+              </a>
+              <a
+                href="/integrations"
+                class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
+                on:click={handleMenuSelection}
+              >
+                Integrations
               </a>
               {#if isAdminPanelRole($page.data.session?.user?.role)}
                 <a

@@ -186,7 +186,7 @@ describe('chemicals routes integration', () => {
     it('returns 404 when the chemical is not found', async () => {
       const spy = vi
         .spyOn(chemicalsService, 'updateChemical')
-        .mockResolvedValue(undefined);
+        .mockResolvedValue(null as any);
 
       const response = await app.inject({
         method: 'PATCH',
@@ -274,7 +274,7 @@ describe('chemicals routes integration', () => {
     it('returns 404 when the chemical is missing', async () => {
       const spy = vi
         .spyOn(chemicalsService, 'deleteChemical')
-        .mockResolvedValue(undefined);
+        .mockResolvedValue(null as any);
 
       const response = await app.inject({
         method: 'DELETE',

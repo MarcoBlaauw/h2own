@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 
@@ -459,7 +459,7 @@ export class LocationsService {
       .where(
         and(
           eq(schema.userLocations.userId, userId),
-          eq(schema.userLocations.googlePlaceId, null)
+          isNull(schema.userLocations.googlePlaceId)
         )
       )
       .returning({ locationId: schema.userLocations.locationId });

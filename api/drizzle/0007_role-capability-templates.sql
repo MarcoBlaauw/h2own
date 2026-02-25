@@ -1,0 +1,55 @@
+CREATE TABLE IF NOT EXISTS "role_capability_templates" (
+  "template_id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "role" varchar(24) NOT NULL,
+  "scope" varchar(24) NOT NULL,
+  "capability" varchar(64) NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "role_capability_templates_role_scope_capability_idx" ON "role_capability_templates" ("role","scope","capability");
+--> statement-breakpoint
+INSERT INTO "role_capability_templates" ("role", "scope", "capability")
+VALUES
+  ('admin', 'system', 'admin.users.read'),
+  ('admin', 'system', 'admin.users.manage'),
+  ('admin', 'system', 'admin.audit.read'),
+  ('admin', 'system', 'admin.tokens.manage'),
+  ('admin', 'system', 'admin.pools.manage'),
+  ('business', 'system', 'admin.pools.manage'),
+  ('admin', 'account', 'account.profile.read'),
+  ('admin', 'account', 'account.profile.update'),
+  ('admin', 'account', 'account.preferences.read'),
+  ('admin', 'account', 'account.preferences.update'),
+  ('admin', 'account', 'account.security.read'),
+  ('admin', 'account', 'account.security.update'),
+  ('admin', 'account', 'notifications.read'),
+  ('admin', 'account', 'notifications.manage'),
+  ('admin', 'account', 'messages.read'),
+  ('admin', 'account', 'messages.send'),
+  ('admin', 'account', 'billing.read'),
+  ('admin', 'account', 'billing.manage'),
+  ('business', 'account', 'account.profile.read'),
+  ('business', 'account', 'account.profile.update'),
+  ('business', 'account', 'account.preferences.read'),
+  ('business', 'account', 'account.preferences.update'),
+  ('business', 'account', 'account.security.read'),
+  ('business', 'account', 'account.security.update'),
+  ('business', 'account', 'notifications.read'),
+  ('business', 'account', 'notifications.manage'),
+  ('business', 'account', 'messages.read'),
+  ('business', 'account', 'messages.send'),
+  ('business', 'account', 'billing.read'),
+  ('business', 'account', 'billing.manage'),
+  ('member', 'account', 'account.profile.read'),
+  ('member', 'account', 'account.profile.update'),
+  ('member', 'account', 'account.preferences.read'),
+  ('member', 'account', 'account.preferences.update'),
+  ('member', 'account', 'account.security.read'),
+  ('member', 'account', 'account.security.update'),
+  ('member', 'account', 'notifications.read'),
+  ('member', 'account', 'notifications.manage'),
+  ('member', 'account', 'messages.read'),
+  ('member', 'account', 'messages.send'),
+  ('member', 'account', 'billing.read')
+ON CONFLICT ("role", "scope", "capability") DO NOTHING;

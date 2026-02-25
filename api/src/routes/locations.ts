@@ -217,7 +217,7 @@ export async function locationsRoutes(app: FastifyInstance) {
       const weather = await weatherService.getWeatherForLocation({
         locationId,
         userId: req.user!.id,
-        role: req.user?.role,
+        role: req.user?.role ?? undefined,
         from: from ? new Date(from) : undefined,
         to: to ? new Date(to) : undefined,
         granularity,

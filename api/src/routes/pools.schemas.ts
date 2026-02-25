@@ -24,7 +24,54 @@ export const parseUpdateLocationId = z.preprocess(
 );
 
 export const optionalPoolFields = {
-  saltLevelPpm: z.coerce.number().optional(),
+  chlorineSource: z.preprocess(
+    (value) => {
+      if (value === '' || value === undefined) {
+        return undefined;
+      }
+      if (value === null) {
+        return null;
+      }
+      return value;
+    },
+    z.union([z.string(), z.null()]).optional()
+  ),
+  saltLevelPpm: z.preprocess(
+    (value) => {
+      if (value === '' || value === undefined) {
+        return undefined;
+      }
+      if (value === null) {
+        return null;
+      }
+      return value;
+    },
+    z.union([z.coerce.number(), z.null()]).optional()
+  ),
+  sanitizerTargetMinPpm: z.preprocess(
+    (value) => {
+      if (value === '' || value === undefined) {
+        return undefined;
+      }
+      if (value === null) {
+        return null;
+      }
+      return value;
+    },
+    z.union([z.coerce.number(), z.null()]).optional()
+  ),
+  sanitizerTargetMaxPpm: z.preprocess(
+    (value) => {
+      if (value === '' || value === undefined) {
+        return undefined;
+      }
+      if (value === null) {
+        return null;
+      }
+      return value;
+    },
+    z.union([z.coerce.number(), z.null()]).optional()
+  ),
   shadeLevel: z.string().optional(),
   enclosureType: z.string().optional(),
   hasCover: z.coerce.boolean().optional(),

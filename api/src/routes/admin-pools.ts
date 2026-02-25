@@ -8,6 +8,7 @@ import {
   poolEquipmentService,
   PoolNotFoundError,
   PoolLocationAccessError,
+  PoolValidationError,
   type AdminPoolSummary,
 } from '../services/pools/index.js';
 import { writeAuditLog } from './audit.js';
@@ -28,6 +29,7 @@ const updatePoolSchema = z
 
 const transferSchema = z.object({
   newOwnerId: z.string().uuid(),
+  retainExistingAccess: z.boolean().optional().default(false),
 });
 
 const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
@@ -186,6 +188,9 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: 'InvalidLocation', locationId: error.locationId, message: error.message });
       }
+      if (error instanceof PoolValidationError) {
+        return reply.code(400).send({ error: 'ValidationError', details: [{ message: error.message }] });
+      }
       if (error instanceof PoolNotFoundError) {
         return reply.code(404).send({ error: 'NotFound' });
       }
@@ -279,14 +284,22 @@ export async function adminPoolsRoutes(app: FastifyInstance) {
   app.post('/:poolId/transfer', async (req, reply) => {
     try {
       const { poolId } = poolIdParams.parse(req.params);
-      const { newOwnerId } = transferSchema.parse(req.body ?? {});
-      const result = await poolAdminService.transferOwnership(poolId, newOwnerId);
+      const { newOwnerId, retainExistingAccess } = transferSchema.parse(req.body ?? {});
+      const result = await poolAdminService.transferOwnership(poolId, newOwnerId, {
+        retainExistingAccess,
+        transferredByUserId: req.user?.id ?? null,
+      });
       await writeAuditLog(app, req, {
         action: 'admin.pool.transfer_ownership',
         entity: 'pool',
         entityId: poolId,
         poolId,
-        data: { newOwnerId },
+        data: {
+          newOwnerId,
+          retainExistingAccess,
+          previousOwnerId: result.previousOwnerId,
+          revokedAccessCount: result.revokedAccessCount,
+        },
       });
       return reply.send(result);
     } catch (error) {

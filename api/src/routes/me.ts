@@ -39,6 +39,7 @@ const updatePreferencesBodySchema = z
     measurementSystem: z.enum(['imperial', 'metric']).optional(),
     currency: z.string().trim().length(3).optional(),
     preferredPoolTemp: z.number().min(40).max(110).nullable().optional(),
+    defaultPoolId: z.string().uuid().nullable().optional(),
     notificationEmailEnabled: z.boolean().optional(),
     notificationSmsEnabled: z.boolean().optional(),
     notificationPushEnabled: z.boolean().optional(),
@@ -174,6 +175,9 @@ export async function meRoutes(app: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: error.errors });
       }
+      if ((error as { code?: string })?.code === 'ValidationError') {
+        return reply.code(400).send({ error: 'ValidationError', message: (error as Error).message });
+      }
       throw error;
     }
   });
@@ -209,6 +213,9 @@ export async function meRoutes(app: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      if ((error as { code?: string })?.code === 'ValidationError') {
+        return reply.code(400).send({ error: 'ValidationError', message: (error as Error).message });
       }
       throw error;
     }

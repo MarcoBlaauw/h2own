@@ -108,6 +108,71 @@ This link expires in ${hours} hour(s).
 If you did not request this change, you can ignore this email.`,
     });
   }
+
+  async sendAuthLockoutEscalationEmail(
+    to: string,
+    details: {
+      email: string;
+      ipAddress: string;
+      offenseLevel: 2 | 3;
+      lockoutUntil: string;
+    },
+  ) {
+    return this.send({
+      to,
+      subject: `H2Own auth lockout escalation (offense ${details.offenseLevel})`,
+      text: `An authentication lockout escalation was triggered.
+
+User: ${details.email}
+Source IP: ${details.ipAddress}
+Offense level: ${details.offenseLevel}
+Locked until: ${details.lockoutUntil}`,
+    });
+  }
+
+  async sendAuthLockoutSupportRequestEmail(
+    to: string,
+    details: {
+      email: string;
+      ipAddress: string;
+      message: string;
+    },
+  ) {
+    return this.send({
+      to,
+      subject: "H2Own lockout support request",
+      text: `A locked user submitted a support request.
+
+User: ${details.email}
+Source IP: ${details.ipAddress}
+
+Message:
+${details.message}`,
+    });
+  }
+
+  async sendPublicContactEmail(
+    to: string,
+    details: {
+      name: string;
+      email: string;
+      message: string;
+      ipAddress?: string | null;
+    },
+  ) {
+    return this.send({
+      to,
+      subject: `H2Own contact form: ${details.name}`,
+      text: `New contact form submission:
+
+Name: ${details.name}
+Email: ${details.email}
+IP: ${details.ipAddress ?? 'unknown'}
+
+Message:
+${details.message}`,
+    });
+  }
 }
 
 export const mailerService = new MailerService();
