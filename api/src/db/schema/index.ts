@@ -32,3 +32,7 @@ export * from './integrations.js';
 export * from './integration_devices.js';
 export * from './sensor_readings.js';
 export * from './integration_ingestion_failures.js';
+export * from './message_threads.js';
+export * from './thread_participants.js';
+export * from './messages.js';
+export * from './message_deliveries.js';

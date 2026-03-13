@@ -373,6 +373,54 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_notifications_pool ON notifications(pool_id);
 
+-- Messaging
+CREATE TABLE IF NOT EXISTS message_threads (
+  thread_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_by UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  pool_id UUID REFERENCES pools(pool_id) ON DELETE SET NULL,
+  subject VARCHAR(200),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS thread_participants (
+  thread_id UUID NOT NULL REFERENCES message_threads(thread_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  role VARCHAR(30) NOT NULL DEFAULT 'member',
+  metadata JSONB,
+  last_read_at TIMESTAMPTZ,
+  muted_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (thread_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_thread_participants_user ON thread_participants(user_id, thread_id);
+
+CREATE TABLE IF NOT EXISTS messages (
+  message_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  thread_id UUID NOT NULL REFERENCES message_threads(thread_id) ON DELETE CASCADE,
+  sender_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  attachments JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  edited_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_thread_time ON messages(thread_id, created_at DESC, message_id DESC);
+
+CREATE TABLE IF NOT EXISTS message_deliveries (
+  message_id BIGINT NOT NULL REFERENCES messages(message_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  delivered_at TIMESTAMPTZ,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_deliveries_user ON message_deliveries(user_id, read_at);
+
 -- Audit log
 CREATE TABLE IF NOT EXISTS audit_log (
   audit_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
