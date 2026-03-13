@@ -20,6 +20,7 @@
 
   export let data: {
     test: TestDetail | null;
+    returnPoolId: string | null;
     loadError: string | null;
   };
 
@@ -171,8 +172,11 @@
           </div>
         </div>
         <div class="mt-6">
-          <a class="text-sm font-semibold text-accent hover:text-accent-strong" href={`/pools/${data.test.poolId}`}>
-            Back to pool
+          <a
+            class="text-sm font-semibold text-accent hover:text-accent-strong"
+            href={data.returnPoolId ? `/overview?poolId=${encodeURIComponent(data.returnPoolId)}` : '/overview'}
+          >
+            Back to Pool Overview
           </a>
         </div>
       </Card>

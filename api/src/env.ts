@@ -127,6 +127,18 @@ const envSchema = z.object({
     .transform((value) => Number(value))
     .pipe(z.number().int().min(1).max(20))
     .default("5"),
+  SCHEDULE_REMINDERS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value !== undefined) return value.toLowerCase() === 'true';
+      return process.env.NODE_ENV !== 'test';
+    }),
+  SCHEDULE_REMINDERS_TICK_SECONDS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default('60'),
   INTEGRATION_WEBHOOK_SHARED_SECRET: emptyToUndefined(z.string().optional()),
   WEATHER_STATION_WEBHOOK_SECRET: emptyToUndefined(z.string().optional()),
   WEATHER_CACHE_TTL_MINUTES: z
@@ -217,6 +229,8 @@ if (env.NODE_ENV === "development") {
   console.log(`  INTEGRATION_RETRY_TICK_SECONDS: ${env.INTEGRATION_RETRY_TICK_SECONDS}`);
   console.log(`  INTEGRATION_RETRY_BATCH_SIZE: ${env.INTEGRATION_RETRY_BATCH_SIZE}`);
   console.log(`  INTEGRATION_RETRY_MAX_ATTEMPTS: ${env.INTEGRATION_RETRY_MAX_ATTEMPTS}`);
+  console.log(`  SCHEDULE_REMINDERS_ENABLED: ${env.SCHEDULE_REMINDERS_ENABLED}`);
+  console.log(`  SCHEDULE_REMINDERS_TICK_SECONDS: ${env.SCHEDULE_REMINDERS_TICK_SECONDS}`);
   console.log(
     `  WEATHER_STATION_WEBHOOK_SECRET_CONFIGURED: ${Boolean(env.WEATHER_STATION_WEBHOOK_SECRET)}`,
   );

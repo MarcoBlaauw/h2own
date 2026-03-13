@@ -94,14 +94,14 @@ describe('AppHeader', () => {
     }
   });
 
-  it('keeps admin options inside the user menu (no direct top admin links)', () => {
+  it('shows billing and admin panel links in top navigation for admin roles', () => {
     setPage('/admin/users', { user: { email: 'admin@example.com', role: 'admin' } });
 
-    const { getByLabelText, getByRole, queryAllByText } = render(AppHeader);
+    const { getAllByRole, queryAllByText } = render(AppHeader);
     expect(queryAllByText('Chemicals')).toHaveLength(0);
     expect(queryAllByText('Users')).toHaveLength(0);
-    expect(getByLabelText(/open user menu/i)).toBeInTheDocument();
-    expect(getByRole('link', { name: /admin panel/i })).toBeInTheDocument();
+    expect(getAllByRole('link', { name: /admin panel/i }).length).toBeGreaterThan(0);
+    expect(getAllByRole('link', { name: /billing/i }).length).toBeGreaterThan(0);
   });
 
   it('hides admin links for non-admin users', () => {
@@ -114,6 +114,7 @@ describe('AppHeader', () => {
     expect(queryAllByText('My Pools').length).toBeGreaterThan(0);
     expect(queryAllByText('Pool Overview').length).toBeGreaterThan(0);
     expect(queryAllByText('Inventory').length).toBeGreaterThan(0);
+    expect(queryAllByText('Billing').length).toBeGreaterThan(0);
     expect(queryAllByText('Integrations').length).toBeGreaterThan(0);
     expect(getByLabelText(/open user menu/i)).toBeInTheDocument();
   });

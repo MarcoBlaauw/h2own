@@ -283,6 +283,36 @@ describe('GET /pools/:poolId integration', () => {
     });
   });
 
+  it('returns 400 when sanitizer target ppm exceeds supported bounds', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/pools',
+      payload: {
+        name: 'Overflow Pool',
+        volumeGallons: 15000,
+        sanitizerType: 'chlorine',
+        chlorineSource: 'swg',
+        surfaceType: 'plaster',
+        saltLevelPpm: 3600,
+        sanitizerTargetMinPpm: 3200,
+        sanitizerTargetMaxPpm: 4000,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'ValidationError',
+      details: expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('Sanitizer target min ppm must be greater than 0 and no more than 20'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('Sanitizer target max ppm must be greater than 0 and no more than 20'),
+        }),
+      ]),
+    });
+  });
+
   it('gets and updates pool equipment', async () => {
     const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
     const equipment = {

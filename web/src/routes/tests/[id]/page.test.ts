@@ -21,7 +21,7 @@ describe('test detail page', () => {
     };
 
     const { getByText } = render(Page, {
-      props: { data: { test, loadError: null } },
+      props: { data: { test, returnPoolId: test.poolId, loadError: null } },
     });
 
     expect(getByText('Test details')).toBeTruthy();
@@ -36,7 +36,7 @@ describe('test detail page', () => {
 
   it('renders a fallback when the test is missing', () => {
     const { getByRole, getByText } = render(Page, {
-      props: { data: { test: null, loadError: 'Test not found.' } },
+      props: { data: { test: null, returnPoolId: null, loadError: 'Test not found.' } },
     });
 
     expect(getByRole('alert').textContent).toContain('Test not found.');

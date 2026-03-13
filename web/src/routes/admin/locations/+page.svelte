@@ -391,8 +391,7 @@
                   </span>
                 </div>
                 <div class="mt-1 text-xs text-content-secondary">
-                  {location.user?.email ?? 'Unassigned'} •
-                  {location.timezone ?? 'No timezone'}
+                  {location.user?.email ?? 'Unassigned'}
                 </div>
                 {#if location.formattedAddress}
                   <div class="mt-1 text-xs text-content-secondary/80">{location.formattedAddress}</div>
@@ -456,20 +455,6 @@
           bind:googlePlaceId={createForm.googlePlaceId}
           bind:googlePlusCode={createForm.googlePlusCode}
         />
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-1">
-            <label class="form-label" for="create-latitude">Latitude</label>
-            <input id="create-latitude" class="form-control" bind:value={createForm.latitude} />
-          </div>
-          <div class="space-y-1">
-            <label class="form-label" for="create-longitude">Longitude</label>
-            <input id="create-longitude" class="form-control" bind:value={createForm.longitude} />
-          </div>
-        </div>
-        <div class="space-y-1">
-          <label class="form-label" for="create-timezone">Timezone</label>
-          <input id="create-timezone" class="form-control" bind:value={createForm.timezone} placeholder="e.g. America/New_York" />
-        </div>
         <div class="space-y-1">
           <label class="form-label" for="create-formatted-address">Formatted address</label>
           <input id="create-formatted-address" class="form-control" bind:value={createForm.formattedAddress} />
@@ -539,20 +524,6 @@
             bind:googlePlaceId={updateForm.googlePlaceId}
             bind:googlePlusCode={updateForm.googlePlusCode}
           />
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-1">
-              <label class="form-label" for="edit-latitude">Latitude</label>
-              <input id="edit-latitude" class="form-control" bind:value={updateForm.latitude} />
-            </div>
-            <div class="space-y-1">
-              <label class="form-label" for="edit-longitude">Longitude</label>
-              <input id="edit-longitude" class="form-control" bind:value={updateForm.longitude} />
-            </div>
-          </div>
-          <div class="space-y-1">
-            <label class="form-label" for="edit-timezone">Timezone</label>
-            <input id="edit-timezone" class="form-control" bind:value={updateForm.timezone} placeholder="e.g. America/Los_Angeles" />
-          </div>
           <div class="space-y-1">
             <label class="form-label" for="edit-formatted-address">Formatted address</label>
             <input id="edit-formatted-address" class="form-control" bind:value={updateForm.formattedAddress} />

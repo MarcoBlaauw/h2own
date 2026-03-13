@@ -16,6 +16,10 @@
     notificationSmsEnabled: boolean;
     notificationPushEnabled: boolean;
     notificationEmailAddress: string;
+    reminderTimezone: string | null;
+    reminderLeadMinutes: number;
+    quietHoursStart: string | null;
+    quietHoursEnd: string | null;
   };
 
   type PoolSummary = {
@@ -36,6 +40,10 @@
     notificationSmsEnabled: data?.preferences?.notificationSmsEnabled ?? false,
     notificationPushEnabled: data?.preferences?.notificationPushEnabled ?? false,
     notificationEmailAddress: data?.preferences?.notificationEmailAddress ?? data?.session?.user?.email ?? '',
+    reminderTimezone: data?.preferences?.reminderTimezone ?? '',
+    reminderLeadMinutes: data?.preferences?.reminderLeadMinutes ?? 1440,
+    quietHoursStart: data?.preferences?.quietHoursStart ?? '',
+    quietHoursEnd: data?.preferences?.quietHoursEnd ?? '',
   };
 
   let preferences = { ...initialPreferences };
@@ -69,6 +77,10 @@
             : Number(preferences.preferredPoolTemp),
         defaultPoolId: preferences.defaultPoolId ?? null,
         notificationEmailAddress: preferences.notificationEmailAddress.trim() || null,
+        reminderTimezone: preferences.reminderTimezone?.trim() || null,
+        reminderLeadMinutes: Number(preferences.reminderLeadMinutes),
+        quietHoursStart: preferences.quietHoursStart?.trim() || null,
+        quietHoursEnd: preferences.quietHoursEnd?.trim() || null,
       };
 
       const res = await api.me.updatePreferences(payload);
@@ -177,6 +189,24 @@
           <span class="form-label">Notification email destination</span>
           <input class="form-control" type="email" bind:value={preferences.notificationEmailAddress} />
         </label>
+        <label class="form-field">
+          <span class="form-label">Reminder timezone</span>
+          <input class="form-control" bind:value={preferences.reminderTimezone} placeholder="America/Chicago" />
+        </label>
+        <label class="form-field">
+          <span class="form-label">Default reminder lead time (minutes)</span>
+          <input class="form-control" type="number" min="0" bind:value={preferences.reminderLeadMinutes} />
+        </label>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="form-field">
+            <span class="form-label">Quiet hours start</span>
+            <input class="form-control" type="time" bind:value={preferences.quietHoursStart} />
+          </label>
+          <label class="form-field">
+            <span class="form-label">Quiet hours end</span>
+            <input class="form-control" type="time" bind:value={preferences.quietHoursEnd} />
+          </label>
+        </div>
       </div>
 
       {#if message}

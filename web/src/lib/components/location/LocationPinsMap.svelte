@@ -37,6 +37,19 @@
   let markerRefs: any[] = [];
 
   const getGoogle = () => (window as MapsWindow).google;
+  const getMapsImportLibrary = (google: any) =>
+    typeof google?.maps?.importLibrary === 'function'
+      ? google.maps.importLibrary.bind(google.maps)
+      : null;
+  const isConstructable = (value: unknown): value is new (...args: any[]) => any => {
+    if (typeof value !== 'function') return false;
+    try {
+      Reflect.construct(String, [], value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const loadMaps = () => {
     if (!apiKey) {
@@ -54,12 +67,36 @@
       return mapsLoadPromise;
     }
 
+    const waitForMapsReady = (
+      resolve: () => void,
+      reject: (error: Error) => void,
+      timeoutMs = 10000
+    ) => {
+      const start = Date.now();
+      const tick = () => {
+        if (win.google?.maps?.Map && win.google?.maps?.InfoWindow) {
+          resolve();
+          return;
+        }
+        if (Date.now() - start >= timeoutMs) {
+          reject(new Error('Google Maps loaded, but constructors were not initialized.'));
+          return;
+        }
+        window.setTimeout(tick, 50);
+      };
+      tick();
+    };
+
     mapsLoadPromise = new Promise<void>((resolve, reject) => {
       const existing = document.querySelector<HTMLScriptElement>(
         'script[data-google-maps-loader="1"]'
       );
       if (existing) {
-        existing.addEventListener('load', () => resolve(), { once: true });
+        if (win.google?.maps?.Map && win.google?.maps?.InfoWindow) {
+          resolve();
+          return;
+        }
+        existing.addEventListener('load', () => waitForMapsReady(resolve, reject), { once: true });
         existing.addEventListener(
           'error',
           () => reject(new Error('Failed to load Google Maps script.')),
@@ -70,7 +107,7 @@
 
       const callbackName = '__h2ownMapsLoaderCallback';
       win[callbackName] = () => {
-        resolve();
+        waitForMapsReady(resolve, reject);
         try {
           delete win[callbackName];
         } catch {
@@ -93,7 +130,7 @@
       script.async = true;
       script.defer = true;
       script.dataset.googleMapsLoader = '1';
-      script.addEventListener('load', () => resolve(), { once: true });
+      script.addEventListener('load', () => waitForMapsReady(resolve, reject), { once: true });
       script.addEventListener(
         'error',
         () => reject(new Error('Failed to load Google Maps script.')),
@@ -121,8 +158,23 @@
     if (!map) return;
     clearMarkers();
     const google = getGoogle();
-    const markerLib = await google.maps.importLibrary('marker');
-    const MarkerCtor = markerLib?.Marker ?? google.maps.Marker;
+    const importLibrary = getMapsImportLibrary(google);
+    let markerLib: Record<string, unknown> | null = null;
+    if (importLibrary) {
+      try {
+        markerLib = (await importLibrary('marker')) as Record<string, unknown>;
+      } catch {
+        markerLib = null;
+      }
+    }
+    const markerNamespace =
+      markerLib && Object.keys(markerLib).length > 0 ? markerLib : google.maps?.marker;
+    const AdvancedMarkerCtor = markerNamespace?.AdvancedMarkerElement;
+    const MarkerCtor = google.maps?.Marker;
+    const canUseAdvancedMarkers = Boolean(
+      mapId &&
+        isConstructable(AdvancedMarkerCtor)
+    );
     const bounds = new google.maps.LatLngBounds();
     const withCoordinates = locations.filter(
       (location) => location.latitude !== null && location.longitude !== null
@@ -133,18 +185,44 @@
         lat: Number(location.latitude),
         lng: Number(location.longitude),
       };
-      const marker = new MarkerCtor({
-        map,
-        position,
-        title: location.name,
-        icon: {
-          url: location.pools?.some((pool) => pool.poolId === activePoolId)
-            ? 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
-            : 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
-        },
-      });
+      const isActive = location.pools?.some((pool) => pool.poolId === activePoolId);
+      let marker: any;
 
-      marker.addListener('click', () => {
+      if (canUseAdvancedMarkers) {
+        try {
+          marker = new AdvancedMarkerCtor({
+            map,
+            position,
+            title: location.name,
+          });
+        } catch {
+          marker = null;
+        }
+      } else {
+        marker = null;
+      }
+
+      if (!marker && isConstructable(MarkerCtor)) {
+        marker = new MarkerCtor({
+          map,
+          position,
+          title: location.name,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 8,
+            fillColor: isActive ? '#16a34a' : '#dc2626',
+            fillOpacity: 1,
+            strokeColor: '#0f172a',
+            strokeWeight: 1.25,
+          },
+        });
+      }
+
+      if (!marker) {
+        continue;
+      }
+
+      const handleMarkerClick = () => {
         const pools = location.pools ?? [];
         infoWindow?.setContent(`
           <div style="max-width:280px;">
@@ -161,7 +239,13 @@
         `);
         infoWindow?.open({ map, anchor: marker });
         dispatch('select', { locationId: location.locationId });
-      });
+      };
+
+      if (canUseAdvancedMarkers && typeof marker.addEventListener === 'function') {
+        marker.addEventListener('gmp-click', handleMarkerClick);
+      } else {
+        marker.addListener('click', handleMarkerClick);
+      }
 
       markerRefs.push(marker);
       bounds.extend(position);
@@ -186,9 +270,28 @@
       if (!mapEl) return;
       await loadMaps();
       const google = getGoogle();
-      const mapsLib = await google.maps.importLibrary('maps');
-      const MapCtor = mapsLib?.Map ?? google.maps.Map;
-      const InfoWindowCtor = mapsLib?.InfoWindow ?? google.maps.InfoWindow;
+      const importLibrary = getMapsImportLibrary(google);
+      let mapsLib: Record<string, unknown> | null = null;
+      if (importLibrary) {
+        try {
+          mapsLib = (await importLibrary('maps')) as Record<string, unknown>;
+        } catch {
+          mapsLib = null;
+        }
+      }
+      const MapCtor = isConstructable(mapsLib?.Map) ? mapsLib.Map : google.maps?.Map;
+      const InfoWindowCtor = isConstructable(mapsLib?.InfoWindow)
+        ? mapsLib.InfoWindow
+        : google.maps?.InfoWindow;
+      if (!isConstructable(MapCtor) || !isConstructable(InfoWindowCtor)) {
+        const mapCtorType = typeof mapsLib?.Map;
+        const globalMapCtorType = typeof google.maps?.Map;
+        const infoCtorType = typeof mapsLib?.InfoWindow;
+        const globalInfoCtorType = typeof google.maps?.InfoWindow;
+        throw new Error(
+          `Google Maps constructors unavailable (maps.Map=${mapCtorType}, global.Map=${globalMapCtorType}, maps.InfoWindow=${infoCtorType}, global.InfoWindow=${globalInfoCtorType}). Verify API key, map ID, and key restrictions.`
+        );
+      }
       map = new MapCtor(mapEl, {
         center: { lat: 37.09024, lng: -95.712891 },
         zoom: 4,
@@ -207,7 +310,7 @@
   });
 
   $: if (map) {
-    renderMarkers();
+    void renderMarkers();
   }
 </script>
 

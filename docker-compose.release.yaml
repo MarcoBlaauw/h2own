@@ -6,6 +6,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-h2own}
       POSTGRES_USER: ${POSTGRES_USER:-h2own}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
@@ -36,9 +38,6 @@ services:
       CORS_ORIGIN: http://localhost:${WEB_PORT:-3000}
       TOMORROW_API_KEY: ${TOMORROW_API_KEY:-}
       TOMORROW_API_BASE: ${TOMORROW_API_BASE:-https://api.tomorrow.io/v4}
-      CAPTCHA_PROVIDER: ${CAPTCHA_PROVIDER:-}
-      CAPTCHA_SITE_KEY: ${CAPTCHA_SITE_KEY:-}
-      CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
       AUTH_LOCKOUT_ALERT_EMAILS: ${AUTH_LOCKOUT_ALERT_EMAILS:-}
       SUPPORT_CONTACT_EMAILS: ${SUPPORT_CONTACT_EMAILS:-support@h2own.com}
       SENSOR_RETENTION_ENABLED: ${SENSOR_RETENTION_ENABLED:-true}

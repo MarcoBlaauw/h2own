@@ -1,5 +1,6 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
+  import { page } from '$app/stores';
   import Container from '$lib/components/layout/Container.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import GoogleMapPicker from '$lib/components/location/GoogleMapPicker.svelte';
@@ -197,6 +198,8 @@
   let expandedLocationPools = new SvelteSet<string>();
   let showAllPools = false;
   let showAllLocations = false;
+  let showCreateModal = false;
+  let initializedCreateModalFromQuery = false;
   let locationSearch = '';
   let locationCityFilter = '';
   let locationStateFilter = '';
@@ -260,6 +263,10 @@
   $: if (activePoolId && !pools.some((pool) => pool.poolId === activePoolId)) {
     activePoolId = '';
   }
+  $: if (!initializedCreateModalFromQuery) {
+    initializedCreateModalFromQuery = true;
+    showCreateModal = pools.length > 0 && $page?.url?.searchParams?.get('createPool') === '1';
+  }
 
   const sanitizerOptions = ['chlorine', 'bromine'];
   const chlorineSourceOptions = ['manual', 'swg'];
@@ -278,28 +285,6 @@
     { value: 'solar_assisted', label: 'Solar-assisted' },
   ];
 
-  const fallbackTimezones = [
-    'UTC',
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Phoenix',
-    'Pacific/Honolulu',
-  ];
-
-  const getTimezones = () => {
-    if (typeof Intl !== 'undefined' && typeof (Intl as any).supportedValuesOf === 'function') {
-      try {
-        return (Intl as any).supportedValuesOf('timeZone') as string[];
-      } catch {
-        return fallbackTimezones;
-      }
-    }
-    return fallbackTimezones;
-  };
-  const availableTimezones = getTimezones();
-
   const normalizeText = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return '';
     return typeof value === 'string' ? value : String(value);
@@ -311,6 +296,7 @@
     isChlorineSanitizer(sanitizerType) && chlorineSource.trim().toLowerCase() === 'swg';
   const showsSanitizerTargetRange = (value: string) =>
     ['chlorine', 'bromine'].includes(value.trim().toLowerCase());
+  const sanitizerResidualMaxPpm = 20;
 
   const validateForm = (form: FormState) => {
     const errors: string[] = [];
@@ -336,6 +322,10 @@
         errors.push('Sanitizer target range requires both minimum and maximum ppm values.');
       } else if (sanitizerMin <= 0 || sanitizerMax <= 0 || sanitizerMin > sanitizerMax) {
         errors.push('Sanitizer target range must be positive and min must be less than or equal to max.');
+      } else if (sanitizerMin > sanitizerResidualMaxPpm || sanitizerMax > sanitizerResidualMaxPpm) {
+        errors.push(
+          'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.'
+        );
       }
     }
     if (!normalizeText(form.surfaceType).trim()) errors.push('Surface type is required.');
@@ -630,9 +620,6 @@
     if (longitude === undefined || Number.isNaN(longitude)) {
       createErrors.push('Select a valid location pin to set longitude.');
     }
-    if (!locationForm.timezone.trim()) {
-      createErrors.push('Timezone is required. Pick a location pin first.');
-    }
     if (createErrors.length) return;
 
     creating = true;
@@ -648,7 +635,7 @@
         googlePlusCode: locationForm.googlePlusCode.trim() || undefined,
         latitude,
         longitude,
-        timezone: locationForm.timezone.trim(),
+        timezone: locationForm.timezone.trim() || undefined,
       });
       if (!locationRes.ok) {
         const body = await locationRes.json().catch(() => ({}));
@@ -706,6 +693,7 @@
       resetCreateForm();
       resetLocationForm();
       await refreshLocations();
+      showCreateModal = false;
     } catch (error) {
       createMessage = { type: 'error', text: 'Unable to create pool.' };
     } finally {
@@ -852,9 +840,6 @@
     if (longitude === undefined || Number.isNaN(longitude)) {
       editErrors.push('Select a valid location pin to set longitude.');
     }
-    if (!poolEditLocationForm.timezone.trim()) {
-      editErrors.push('Timezone is required. Pick a location pin first.');
-    }
     if (editErrors.length) return;
 
     updating = true;
@@ -866,7 +851,7 @@
         googlePlusCode: poolEditLocationForm.googlePlusCode.trim() || undefined,
         latitude,
         longitude,
-        timezone: poolEditLocationForm.timezone.trim(),
+        timezone: poolEditLocationForm.timezone.trim() || undefined,
       });
       if (!locationRes.ok) {
         const body = await locationRes.json().catch(() => ({}));
@@ -950,15 +935,32 @@
       deletingPoolId = null;
     }
   };
+
+  const openCreateModal = () => {
+    showCreateModal = true;
+  };
+
+  const closeCreateModal = () => {
+    showCreateModal = false;
+    createMessage = null;
+    createErrors = [];
+  };
 </script>
 
 <Container>
 <section class="mx-auto w-full max-w-6xl space-y-6 py-6">
   <header>
-    <h1 class="text-2xl font-semibold text-content-primary">My Pools</h1>
-    <p class="mt-1 text-sm text-content-secondary">
-      Create and manage pools tied to your account.
-    </p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold text-content-primary">My Pools</h1>
+        <p class="mt-1 text-sm text-content-secondary">
+          Create and manage pools tied to your account.
+        </p>
+      </div>
+      {#if pools.length > 0}
+        <button class="btn btn-sm btn-primary" on:click={openCreateModal}>Create new pool</button>
+      {/if}
+    </div>
   </header>
 
   {#if loadError}
@@ -967,6 +969,7 @@
     </Card>
   {/if}
 
+  {#if pools.length > 0}
   <Card>
     <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
       <div class="space-y-3">
@@ -1010,9 +1013,20 @@
       </div>
     </div>
   </Card>
+  {/if}
 
+  {#if pools.length === 0 || (pools.length > 0 && showCreateModal)}
+    <div class={pools.length > 0 ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4' : ''}>
+      <div class={pools.length > 0 ? 'max-h-[90vh] w-full max-w-5xl overflow-y-auto' : ''}>
   <Card>
-    <h2 class="text-lg font-semibold text-content-primary">Create new pool</h2>
+    {#if pools.length > 0}
+      <div class="mb-3 flex items-center justify-between gap-2">
+        <h2 class="text-lg font-semibold text-content-primary">Create new pool</h2>
+        <button class="btn btn-sm btn-tonal" on:click={closeCreateModal}>Close</button>
+      </div>
+    {:else}
+      <h2 class="text-lg font-semibold text-content-primary">Create new pool</h2>
+    {/if}
     <div class="mt-4 space-y-4">
       <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-content-secondary">Pool Characteristics</p>
@@ -1067,10 +1081,14 @@
                 class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                 type="number"
                 min="0"
+                max={sanitizerResidualMaxPpm}
                 step="0.1"
                 bind:value={createForm.sanitizerTargetMinPpm}
-                placeholder="e.g. 3"
+                placeholder="e.g. 2"
               />
+              <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                Sanitizer residual target. For chlorine pools, a common target is 2-4 ppm.
+              </span>
             </label>
             <label class="text-sm font-medium text-content-secondary">
               Sanitizer target max (ppm)
@@ -1078,12 +1096,13 @@
                 class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                 type="number"
                 min="0"
+                max={sanitizerResidualMaxPpm}
                 step="0.1"
                 bind:value={createForm.sanitizerTargetMaxPpm}
-                placeholder="e.g. 5"
+                placeholder="e.g. 4"
               />
               <span class="mt-1 block text-xs font-normal text-content-secondary/80">
-                Required target policy range for sanitizer residual in ppm.
+                Required target policy range for sanitizer residual in ppm. Do not enter the SWG salt target here.
               </span>
             </label>
           {/if}
@@ -1168,23 +1187,6 @@
               bind:timezone={locationForm.timezone}
             />
           </div>
-          <label class="text-sm font-medium text-content-secondary">
-            Timezone (from pin)
-            <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={locationForm.timezone}>
-              <option value="">Auto-detect from map pin</option>
-              {#each availableTimezones as zone}
-                <option value={zone}>{zone}</option>
-              {/each}
-            </select>
-          </label>
-          <label class="text-sm font-medium text-content-secondary">
-            Latitude
-            <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="text" inputmode="decimal" bind:value={locationForm.latitude} />
-          </label>
-          <label class="text-sm font-medium text-content-secondary">
-            Longitude
-            <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="text" inputmode="decimal" bind:value={locationForm.longitude} />
-          </label>
           <label class="text-sm font-medium text-content-secondary sm:col-span-2">
             Selected address
             <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={locationForm.formattedAddress} />
@@ -1208,7 +1210,11 @@
       </button>
     </div>
   </Card>
+      </div>
+    </div>
+  {/if}
 
+  {#if pools.length > 0}
   <Card>
     <h2 class="text-lg font-semibold text-content-primary">Manage pools</h2>
     {#if pools.length === 0}
@@ -1293,29 +1299,34 @@
                     {#if showsSanitizerTargetRange(editForm.sanitizerType)}
                       <label class="text-sm font-medium text-content-secondary">
                         Sanitizer target min (ppm)
+                          <input
+                            class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                            type="number"
+                            min="0"
+                            max={sanitizerResidualMaxPpm}
+                            step="0.1"
+                            bind:value={editForm.sanitizerTargetMinPpm}
+                            placeholder="e.g. 2"
+                          />
+                          <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                            Sanitizer residual target. For chlorine pools, a common target is 2-4 ppm.
+                          </span>
+                        </label>
+                        <label class="text-sm font-medium text-content-secondary">
+                          Sanitizer target max (ppm)
                         <input
-                          class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          bind:value={editForm.sanitizerTargetMinPpm}
-                          placeholder="e.g. 3"
-                        />
-                      </label>
-                      <label class="text-sm font-medium text-content-secondary">
-                        Sanitizer target max (ppm)
-                        <input
-                          class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          bind:value={editForm.sanitizerTargetMaxPpm}
-                          placeholder="e.g. 5"
-                        />
-                        <span class="mt-1 block text-xs font-normal text-content-secondary/80">
-                          Required target policy range for sanitizer residual in ppm.
-                        </span>
-                      </label>
+                            class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                            type="number"
+                            min="0"
+                            max={sanitizerResidualMaxPpm}
+                            step="0.1"
+                            bind:value={editForm.sanitizerTargetMaxPpm}
+                            placeholder="e.g. 4"
+                          />
+                          <span class="mt-1 block text-xs font-normal text-content-secondary/80">
+                            Required target policy range for sanitizer residual in ppm. Do not enter the SWG salt target here.
+                          </span>
+                        </label>
                     {/if}
                     <label class="text-sm font-medium text-content-secondary">
                       Surface type
@@ -1399,23 +1410,6 @@
                         heightClass="h-44"
                       />
                     </div>
-                    <label class="text-sm font-medium text-content-secondary">
-                      Timezone (from pin)
-                      <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={poolEditLocationForm.timezone}>
-                        <option value="">Auto-detect from map pin</option>
-                        {#each availableTimezones as zone}
-                          <option value={zone}>{zone}</option>
-                        {/each}
-                      </select>
-                    </label>
-                    <label class="text-sm font-medium text-content-secondary">
-                      Latitude
-                      <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="text" inputmode="decimal" bind:value={poolEditLocationForm.latitude} />
-                    </label>
-                    <label class="text-sm font-medium text-content-secondary">
-                      Longitude
-                      <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="text" inputmode="decimal" bind:value={poolEditLocationForm.longitude} />
-                    </label>
                     <label class="text-sm font-medium text-content-secondary sm:col-span-2">
                       Selected address
                       <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={poolEditLocationForm.formattedAddress} />
@@ -1535,14 +1529,7 @@
                   {/if}
                 </div>
                 <div class="text-xs text-content-secondary/70">
-                  {#if location.latitude !== null && location.longitude !== null}
-                    {location.latitude}, {location.longitude}
-                  {:else}
-                    Coordinates not set
-                  {/if}
-                  {#if location.timezone}
-                    · {location.timezone}
-                  {/if}
+                  Map location saved.
                 </div>
               </div>
               <div class="text-xs text-content-secondary/80">
@@ -1597,15 +1584,6 @@
                   Location name
                   <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={locationEditForm.name} />
                 </label>
-                <label class="text-sm font-medium text-content-secondary">
-                  Timezone
-                  <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={locationEditForm.timezone}>
-                    <option value="">No timezone</option>
-                    {#each availableTimezones as zone}
-                      <option value={zone}>{zone}</option>
-                    {/each}
-                  </select>
-                </label>
                 <div class="sm:col-span-2">
                   <GoogleMapPicker
                     idPrefix={`edit-location-${location.locationId}`}
@@ -1648,5 +1626,6 @@
       {/if}
     {/if}
   </Card>
+  {/if}
 </section>
 </Container>

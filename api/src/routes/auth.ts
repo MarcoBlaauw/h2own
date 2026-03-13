@@ -5,6 +5,7 @@ import { z } from "zod";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
 import { authLockoutService } from "../services/auth-lockout.js";
 import { mailerService } from "../services/mailer.js";
+import { totpService } from "../services/totp.js";
 import { env } from "../env.js";
 import { writeAuditLog } from "./audit.js";
 
@@ -43,6 +44,24 @@ const loginBodySchema = z.object({
     })
     .min(1, "Password is required"),
   captchaToken: z.string().trim().min(1).optional(),
+});
+
+const loginTotpBodySchema = z.object({
+  challengeToken: z
+    .string({
+      required_error: "Challenge token is required",
+      invalid_type_error: "Challenge token must be a string",
+    })
+    .trim()
+    .min(32, "Challenge token is invalid"),
+  code: z
+    .string({
+      required_error: "Code is required",
+      invalid_type_error: "Code must be a string",
+    })
+    .trim()
+    .min(6, "Code is required")
+    .max(8, "Code is invalid"),
 });
 
 const forgotPasswordBodySchema = z.object({
@@ -463,6 +482,44 @@ export async function authRoutes(app: FastifyInstance) {
 
       await authLockoutService.clearFailureHistory(app.redis as any, body.email, sourceIp);
 
+      if (user.totpEnabled) {
+        if (!user.totpSecretEncrypted) {
+          req.log.error(
+            { userId: user.userId, email: user.email },
+            "totp is enabled but no secret is configured",
+          );
+          return reply.code(500).send({
+            error: "TwoFactorUnavailable",
+            message: "Two-factor authentication is temporarily unavailable.",
+          });
+        }
+
+        const challengeToken = randomBytes(32).toString("hex");
+        const challengeKey = `auth:totp:${challengeToken}`;
+        await app.redis.set(
+          challengeKey,
+          JSON.stringify({
+            userId: user.userId,
+            role: user.role ?? null,
+          }),
+          "EX",
+          300,
+        );
+
+        await writeAuditLog(app, req, {
+          action: "auth.login.totp_challenge_issued",
+          entity: "user",
+          entityId: user.userId,
+          userId: user.userId,
+        });
+
+        return reply.code(202).send({
+          requiresTwoFactor: true,
+          challengeToken,
+          message: "Enter your authenticator app code to finish signing in.",
+        });
+      }
+
       // ⬇️ Create opaque server-side session + set signed 'sid' cookie
       await app.sessions.create(reply, user.userId, user.role ?? undefined);
 
@@ -486,6 +543,83 @@ export async function authRoutes(app: FastifyInstance) {
         return handleValidationError(reply, error);
       }
 
+      throw error;
+    }
+  });
+
+  app.post("/login/totp", async (req, reply) => {
+    try {
+      const body = loginTotpBodySchema.parse(req.body);
+      const challengeKey = `auth:totp:${body.challengeToken}`;
+      const challengeRaw = await app.redis.get(challengeKey);
+      if (!challengeRaw) {
+        return reply.code(401).send({
+          error: "TwoFactorChallengeExpired",
+          message: "Your sign-in challenge expired. Please sign in again.",
+        });
+      }
+
+      const challenge = z
+        .object({
+          userId: z.string().uuid(),
+          role: z.string().nullable().optional(),
+        })
+        .parse(JSON.parse(challengeRaw));
+
+      const security = await authService.getUserSecurityById(challenge.userId);
+      if (!security || !security.totpEnabled || !security.totpSecretEncrypted) {
+        await app.redis.del(challengeKey);
+        return reply.code(401).send({
+          error: "TwoFactorNotEnabled",
+          message: "Two-factor authentication is not enabled for this account.",
+        });
+      }
+
+      const decryptedSecret = totpService.decryptSecret(security.totpSecretEncrypted);
+      const valid = totpService.verifyToken(decryptedSecret, body.code);
+      if (!valid) {
+        await writeAuditLog(app, req, {
+          action: "auth.login.totp_failed",
+          entity: "user",
+          entityId: security.userId,
+          userId: security.userId,
+        });
+        return reply.code(401).send({
+          error: "InvalidTwoFactorCode",
+          message: "The authentication code is invalid.",
+        });
+      }
+
+      await app.redis.del(challengeKey);
+      await app.sessions.create(reply, security.userId, challenge.role ?? undefined);
+
+      const user = await authService.getUserById(security.userId);
+      await writeAuditLog(app, req, {
+        action: "auth.login.totp_verified",
+        entity: "session",
+        entityId: req.session?.id ?? null,
+        userId: security.userId,
+      });
+
+      return reply.code(201).send({
+        user: user
+          ? {
+              id: user.userId,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+            }
+          : {
+              id: security.userId,
+              email: security.email,
+              name: null,
+              role: challenge.role ?? "member",
+            },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return handleValidationError(reply, error);
+      }
       throw error;
     }
   });

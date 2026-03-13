@@ -5,6 +5,7 @@ import { authService } from '../services/auth.js';
 import { profileService, ProfileEmailConflictError } from '../services/profile.js';
 import { preferencesService } from '../services/preferences.js';
 import { mailerService } from '../services/mailer.js';
+import { totpService } from '../services/totp.js';
 import { env } from '../env.js';
 import { writeAuditLog } from './audit.js';
 
@@ -15,6 +16,8 @@ const nullableTrimmedString = (maxLength: number) =>
     .max(maxLength)
     .transform((value) => (value === '' ? null : value))
     .nullable();
+
+const timeOfDaySchema = z.string().regex(/^\d{2}:\d{2}$/, 'Time must be in HH:MM format');
 
 const updateProfileBodySchema = z
   .object({
@@ -44,6 +47,10 @@ const updatePreferencesBodySchema = z
     notificationSmsEnabled: z.boolean().optional(),
     notificationPushEnabled: z.boolean().optional(),
     notificationEmailAddress: z.string().trim().email().nullable().optional(),
+    reminderTimezone: z.string().trim().min(1).max(64).nullable().optional(),
+    reminderLeadMinutes: z.number().int().min(0).max(60 * 24 * 30).optional(),
+    quietHoursStart: timeOfDaySchema.nullable().optional(),
+    quietHoursEnd: timeOfDaySchema.nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one property must be provided.',
@@ -58,6 +65,19 @@ const updatePasswordBodySchema = z
     message: 'New password must be different from current password.',
     path: ['newPassword'],
   });
+
+const initiateTotpSetupBodySchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+});
+
+const enableTotpBodySchema = z.object({
+  code: z.string().trim().min(6, 'Code is required').max(8, 'Code is invalid'),
+});
+
+const disableTotpBodySchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  code: z.string().trim().min(6, 'Code is required').max(8, 'Code is invalid'),
+});
 
 export async function meRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.auth.verifySession);
@@ -246,6 +266,156 @@ export async function meRoutes(app: FastifyInstance) {
 
       await app.sessions.destroy(reply, req.session?.id ?? null);
       return reply.send({ ok: true, requiresLogin: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      throw error;
+    }
+  });
+
+  app.get('/security/totp', async (req, reply) => {
+    const security = await authService.getUserSecurityById(req.user!.id);
+    if (!security) {
+      return reply.code(404).send({ error: 'NotFound' });
+    }
+
+    return reply.send({
+      enabled: Boolean(security.totpEnabled),
+      pending: Boolean(security.totpPendingSecretEncrypted),
+    });
+  });
+
+  app.post('/security/totp/initiate', async (req, reply) => {
+    try {
+      const payload = initiateTotpSetupBodySchema.parse(req.body ?? {});
+      const isCurrentValid = await authService.verifyPasswordByUserId(req.user!.id, payload.currentPassword);
+      if (!isCurrentValid) {
+        return reply.code(400).send({
+          error: 'CurrentPasswordInvalid',
+          message: 'Current password is incorrect.',
+        });
+      }
+
+      const security = await authService.getUserSecurityById(req.user!.id);
+      if (!security) {
+        return reply.code(404).send({ error: 'NotFound' });
+      }
+      if (security.totpEnabled) {
+        return reply.code(409).send({
+          error: 'TwoFactorAlreadyEnabled',
+          message: 'Two-factor authentication is already enabled.',
+        });
+      }
+
+      const enrollment = await totpService.createEnrollment(security.email);
+      const encryptedPendingSecret = totpService.encryptSecret(enrollment.secret);
+      await authService.setTotpPendingSecret(req.user!.id, encryptedPendingSecret);
+
+      await writeAuditLog(app, req, {
+        action: 'account.security.totp.setup_initiated',
+        entity: 'user',
+        entityId: req.user!.id,
+        userId: req.user!.id,
+      });
+
+      return reply.send({
+        ok: true,
+        secret: enrollment.secret,
+        otpauthUrl: enrollment.otpauthUrl,
+        qrCodeDataUrl: enrollment.qrCodeDataUrl,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      throw error;
+    }
+  });
+
+  app.post('/security/totp/enable', async (req, reply) => {
+    try {
+      const payload = enableTotpBodySchema.parse(req.body ?? {});
+      const security = await authService.getUserSecurityById(req.user!.id);
+      if (!security) {
+        return reply.code(404).send({ error: 'NotFound' });
+      }
+      if (security.totpEnabled) {
+        return reply.code(409).send({
+          error: 'TwoFactorAlreadyEnabled',
+          message: 'Two-factor authentication is already enabled.',
+        });
+      }
+      if (!security.totpPendingSecretEncrypted) {
+        return reply.code(400).send({
+          error: 'TwoFactorSetupNotStarted',
+          message: 'Start 2FA setup first.',
+        });
+      }
+
+      const pendingSecret = totpService.decryptSecret(security.totpPendingSecretEncrypted);
+      const valid = totpService.verifyToken(pendingSecret, payload.code);
+      if (!valid) {
+        return reply.code(400).send({
+          error: 'InvalidTwoFactorCode',
+          message: 'The authentication code is invalid.',
+        });
+      }
+
+      await authService.enableTotp(req.user!.id, security.totpPendingSecretEncrypted);
+      await writeAuditLog(app, req, {
+        action: 'account.security.totp.enabled',
+        entity: 'user',
+        entityId: req.user!.id,
+        userId: req.user!.id,
+      });
+
+      return reply.send({ ok: true, enabled: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      throw error;
+    }
+  });
+
+  app.post('/security/totp/disable', async (req, reply) => {
+    try {
+      const payload = disableTotpBodySchema.parse(req.body ?? {});
+      const isCurrentValid = await authService.verifyPasswordByUserId(req.user!.id, payload.currentPassword);
+      if (!isCurrentValid) {
+        return reply.code(400).send({
+          error: 'CurrentPasswordInvalid',
+          message: 'Current password is incorrect.',
+        });
+      }
+
+      const security = await authService.getUserSecurityById(req.user!.id);
+      if (!security || !security.totpEnabled || !security.totpSecretEncrypted) {
+        return reply.code(400).send({
+          error: 'TwoFactorNotEnabled',
+          message: 'Two-factor authentication is not enabled.',
+        });
+      }
+
+      const currentSecret = totpService.decryptSecret(security.totpSecretEncrypted);
+      const valid = totpService.verifyToken(currentSecret, payload.code);
+      if (!valid) {
+        return reply.code(400).send({
+          error: 'InvalidTwoFactorCode',
+          message: 'The authentication code is invalid.',
+        });
+      }
+
+      await authService.disableTotp(req.user!.id);
+      await writeAuditLog(app, req, {
+        action: 'account.security.totp.disabled',
+        entity: 'user',
+        entityId: req.user!.id,
+        userId: req.user!.id,
+      });
+
+      return reply.send({ ok: true, enabled: false });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: error.errors });

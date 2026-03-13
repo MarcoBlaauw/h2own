@@ -1,24 +1,38 @@
 const base = (() => {
-  const configured = import.meta.env.VITE_API_URL;
-  if (configured) {
-    return configured;
+  const inBrowser =
+    typeof globalThis !== 'undefined' &&
+    typeof globalThis.location === 'object' &&
+    globalThis.location !== null;
+
+  if (inBrowser) {
+    const clientConfigured = import.meta.env.VITE_API_URL || import.meta.env.PUBLIC_API_BASE;
+    return clientConfigured || '/api';
   }
 
   if (typeof process !== 'undefined' && process?.env) {
+    const internalApi = process.env.INTERNAL_API_URL;
+    if (internalApi) {
+      return internalApi;
+    }
+
     const serverConfigured = process.env.VITE_API_URL || process.env.PUBLIC_API_BASE;
     if (serverConfigured) {
-      return serverConfigured;
+      if (serverConfigured.startsWith('http://') || serverConfigured.startsWith('https://')) {
+        return serverConfigured;
+      }
+
+      const appBase = process.env.APP_BASE_URL;
+      if (appBase) {
+        const normalizedAppBase = appBase.endsWith('/') ? appBase.slice(0, -1) : appBase;
+        const normalizedPath = serverConfigured.startsWith('/')
+          ? serverConfigured
+          : `/${serverConfigured}`;
+        return `${normalizedAppBase}${normalizedPath}`;
+      }
     }
   }
 
-  if (typeof globalThis !== 'undefined' && typeof globalThis.location === 'object' && globalThis.location) {
-    const origin = (globalThis.location as Location).origin;
-    if (origin) {
-      return origin;
-    }
-  }
-
-  return '';
+  return '/api';
 })();
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -53,6 +67,7 @@ type ApiClient = {
   auth: {
     register: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     login: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    loginTotp: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     logout: (customFetch?: FetchLike) => Promise<Response>;
     me: (customFetch?: FetchLike) => Promise<Response>;
     captchaConfig: (customFetch?: FetchLike) => Promise<Response>;
@@ -69,6 +84,10 @@ type ApiClient = {
     updatePreferences: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     updatePassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     requestEmailChange: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    totpStatus: (customFetch?: FetchLike) => Promise<Response>;
+    initiateTotpSetup: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    enableTotp: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    disableTotp: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   apiTokens: {
     list: (customFetch?: FetchLike) => Promise<Response>;
@@ -268,6 +287,23 @@ type ApiClient = {
     readAll: (customFetch?: FetchLike) => Promise<Response>;
     preview: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
+  schedule: {
+    list: (
+      customFetch?: FetchLike,
+      params?: {
+        from?: string;
+        to?: string;
+        poolId?: string;
+        status?: string;
+        limit?: number;
+      }
+    ) => Promise<Response>;
+    summary: (customFetch?: FetchLike) => Promise<Response>;
+    create: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    update: (eventId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    complete: (eventId: string, customFetch?: FetchLike) => Promise<Response>;
+    del: (eventId: string, customFetch?: FetchLike) => Promise<Response>;
+  };
   messages: {
     list: (customFetch?: FetchLike) => Promise<Response>;
     send: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
@@ -302,6 +338,8 @@ export const api: ApiClient = {
       apiFetch('/auth/register', jsonRequest(body, { method: 'POST' }), customFetch),
     login: (body, customFetch) =>
       apiFetch('/auth/login', jsonRequest(body, { method: 'POST' }), customFetch),
+    loginTotp: (body, customFetch) =>
+      apiFetch('/auth/login/totp', jsonRequest(body, { method: 'POST' }), customFetch),
     logout: (customFetch) => apiFetch('/auth/logout', { method: 'POST' }, customFetch),
     me: (customFetch) => apiFetch('/auth/me', {}, customFetch),
     captchaConfig: (customFetch) => apiFetch('/auth/captcha-config', {}, customFetch),
@@ -327,6 +365,13 @@ export const api: ApiClient = {
       apiFetch('/me/security/password', jsonRequest(body, { method: 'POST' }), customFetch),
     requestEmailChange: (body, customFetch) =>
       apiFetch('/me/email/change-request', jsonRequest(body, { method: 'POST' }), customFetch),
+    totpStatus: (customFetch) => apiFetch('/me/security/totp', {}, customFetch),
+    initiateTotpSetup: (body, customFetch) =>
+      apiFetch('/me/security/totp/initiate', jsonRequest(body, { method: 'POST' }), customFetch),
+    enableTotp: (body, customFetch) =>
+      apiFetch('/me/security/totp/enable', jsonRequest(body, { method: 'POST' }), customFetch),
+    disableTotp: (body, customFetch) =>
+      apiFetch('/me/security/totp/disable', jsonRequest(body, { method: 'POST' }), customFetch),
   },
   apiTokens: {
     list: (customFetch) => apiFetch('/admin/api-tokens', {}, customFetch),
@@ -582,6 +627,27 @@ export const api: ApiClient = {
     readAll: (customFetch) => apiFetch('/notifications/read-all', { method: 'POST' }, customFetch),
     preview: (body, customFetch) =>
       apiFetch('/notifications/preview', jsonRequest(body, { method: 'POST' }), customFetch),
+  },
+  schedule: {
+    list: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.from) search.set('from', params.from);
+      if (params.to) search.set('to', params.to);
+      if (params.poolId) search.set('poolId', params.poolId);
+      if (params.status) search.set('status', params.status);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      return apiFetch(`/schedule/events${query ? `?${query}` : ''}`, {}, customFetch);
+    },
+    summary: (customFetch) => apiFetch('/schedule/summary', {}, customFetch),
+    create: (body, customFetch) =>
+      apiFetch('/schedule/events', jsonRequest(body, { method: 'POST' }), customFetch),
+    update: (eventId, body, customFetch) =>
+      apiFetch(`/schedule/events/${eventId}`, jsonRequest(body, { method: 'PATCH' }), customFetch),
+    complete: (eventId, customFetch) =>
+      apiFetch(`/schedule/events/${eventId}/complete`, { method: 'POST' }, customFetch),
+    del: (eventId, customFetch) =>
+      apiFetch(`/schedule/events/${eventId}`, { method: 'DELETE' }, customFetch),
   },
   messages: {
     list: (customFetch) => apiFetch('/messages', {}, customFetch),

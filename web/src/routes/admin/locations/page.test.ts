@@ -5,6 +5,11 @@ import type { AdminLocation } from './+page';
 import type { PageData } from './$types';
 import { api } from '$lib/api';
 
+vi.mock('$lib/components/location/GoogleMapPicker.svelte', async () => {
+  const mod = await import('$lib/components/location/__mocks__/GoogleMapPicker.svelte');
+  return { default: mod.default };
+});
+
 vi.mock('$lib/api', () => {
   const locations = {
     list: vi.fn(),
@@ -143,24 +148,18 @@ describe('admin locations page', () => {
     const nameFields = getAllByLabelText('Name');
     await fireEvent.input(nameFields[0], { target: { value: 'New Spot' } });
 
-    const latitudeFields = getAllByLabelText('Latitude');
-    const longitudeFields = getAllByLabelText('Longitude');
-    const timezoneFields = getAllByLabelText('Timezone');
-    await fireEvent.input(latitudeFields[0], { target: { value: '12.5' } });
-    await fireEvent.input(longitudeFields[0], { target: { value: '-70.1' } });
-    await fireEvent.input(timezoneFields[0], { target: { value: 'UTC' } });
-
     await fireEvent.click(getByRole('button', { name: /create location/i }));
 
     await waitFor(() => {
-      expect(locationsApi.create).toHaveBeenCalledWith({
-        userId: secondaryUserId,
-        name: 'New Spot',
-        isPrimary: false,
-        latitude: 12.5,
-        longitude: -70.1,
-        timezone: 'UTC',
-      });
+      expect(locationsApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: secondaryUserId,
+          name: 'New Spot',
+          isPrimary: false,
+          latitude: 30.0279,
+          longitude: -90.4614,
+        })
+      );
     });
 
     expect(await findByText('New Spot')).toBeInTheDocument();

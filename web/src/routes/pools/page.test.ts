@@ -4,6 +4,11 @@ import type { Mock } from 'vitest';
 import Page from './+page.svelte';
 import { api } from '$lib/api';
 
+vi.mock('$lib/components/location/GoogleMapPicker.svelte', async () => {
+  const mod = await import('$lib/components/location/__mocks__/GoogleMapPicker.svelte');
+  return { default: mod.default };
+});
+
 vi.mock('$lib/api', () => {
   const create = vi.fn();
   const patch = vi.fn();
@@ -132,7 +137,7 @@ describe('pools page', () => {
 
   it('validates required fields before creating', async () => {
     const { getByRole, findByRole } = render(Page, {
-      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
+      props: { data: { session: null, defaultPoolId: null, pools: [], locations, loadError: null } },
     });
 
     const submit = getByRole('button', { name: /create pool/i });
@@ -140,7 +145,6 @@ describe('pools page', () => {
 
     const alert = await findByRole('alert');
     expect(alert.textContent).toContain('Name is required.');
-    expect(alert.textContent).toContain('Timezone is required.');
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -176,8 +180,8 @@ describe('pools page', () => {
       })
     );
 
-    const { getByLabelText, getByRole, findByRole, queryAllByText } = render(Page, {
-      props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
+    const { getByLabelText, getByRole, queryAllByText } = render(Page, {
+      props: { data: { session: null, defaultPoolId: null, pools: [], locations, loadError: null } },
     });
 
     await fireEvent.input(getByLabelText('Name'), { target: { value: created.name } });
@@ -187,19 +191,13 @@ describe('pools page', () => {
     await fireEvent.input(getByLabelText(/salt target \(ppm\)/i), {
       target: { value: created.saltLevelPpm },
     });
-    await fireEvent.input(getByLabelText('Sanitizer target min (ppm)'), {
+    await fireEvent.input(getByLabelText(/sanitizer target min \(ppm\)/i), {
       target: { value: created.sanitizerTargetMinPpm },
     });
     await fireEvent.input(getByLabelText(/sanitizer target max \(ppm\)/i), {
       target: { value: created.sanitizerTargetMaxPpm },
     });
     await fireEvent.change(getByLabelText('Surface type'), { target: { value: created.surfaceType } });
-    await fireEvent.input(getByLabelText('Latitude'), { target: { value: '30.0279' } });
-    await fireEvent.input(getByLabelText('Longitude'), { target: { value: '-90.4614' } });
-    await fireEvent.change(getByLabelText('Timezone (from pin)'), {
-      target: { value: 'America/Chicago' },
-    });
-
     const submit = getByRole('button', { name: /create pool/i });
     await fireEvent.click(submit);
 
@@ -224,11 +222,32 @@ describe('pools page', () => {
       );
     });
 
-    const status = await findByRole('status');
-    expect(status.textContent).toContain('Pool created.');
     await waitFor(() => {
       expect(queryAllByText(created.name).length).toBeGreaterThan(0);
     });
+  });
+
+  it('blocks sanitizer targets that are actually salt-range values', async () => {
+    const { getByLabelText, getByRole, findByRole } = render(Page, {
+      props: { data: { session: null, defaultPoolId: null, pools: [], locations, loadError: null } },
+    });
+
+    await fireEvent.input(getByLabelText('Name'), { target: { value: 'My pool' } });
+    await fireEvent.input(getByLabelText('Volume (gallons)'), { target: { value: 15000 } });
+    await fireEvent.change(getByLabelText('Sanitizer type'), { target: { value: 'chlorine' } });
+    await fireEvent.change(getByLabelText('Chlorine source'), { target: { value: 'swg' } });
+    await fireEvent.input(getByLabelText(/salt target \(ppm\)/i), { target: { value: 3600 } });
+    await fireEvent.input(getByLabelText(/sanitizer target min \(ppm\)/i), { target: { value: 3200 } });
+    await fireEvent.input(getByLabelText(/sanitizer target max \(ppm\)/i), { target: { value: 4000 } });
+    await fireEvent.change(getByLabelText('Surface type'), { target: { value: 'plaster' } });
+
+    await fireEvent.click(getByRole('button', { name: /create pool/i }));
+
+    const alert = await findByRole('alert');
+    expect(alert.textContent).toContain(
+      'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.'
+    );
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   it('updates a pool', async () => {
@@ -302,11 +321,11 @@ describe('pools page', () => {
     expect(entries.length).toBeGreaterThan(0);
   });
 
-  it('shows timezone selection on create pool', () => {
-    const { getByLabelText } = render(Page, {
+  it('does not show manual timezone selection on create pool', () => {
+    const { queryByLabelText } = render(Page, {
       props: { data: { session: null, defaultPoolId: null, pools, locations, loadError: null } },
     });
 
-    expect(getByLabelText('Timezone (from pin)')).toBeTruthy();
+    expect(queryByLabelText('Timezone (from pin)')).toBeNull();
   });
 });

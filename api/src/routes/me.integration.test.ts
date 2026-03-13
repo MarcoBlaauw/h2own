@@ -5,6 +5,7 @@ import { authService } from '../services/auth.js';
 import { mailerService } from '../services/mailer.js';
 import { profileService } from '../services/profile.js';
 import { preferencesService } from '../services/preferences.js';
+import { totpService } from '../services/totp.js';
 
 describe('me routes', () => {
   let app: ReturnType<typeof Fastify>;
@@ -260,5 +261,75 @@ describe('me routes', () => {
       error: 'CurrentPasswordInvalid',
       message: 'Current password is incorrect.',
     });
+  });
+
+  it('returns totp status for the authenticated user', async () => {
+    vi.spyOn(authService, 'getUserSecurityById').mockResolvedValue({
+      userId: currentUserId,
+      email: 'member@example.com',
+      totpEnabled: true,
+      totpSecretEncrypted: 'enc',
+      totpPendingSecretEncrypted: null,
+    } as any);
+
+    const response = await app.inject({ method: 'GET', url: '/me/security/totp' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ enabled: true, pending: false });
+  });
+
+  it('initiates 2fa setup after current password verification', async () => {
+    vi.spyOn(authService, 'verifyPasswordByUserId').mockResolvedValue(true);
+    vi.spyOn(authService, 'getUserSecurityById').mockResolvedValue({
+      userId: currentUserId,
+      email: 'member@example.com',
+      totpEnabled: false,
+      totpSecretEncrypted: null,
+      totpPendingSecretEncrypted: null,
+    } as any);
+    vi.spyOn(totpService, 'createEnrollment').mockResolvedValue({
+      secret: 'ABCDEF123456',
+      otpauthUrl: 'otpauth://totp/H2Own:member@example.com?secret=ABCDEF123456',
+      qrCodeDataUrl: 'data:image/png;base64,abc',
+    });
+    vi.spyOn(totpService, 'encryptSecret').mockReturnValue('encrypted-pending');
+    vi.spyOn(authService, 'setTotpPendingSecret').mockResolvedValue(true);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/me/security/totp/initiate',
+      payload: { currentPassword: 'password-123' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      secret: 'ABCDEF123456',
+      qrCodeDataUrl: 'data:image/png;base64,abc',
+    });
+    expect(authService.setTotpPendingSecret).toHaveBeenCalledWith(currentUserId, 'encrypted-pending');
+  });
+
+  it('enables 2fa when setup code is valid', async () => {
+    vi.spyOn(authService, 'getUserSecurityById').mockResolvedValue({
+      userId: currentUserId,
+      email: 'member@example.com',
+      totpEnabled: false,
+      totpSecretEncrypted: null,
+      totpPendingSecretEncrypted: 'encrypted-pending',
+    } as any);
+    vi.spyOn(totpService, 'decryptSecret').mockReturnValue('plain-secret');
+    vi.spyOn(totpService, 'verifyToken').mockReturnValue(true);
+    vi.spyOn(authService, 'enableTotp').mockResolvedValue(true);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/me/security/totp/enable',
+      payload: { code: '123456' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, enabled: true });
+    expect(authService.enableTotp).toHaveBeenCalledWith(currentUserId, 'encrypted-pending');
   });
 });

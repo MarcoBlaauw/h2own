@@ -80,6 +80,8 @@ export class AuthService {
         passwordHash: schema.users.passwordHash,
         isActive: schema.users.isActive,
         role: schema.users.role,
+        totpEnabled: schema.users.totpEnabled,
+        totpSecretEncrypted: schema.users.totpSecretEncrypted,
       })
       .from(schema.users)
       .where(eq(schema.users.email, data.email));
@@ -98,6 +100,8 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      totpEnabled: user.totpEnabled,
+      totpSecretEncrypted: user.totpSecretEncrypted,
     };
   }
 
@@ -275,12 +279,72 @@ export class AuthService {
         email: schema.users.email,
         name: schema.users.name,
         role: schema.users.role,
+        totpEnabled: schema.users.totpEnabled,
         createdAt: schema.users.createdAt,
       })
       .from(schema.users)
       .where(eq(schema.users.userId, userId));
 
     return user;
+  }
+
+  async getUserSecurityById(userId: string) {
+    const [user] = await db
+      .select({
+        userId: schema.users.userId,
+        email: schema.users.email,
+        totpEnabled: schema.users.totpEnabled,
+        totpSecretEncrypted: schema.users.totpSecretEncrypted,
+        totpPendingSecretEncrypted: schema.users.totpPendingSecretEncrypted,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.userId, userId))
+      .limit(1);
+
+    return user ?? null;
+  }
+
+  async setTotpPendingSecret(userId: string, totpPendingSecretEncrypted: string) {
+    const [updated] = await db
+      .update(schema.users)
+      .set({
+        totpPendingSecretEncrypted,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.userId, userId))
+      .returning({ userId: schema.users.userId });
+
+    return Boolean(updated);
+  }
+
+  async enableTotp(userId: string, totpSecretEncrypted: string) {
+    const [updated] = await db
+      .update(schema.users)
+      .set({
+        totpEnabled: true,
+        totpSecretEncrypted,
+        totpPendingSecretEncrypted: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.userId, userId))
+      .returning({ userId: schema.users.userId });
+
+    return Boolean(updated);
+  }
+
+  async disableTotp(userId: string) {
+    const [updated] = await db
+      .update(schema.users)
+      .set({
+        totpEnabled: false,
+        totpSecretEncrypted: null,
+        totpPendingSecretEncrypted: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.userId, userId))
+      .returning({ userId: schema.users.userId });
+
+    return Boolean(updated);
   }
 }
 

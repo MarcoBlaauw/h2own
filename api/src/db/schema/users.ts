@@ -8,6 +8,9 @@ export const users = pgTable('users', {
   role: varchar('role', { length: 24 }).notNull().default('member'),
   isActive: boolean('is_active').default(true),
   emailVerified: boolean('email_verified').default(false),
+  totpEnabled: boolean('totp_enabled').notNull().default(false),
+  totpSecretEncrypted: text('totp_secret_encrypted'),
+  totpPendingSecretEncrypted: text('totp_pending_secret_encrypted'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

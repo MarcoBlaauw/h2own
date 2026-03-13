@@ -253,8 +253,12 @@ Event types: test.created, dosing.created, recommendation.status_changed, cost.c
 
 ---
 
-# `docs/cline-goals.md`
+# Planning Docs
 
-The canonical implementation plan now lives in
-[`docs/implementation-plan.md`](implementation-plan.md). The
-`docs/cline-goals.md` file is maintained as a short pointer to avoid duplication.
+The previous `docs/cline-goals.md` pointer file has been archived because it
+referred to a non-existent `docs/implementation-plan.md`.
+
+Current implementation status is tracked in:
+- [`docs/archived/feature-enhancements-and-ui-fixes-implementation-plan.md`](archived/feature-enhancements-and-ui-fixes-implementation-plan.md)
+- [`docs/pool-equipment-and-sensor-implementation-backlog.md`](pool-equipment-and-sensor-implementation-backlog.md)
+- [`docs/archived/calendar-reminders-readiness.md`](archived/calendar-reminders-readiness.md) for the implemented v1 calendar/reminder work and follow-on enhancements

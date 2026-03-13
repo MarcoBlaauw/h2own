@@ -180,6 +180,7 @@
     isChlorineSanitizer(sanitizerType) &&
     typeof chlorineSource === 'string' &&
     chlorineSource.trim().toLowerCase() === 'swg';
+  const sanitizerResidualMaxPpm = 20;
 
   const hydrateThermalForm = (equipmentInput: unknown, prefsInput: unknown): ThermalFormState => {
     const equipment = (equipmentInput ?? {}) as Record<string, unknown>;
@@ -330,6 +331,10 @@
         updateErrors.push('Sanitizer target range requires both minimum and maximum ppm values.');
       } else if (sanitizerTargetMin <= 0 || sanitizerTargetMax <= 0 || sanitizerTargetMin > sanitizerTargetMax) {
         updateErrors.push('Sanitizer target range must be positive and min must be less than or equal to max.');
+      } else if (sanitizerTargetMin > sanitizerResidualMaxPpm || sanitizerTargetMax > sanitizerResidualMaxPpm) {
+        updateErrors.push(
+          'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.'
+        );
       }
     }
     if (sanitizer !== (selectedPool.sanitizerType ?? '')) payload.sanitizerType = sanitizer;
@@ -549,10 +554,14 @@
                     class="input"
                     type="number"
                     min="0"
+                    max={sanitizerResidualMaxPpm}
                     step="0.1"
                     bind:value={updateForm.sanitizerTargetMinPpm}
-                    placeholder="e.g. 3"
+                    placeholder="e.g. 2"
                   />
+                  <p class="mt-1 text-xs text-content-secondary/80">
+                    Sanitizer residual target. For chlorine pools, a common target is 2-4 ppm.
+                  </p>
 
                   <label class="text-sm font-medium text-content-secondary" for="pool-sanitizer-target-max">
                     Sanitizer target max (ppm)
@@ -563,12 +572,13 @@
                       class="input"
                       type="number"
                       min="0"
+                      max={sanitizerResidualMaxPpm}
                       step="0.1"
                       bind:value={updateForm.sanitizerTargetMaxPpm}
-                      placeholder="e.g. 5"
+                      placeholder="e.g. 4"
                     />
                     <p class="mt-1 text-xs text-content-secondary/80">
-                      Required target policy range for sanitizer residual in ppm.
+                      Required target policy range for sanitizer residual in ppm. Do not enter the SWG salt target here.
                     </p>
                   </div>
                 {/if}

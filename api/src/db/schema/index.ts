@@ -17,6 +17,8 @@ export * from './cost_categories.js';
 export * from './costs.js';
 export * from './notification_templates.js';
 export * from './notifications.js';
+export * from './schedule_events.js';
+export * from './schedule_event_notifications.js';
 export * from './photos.js';
 export * from './test_kits.js';
 export * from './api_tokens.js';

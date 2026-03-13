@@ -1,6 +1,7 @@
 # Feature Enhancements and UI Fixes Implementation Plan
 
 ## Status
+- Archived: March 13, 2026
 - Drafted: February 22, 2026
 - Updated: February 25, 2026
 - Scope: Navigation and pool-context UX fixes, auth/lockout hardening, monetization gating, user-facing integrations, AI-assisted maintenance planning, and production CAPTCHA readiness.
@@ -213,3 +214,7 @@
 2. Decide whether portal landing is `/` for authenticated users or a dedicated path (e.g., `/portal`).
 3. Decide initial ad placements for authenticated non-paying users (dashboard only vs broader).
 4. Decide whether AI advice ships initially behind a feature flag.
+
+## Archive Note
+- Archived after implementation verification, local schema repair, and expanded web route coverage for overview, integrations, inventory, and lockout flows on March 13, 2026.
+- Calendar/reminder scheduling remains intentionally tracked outside this plan in `docs/archived/calendar-reminders-readiness.md`.

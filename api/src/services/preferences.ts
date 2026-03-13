@@ -14,6 +14,10 @@ export type PreferencesData = {
   notificationSmsEnabled: boolean;
   notificationPushEnabled: boolean;
   notificationEmailAddress: string | null;
+  reminderTimezone: string | null;
+  reminderLeadMinutes: number;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
 };
 
 export type UpdatePreferencesData = Partial<Omit<PreferencesData, 'userId'>>;
@@ -30,6 +34,10 @@ const defaultPreferences = (userId: string, email: string): PreferencesData => (
   notificationSmsEnabled: false,
   notificationPushEnabled: false,
   notificationEmailAddress: email,
+  reminderTimezone: null,
+  reminderLeadMinutes: 1440,
+  quietHoursStart: null,
+  quietHoursEnd: null,
 });
 
 const normalizeCurrency = (value: string | undefined) => {
@@ -93,6 +101,10 @@ export class PreferencesService {
         notificationSmsEnabled: schema.userPreferences.notificationSmsEnabled,
         notificationPushEnabled: schema.userPreferences.notificationPushEnabled,
         notificationEmailAddress: schema.userPreferences.notificationEmailAddress,
+        reminderTimezone: schema.userPreferences.reminderTimezone,
+        reminderLeadMinutes: schema.userPreferences.reminderLeadMinutes,
+        quietHoursStart: schema.userPreferences.quietHoursStart,
+        quietHoursEnd: schema.userPreferences.quietHoursEnd,
       })
       .from(schema.userPreferences)
       .where(eq(schema.userPreferences.userId, userId))
@@ -112,6 +124,10 @@ export class PreferencesService {
       notificationSmsEnabled: row.notificationSmsEnabled ?? false,
       notificationPushEnabled: row.notificationPushEnabled ?? false,
       notificationEmailAddress: row.notificationEmailAddress ?? user.email,
+      reminderTimezone: row.reminderTimezone ?? null,
+      reminderLeadMinutes: row.reminderLeadMinutes ?? 1440,
+      quietHoursStart: row.quietHoursStart ?? null,
+      quietHoursEnd: row.quietHoursEnd ?? null,
     };
   }
 
@@ -150,6 +166,10 @@ export class PreferencesService {
           notificationSmsEnabled: merged.notificationSmsEnabled,
           notificationPushEnabled: merged.notificationPushEnabled,
           notificationEmailAddress: merged.notificationEmailAddress,
+          reminderTimezone: merged.reminderTimezone,
+          reminderLeadMinutes: merged.reminderLeadMinutes,
+          quietHoursStart: merged.quietHoursStart,
+          quietHoursEnd: merged.quietHoursEnd,
           updatedAt: new Date(),
         })
         .where(eq(schema.userPreferences.userId, userId));
@@ -166,6 +186,10 @@ export class PreferencesService {
         notificationSmsEnabled: merged.notificationSmsEnabled,
         notificationPushEnabled: merged.notificationPushEnabled,
         notificationEmailAddress: merged.notificationEmailAddress,
+        reminderTimezone: merged.reminderTimezone,
+        reminderLeadMinutes: merged.reminderLeadMinutes,
+        quietHoursStart: merged.quietHoursStart,
+        quietHoursEnd: merged.quietHoursEnd,
       });
     }
 

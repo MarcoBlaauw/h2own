@@ -173,5 +173,5 @@ Status: Implemented (February 24, 2026)
 4. Historical retention and cost constraints.
 
 ## Next Plan Handoff
-1. Next active implementation plan: `docs/feature-enhancements-and-ui-fixes-implementation-plan.md`.
-2. Next phase to execute there: `Phase 1: Navigation + Portal Foundations`.
+1. Next implementation plan executed after this backlog: `docs/archived/feature-enhancements-and-ui-fixes-implementation-plan.md`.
+2. That follow-on plan is now complete and archived.

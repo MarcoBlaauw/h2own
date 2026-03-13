@@ -106,10 +106,16 @@ services:
   web:
     build:
       context: ./app/web
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        PUBLIC_API_BASE: ${PUBLIC_API_BASE:-/api}
+        PUBLIC_APP_NAME: ${PUBLIC_APP_NAME:-H2Own}
+        PUBLIC_GOOGLE_MAPS_API_KEY: ${PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        PUBLIC_GOOGLE_MAPS_MAP_ID: ${PUBLIC_GOOGLE_MAPS_MAP_ID:-}
     container_name: h2own-web
     restart: unless-stopped
-    command: ["node_modules/.bin/vite", "--host", "--port", "3000"]
+    command: ["node", "build"]
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

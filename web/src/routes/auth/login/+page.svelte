@@ -17,6 +17,9 @@
   let captchaProvider: 'turnstile' | 'hcaptcha' | null = null;
   let captchaSiteKey = '';
   let captchaToken = '';
+  let requiresTwoFactor = false;
+  let challengeToken = '';
+  let totpCode = '';
 
   onMount(() => {
     if (!browser) {
@@ -55,6 +58,27 @@
     error = '';
     success = '';
     warning = '';
+    if (requiresTwoFactor) {
+      if (!totpCode.trim()) {
+        error = 'Enter the 6-digit authentication code from your app.';
+        return;
+      }
+      try {
+        const res = await api.auth.loginTotp({ challengeToken, code: totpCode.trim() });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          await invalidateAll();
+          await goto('/overview', { invalidateAll: true });
+          return;
+        }
+        error = data?.message ?? 'Unable to verify authentication code.';
+        return;
+      } catch {
+        error = 'Unable to reach the server. Please try again.';
+        return;
+      }
+    }
+
     if (captchaEnabled && !captchaToken) {
       error = 'Please complete the CAPTCHA challenge.';
       return;
@@ -62,7 +86,11 @@
     try {
       const res = await api.auth.login({ email, password, captchaToken: captchaToken || undefined });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
+      if (res.status === 202 && data?.requiresTwoFactor && data?.challengeToken) {
+        requiresTwoFactor = true;
+        challengeToken = data.challengeToken;
+        success = data?.message ?? 'Enter your authenticator app code to continue.';
+      } else if (res.ok) {
         await invalidateAll();
         await goto('/overview', { invalidateAll: true });
       } else if (res.status === 423 && data?.lockout) {
@@ -92,42 +120,56 @@
           <h1 class="text-2xl font-semibold text-content-primary">Sign in</h1>
           <p class="text-sm text-content-secondary">Access your H2Own dashboard</p>
         </div>
-        <div class="form-field">
-          <label class="form-label" for="email">Email</label>
-          <input
-            class="form-control"
-            id="email"
-            type="email"
-            placeholder="Email"
-            bind:value={email}
-          >
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="password">Password</label>
-          <input
-            class="form-control"
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            bind:value={password}
-          >
-        </div>
-        <div class="flex flex-wrap gap-4 text-sm">
-          <a class="font-medium text-accent hover:text-accent-strong" href="/auth/forgot-password">
-            Forgot password?
-          </a>
-          <a class="font-medium text-accent hover:text-accent-strong" href="/auth/forgot-username">
-            Forgot username?
-          </a>
-        </div>
-        {#if captchaEnabled && captchaProvider && captchaSiteKey}
-          <Captcha
-            provider={captchaProvider}
-            siteKey={captchaSiteKey}
-            on:token={(event) => {
-              captchaToken = event.detail ?? '';
-            }}
-          />
+        {#if requiresTwoFactor}
+          <div class="form-field">
+            <label class="form-label" for="totp-code">Authentication code</label>
+            <input
+              class="form-control"
+              id="totp-code"
+              type="text"
+              inputmode="numeric"
+              placeholder="123456"
+              bind:value={totpCode}
+            >
+          </div>
+        {:else}
+          <div class="form-field">
+            <label class="form-label" for="email">Email</label>
+            <input
+              class="form-control"
+              id="email"
+              type="email"
+              placeholder="Email"
+              bind:value={email}
+            >
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="password">Password</label>
+            <input
+              class="form-control"
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              bind:value={password}
+            >
+          </div>
+          <div class="flex flex-wrap gap-4 text-sm">
+            <a class="font-medium text-accent hover:text-accent-strong" href="/auth/forgot-password">
+              Forgot password?
+            </a>
+            <a class="font-medium text-accent hover:text-accent-strong" href="/auth/forgot-username">
+              Forgot username?
+            </a>
+          </div>
+          {#if captchaEnabled && captchaProvider && captchaSiteKey}
+            <Captcha
+              provider={captchaProvider}
+              siteKey={captchaSiteKey}
+              on:token={(event) => {
+                captchaToken = event.detail ?? '';
+              }}
+            />
+          {/if}
         {/if}
         {#if error}
           <p class="form-message" data-state="error">{error}</p>
@@ -143,9 +185,25 @@
             class="btn btn-base btn-primary"
             type="submit"
           >
-            Sign In
+            {requiresTwoFactor ? 'Verify code' : 'Sign In'}
           </button>
-          <a class="btn btn-base btn-secondary" href="/auth/register">Register</a>
+          {#if requiresTwoFactor}
+            <button
+              class="btn btn-base btn-secondary"
+              type="button"
+              on:click={() => {
+                requiresTwoFactor = false;
+                challengeToken = '';
+                totpCode = '';
+                error = '';
+                success = '';
+              }}
+            >
+              Start over
+            </button>
+          {:else}
+            <a class="btn btn-base btn-secondary" href="/auth/register">Register</a>
+          {/if}
         </div>
       </form>
     </Card>

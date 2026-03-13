@@ -286,7 +286,7 @@
   {:else if !isReady}
     <p class="text-xs text-content-secondary">Loading map…</p>
   {:else}
-    <p class="text-xs text-content-secondary">Click on the map or drag the pin to set exact pool coordinates.</p>
+    <p class="text-xs text-content-secondary">Click on the map or drag the pin to refine the selected location.</p>
   {/if}
 </div>
 

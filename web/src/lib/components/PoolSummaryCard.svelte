@@ -4,7 +4,18 @@
 
   const displayVolume = (value) => (typeof value === 'number' ? value.toLocaleString() : '—');
   const displayText = (value) => value ?? '—';
-  const displayOwner = (owner) => owner?.email ?? 'Unknown';
+  const displayOwner = (owner) => owner?.name ?? 'Unknown';
+  const displayEquipment = (equipment) => {
+    if (!equipment) return null;
+    const status = `${equipment.status ?? ''}`.toLowerCase();
+    const equipmentType = `${equipment.equipmentType ?? ''}`.toLowerCase();
+    if (status !== 'enabled' || !equipmentType || equipmentType === 'none') {
+      return null;
+    }
+    const readableType = equipmentType === 'combo' ? 'heater + chiller' : equipmentType;
+    const energySource = equipment.energySource ? ` (${equipment.energySource})` : '';
+    return `${readableType}${energySource}`;
+  };
   const displayLastTested = (value) => {
     if (!value) return 'Never';
     const date = typeof value === 'string' ? new Date(value) : value;
@@ -32,6 +43,12 @@
       <dt class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80">Sanitizer</dt>
       <dd class="text-right text-content-secondary">{displayText(pool?.sanitizerType)}</dd>
     </div>
+    {#if displayEquipment(pool?.equipment)}
+      <div class="flex items-center justify-between gap-3">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80">Equipment</dt>
+        <dd class="text-right text-content-secondary">{displayEquipment(pool?.equipment)}</dd>
+      </div>
+    {/if}
     <div class="flex items-center justify-between gap-3">
       <dt class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80">Last tested</dt>
       <dd class="text-right text-content-secondary">{displayLastTested(pool?.lastTestedAt)}</dd>

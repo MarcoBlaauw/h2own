@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { hasAccountCapability } from '../services/authorization.js';
+import { billingService } from '../services/billing.js';
 import { writeAuditLog } from './audit.js';
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -10,15 +11,7 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 
-    return reply.send({
-      featureStatus: 'placeholder',
-      plan: null,
-      status: 'not_configured',
-      capabilities: {
-        read: hasAccountCapability(req.user?.role, 'billing.read'),
-        manage: hasAccountCapability(req.user?.role, 'billing.manage'),
-      },
-    });
+    return reply.send(await billingService.getSummary(req.user!.id, req.user?.role));
   });
 
   app.post('/portal-session', async (req, reply) => {

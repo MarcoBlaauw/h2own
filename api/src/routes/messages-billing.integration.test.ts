@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { messagesRoutes } from './messages.js';
 import { billingRoutes } from './billing.js';
+import { billingService } from '../services/billing.js';
 
 describe('Messages and billing placeholder endpoints', () => {
   let app: ReturnType<typeof Fastify>;
@@ -57,13 +58,31 @@ describe('Messages and billing placeholder endpoints', () => {
   });
 
   it('returns billing summary for member and rejects portal session manage action', async () => {
+    vi.spyOn(billingService, 'getSummary').mockResolvedValue({
+      featureStatus: 'hooked',
+      plan: {
+        tier: 'free',
+        isPaid: false,
+      },
+      status: 'active',
+      capabilities: {
+        read: true,
+        manage: false,
+      },
+    });
+
     const summaryRes = await app.inject({
       method: 'GET',
       url: '/billing/summary',
     });
     expect(summaryRes.statusCode).toBe(200);
     expect(summaryRes.json()).toMatchObject({
-      featureStatus: 'placeholder',
+      featureStatus: 'hooked',
+      plan: {
+        tier: 'free',
+        isPaid: false,
+      },
+      status: 'active',
       capabilities: { read: true, manage: false },
     });
 

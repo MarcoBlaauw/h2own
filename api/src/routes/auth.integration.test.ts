@@ -5,6 +5,7 @@ import { authRoutes } from "./auth.js";
 import { UserAlreadyExistsError, authService } from "../services/auth.js";
 import { authLockoutService } from "../services/auth-lockout.js";
 import { mailerService } from "../services/mailer.js";
+import { totpService } from "../services/totp.js";
 import { env } from "../env.js";
 
 describe("POST /auth/register integration", () => {
@@ -151,6 +152,8 @@ describe("POST /auth/register integration", () => {
       email: "admin@example.com",
       name: "Admin", 
       role: "admin",
+      totpEnabled: false,
+      totpSecretEncrypted: null,
     });
 
     const response = await app.inject({
@@ -211,6 +214,81 @@ describe("POST /auth/register integration", () => {
         entityId: "admin@example.com",
       }),
     );
+  });
+
+  it("returns a TOTP challenge when the user has 2FA enabled", async () => {
+    vi.spyOn(authService, "validateCredentials").mockResolvedValue({
+      userId: "f2fb74d0-9f84-4624-8454-ce1b1b8f16de",
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      totpEnabled: true,
+      totpSecretEncrypted: "encrypted-secret",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "member@example.com", password: "password123" },
+    });
+
+    expect(response.statusCode).toBe(202);
+    const body = response.json();
+    expect(body.requiresTwoFactor).toBe(true);
+    expect(typeof body.challengeToken).toBe("string");
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("completes login via /auth/login/totp with a valid authenticator code", async () => {
+    vi.spyOn(authService, "validateCredentials").mockResolvedValue({
+      userId: "f2fb74d0-9f84-4624-8454-ce1b1b8f16de",
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      totpEnabled: true,
+      totpSecretEncrypted: "encrypted-secret",
+    });
+    vi.spyOn(authService, "getUserSecurityById").mockResolvedValue({
+      userId: "f2fb74d0-9f84-4624-8454-ce1b1b8f16de",
+      email: "member@example.com",
+      totpEnabled: true,
+      totpSecretEncrypted: "encrypted-secret",
+      totpPendingSecretEncrypted: null,
+    } as any);
+    vi.spyOn(authService, "getUserById").mockResolvedValue({
+      userId: "f2fb74d0-9f84-4624-8454-ce1b1b8f16de",
+      email: "member@example.com",
+      name: "Member",
+      role: "member",
+      totpEnabled: true,
+      createdAt: new Date().toISOString(),
+    } as any);
+    vi.spyOn(totpService, "decryptSecret").mockReturnValue("plain-secret");
+    vi.spyOn(totpService, "verifyToken").mockReturnValue(true);
+
+    const step1 = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "member@example.com", password: "password123" },
+    });
+    const challengeToken = step1.json().challengeToken;
+
+    const step2 = await app.inject({
+      method: "POST",
+      url: "/auth/login/totp",
+      payload: { challengeToken, code: "123456" },
+    });
+
+    expect(step2.statusCode).toBe(201);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(step2.json()).toEqual({
+      user: {
+        id: "f2fb74d0-9f84-4624-8454-ce1b1b8f16de",
+        email: "member@example.com",
+        name: "Member",
+        role: "member",
+      },
+    });
   });
 
   it("returns 423 when the user is already locked out", async () => {

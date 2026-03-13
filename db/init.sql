@@ -24,11 +24,21 @@ CREATE TABLE IF NOT EXISTS users (
   role VARCHAR(24) NOT NULL DEFAULT 'member',
   is_active BOOLEAN DEFAULT TRUE,
   email_verified BOOLEAN DEFAULT FALSE,
+  totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  totp_secret_encrypted TEXT,
+  totp_pending_secret_encrypted TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS totp_secret_encrypted TEXT;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS totp_pending_secret_encrypted TEXT;
 
 -- User locations
 CREATE TABLE IF NOT EXISTS user_locations (
@@ -498,3 +508,219 @@ INSERT INTO cost_categories (name, description) VALUES
   ('maintenance', 'Professional maintenance services'),
   ('utilities', 'Electricity, water, gas costs')
 ON CONFLICT (name) DO NOTHING;
+
+-- --------------------------------------------------------------------------
+-- Post-February 2026 schema additions
+-- Keep this section idempotent so existing local volumes can be updated by
+-- re-running init.sql manually against the dev database.
+-- --------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+  first_name VARCHAR(80),
+  last_name VARCHAR(80),
+  nickname VARCHAR(80),
+  address TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+  theme VARCHAR(16) NOT NULL DEFAULT 'light',
+  temperature_unit CHAR(1) NOT NULL DEFAULT 'F',
+  measurement_system VARCHAR(16) NOT NULL DEFAULT 'imperial',
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  preferred_pool_temp NUMERIC(5,2),
+  default_pool_id UUID REFERENCES pools(pool_id) ON DELETE SET NULL,
+  subscription_tier VARCHAR(24) NOT NULL DEFAULT 'free',
+  subscription_status VARCHAR(24) NOT NULL DEFAULT 'active',
+  notification_email_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  notification_sms_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  notification_push_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  notification_email_address VARCHAR(255),
+  reminder_timezone VARCHAR(64),
+  reminder_lead_minutes INTEGER NOT NULL DEFAULT 1440,
+  quiet_hours_start CHAR(5),
+  quiet_hours_end CHAR(5),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(24) NOT NULL DEFAULT 'free';
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(24) NOT NULL DEFAULT 'active';
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS reminder_timezone VARCHAR(64);
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS reminder_lead_minutes INTEGER NOT NULL DEFAULT 1440;
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS quiet_hours_start CHAR(5);
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS quiet_hours_end CHAR(5);
+
+ALTER TABLE pools
+  ADD COLUMN IF NOT EXISTS chlorine_source VARCHAR(20);
+ALTER TABLE pools
+  ADD COLUMN IF NOT EXISTS sanitizer_target_min_ppm NUMERIC(4,2);
+ALTER TABLE pools
+  ADD COLUMN IF NOT EXISTS sanitizer_target_max_ppm NUMERIC(4,2);
+
+CREATE TABLE IF NOT EXISTS role_capability_templates (
+  template_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  role VARCHAR(24) NOT NULL,
+  scope VARCHAR(24) NOT NULL,
+  capability VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS role_capability_templates_role_scope_capability_idx
+  ON role_capability_templates(role, scope, capability);
+
+INSERT INTO role_capability_templates (role, scope, capability)
+VALUES
+  ('admin', 'system', 'admin.users.read'),
+  ('admin', 'system', 'admin.users.manage'),
+  ('admin', 'system', 'admin.audit.read'),
+  ('admin', 'system', 'admin.tokens.manage'),
+  ('admin', 'system', 'admin.pools.manage'),
+  ('admin', 'account', 'account.profile.read'),
+  ('admin', 'account', 'account.profile.update'),
+  ('admin', 'account', 'account.preferences.read'),
+  ('admin', 'account', 'account.preferences.update'),
+  ('admin', 'account', 'account.security.read'),
+  ('admin', 'account', 'account.security.update'),
+  ('admin', 'account', 'notifications.read'),
+  ('admin', 'account', 'notifications.manage'),
+  ('admin', 'account', 'messages.read'),
+  ('admin', 'account', 'messages.send'),
+  ('admin', 'account', 'billing.read'),
+  ('admin', 'account', 'billing.manage'),
+  ('business', 'system', 'admin.pools.manage'),
+  ('business', 'account', 'account.profile.read'),
+  ('business', 'account', 'account.profile.update'),
+  ('business', 'account', 'account.preferences.read'),
+  ('business', 'account', 'account.preferences.update'),
+  ('business', 'account', 'account.security.read'),
+  ('business', 'account', 'account.security.update'),
+  ('business', 'account', 'notifications.read'),
+  ('business', 'account', 'notifications.manage'),
+  ('business', 'account', 'messages.read'),
+  ('business', 'account', 'messages.send'),
+  ('business', 'account', 'billing.read'),
+  ('business', 'account', 'billing.manage'),
+  ('member', 'account', 'account.profile.read'),
+  ('member', 'account', 'account.profile.update'),
+  ('member', 'account', 'account.preferences.read'),
+  ('member', 'account', 'account.preferences.update'),
+  ('member', 'account', 'account.security.read'),
+  ('member', 'account', 'account.security.update'),
+  ('member', 'account', 'notifications.read'),
+  ('member', 'account', 'notifications.manage'),
+  ('member', 'account', 'messages.read'),
+  ('member', 'account', 'messages.send'),
+  ('member', 'account', 'billing.read')
+ON CONFLICT (role, scope, capability) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS integrations (
+  integration_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  provider VARCHAR(64) NOT NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'connected',
+  scopes JSONB,
+  external_account_id VARCHAR(120),
+  credentials JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS integrations_user_provider_key
+  ON integrations(user_id, provider);
+
+CREATE TABLE IF NOT EXISTS integration_devices (
+  device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  integration_id UUID NOT NULL REFERENCES integrations(integration_id) ON DELETE CASCADE,
+  provider_device_id VARCHAR(120) NOT NULL,
+  device_type VARCHAR(40) NOT NULL,
+  label VARCHAR(120),
+  pool_id UUID REFERENCES pools(pool_id) ON DELETE SET NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'discovered',
+  metadata JSONB,
+  last_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS integration_devices_integration_provider_device_key
+  ON integration_devices(integration_id, provider_device_id);
+
+CREATE TABLE IF NOT EXISTS sensor_readings (
+  reading_id BIGSERIAL PRIMARY KEY,
+  pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
+  integration_id UUID REFERENCES integrations(integration_id) ON DELETE SET NULL,
+  device_id UUID REFERENCES integration_devices(device_id) ON DELETE SET NULL,
+  metric VARCHAR(40) NOT NULL,
+  value NUMERIC(12,4) NOT NULL,
+  unit VARCHAR(16),
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  source VARCHAR(40) NOT NULL DEFAULT 'integration',
+  quality INTEGER,
+  raw_payload JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS integration_ingestion_failures (
+  failure_id BIGSERIAL PRIMARY KEY,
+  provider VARCHAR(64) NOT NULL,
+  headers JSONB DEFAULT NULL,
+  payload JSONB DEFAULT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 1,
+  last_error VARCHAR(1000),
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS schedule_events (
+  event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  pool_id UUID NOT NULL REFERENCES pools(pool_id) ON DELETE CASCADE,
+  event_type VARCHAR(24) NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  notes TEXT,
+  due_at TIMESTAMPTZ NOT NULL,
+  timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
+  recurrence VARCHAR(16) NOT NULL DEFAULT 'once',
+  recurrence_interval INTEGER NOT NULL DEFAULT 1,
+  reminder_lead_minutes INTEGER NOT NULL DEFAULT 1440,
+  status VARCHAR(16) NOT NULL DEFAULT 'scheduled',
+  completed_at TIMESTAMPTZ,
+  canceled_at TIMESTAMPTZ,
+  last_reminder_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS schedule_events_user_due_idx
+  ON schedule_events(user_id, due_at);
+
+CREATE TABLE IF NOT EXISTS schedule_event_notifications (
+  reminder_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES schedule_events(event_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  channel VARCHAR(30) NOT NULL,
+  reminder_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  notification_id UUID REFERENCES notifications(notification_id) ON DELETE SET NULL,
+  sent_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS schedule_event_notifications_event_channel_reminder_idx
+  ON schedule_event_notifications(event_id, channel, reminder_at);

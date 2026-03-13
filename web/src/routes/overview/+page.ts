@@ -18,7 +18,22 @@ export async function load({ fetch, url, parent }) {
       const preferences = preferencesRes.ok ? await preferencesRes.json() : null;
       const defaultPoolId =
         typeof preferences?.defaultPoolId === 'string' ? preferences.defaultPoolId : null;
-      let highlightedPool: { id: string; locationId?: string | null } | null = null;
+      let highlightedPool: {
+        id: string;
+        locationId?: string | null;
+        equipment?: {
+          equipmentType?: string | null;
+          energySource?: string | null;
+          status?: string | null;
+          capacityBtu?: number | null;
+        } | null;
+      } | null = null;
+      let highlightedPoolEquipment: {
+        equipmentType?: string | null;
+        energySource?: string | null;
+        status?: string | null;
+        capacityBtu?: number | null;
+      } | null = null;
       let latestTest = null;
       let recommendations = null;
       let recommendationHistory = [];
@@ -45,7 +60,17 @@ export async function load({ fetch, url, parent }) {
         const detailRes = await api.pools.show(highlightedCandidate.poolId, fetch);
         if (detailRes.ok) {
           highlightedPool = await detailRes.json();
+          const equipmentRes = await api.pools.equipment(highlightedCandidate.poolId, fetch);
+          if (equipmentRes.ok) {
+            highlightedPoolEquipment = await equipmentRes.json();
+          }
         }
+      }
+      if (highlightedPool && highlightedPoolEquipment) {
+        highlightedPool = {
+          ...highlightedPool,
+          equipment: highlightedPoolEquipment,
+        };
       }
       if (highlightedPool) {
         const [testsRes, recsRes, historyRes, dosingRes, costsRes, summaryRes] = await Promise.all([

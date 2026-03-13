@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import Container from '$lib/components/layout/Container.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import { onMount } from 'svelte';
 
   export let data;
 
@@ -11,6 +12,20 @@
   let confirmPassword = '';
   let saving = false;
   let message: { type: 'success' | 'error'; text: string } | null = null;
+  let totpLoading = true;
+  let totpEnabled = false;
+  let totpPending = false;
+  let totpCurrentPassword = '';
+  let totpCode = '';
+  let totpDisablePassword = '';
+  let totpDisableCode = '';
+  let totpSetupSecret = '';
+  let totpSetupQr = '';
+  let totpMessage: { type: 'success' | 'error'; text: string } | null = null;
+
+  onMount(async () => {
+    await refreshTotpStatus();
+  });
 
   async function updatePassword() {
     message = null;
@@ -48,6 +63,86 @@
     } finally {
       saving = false;
     }
+  }
+
+  async function refreshTotpStatus() {
+    totpLoading = true;
+    try {
+      const res = await api.me.totpStatus();
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      totpEnabled = Boolean(body?.enabled);
+      totpPending = Boolean(body?.pending);
+    } finally {
+      totpLoading = false;
+    }
+  }
+
+  async function startTotpSetup() {
+    totpMessage = null;
+    if (!totpCurrentPassword) {
+      totpMessage = { type: 'error', text: 'Current password is required.' };
+      return;
+    }
+
+    const res = await api.me.initiateTotpSetup({ currentPassword: totpCurrentPassword });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      totpMessage = { type: 'error', text: body.message ?? body.error ?? 'Unable to start 2FA setup.' };
+      return;
+    }
+
+    totpSetupSecret = body.secret ?? '';
+    totpSetupQr = body.qrCodeDataUrl ?? '';
+    totpPending = true;
+    totpMessage = { type: 'success', text: 'Scan the QR code, then enter your authenticator code to enable 2FA.' };
+  }
+
+  async function enableTotp() {
+    totpMessage = null;
+    if (!totpCode.trim()) {
+      totpMessage = { type: 'error', text: 'Enter the 6-digit code from your authenticator app.' };
+      return;
+    }
+
+    const res = await api.me.enableTotp({ code: totpCode.trim() });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      totpMessage = { type: 'error', text: body.message ?? body.error ?? 'Unable to enable 2FA.' };
+      return;
+    }
+
+    totpEnabled = true;
+    totpPending = false;
+    totpSetupSecret = '';
+    totpSetupQr = '';
+    totpCurrentPassword = '';
+    totpCode = '';
+    totpMessage = { type: 'success', text: 'Two-factor authentication is enabled.' };
+  }
+
+  async function disableTotp() {
+    totpMessage = null;
+    if (!totpDisablePassword || !totpDisableCode.trim()) {
+      totpMessage = { type: 'error', text: 'Password and authenticator code are required to disable 2FA.' };
+      return;
+    }
+
+    const res = await api.me.disableTotp({
+      currentPassword: totpDisablePassword,
+      code: totpDisableCode.trim(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      totpMessage = { type: 'error', text: body.message ?? body.error ?? 'Unable to disable 2FA.' };
+      return;
+    }
+
+    totpEnabled = false;
+    totpPending = false;
+    totpDisablePassword = '';
+    totpDisableCode = '';
+    totpMessage = { type: 'success', text: 'Two-factor authentication is disabled.' };
   }
 </script>
 
@@ -89,9 +184,55 @@
 
     <Card>
       <h2 class="text-lg font-semibold text-content-primary">Two-factor authentication (2FA)</h2>
-      <p class="mt-1 text-sm text-content-secondary">
-        Coming soon. TOTP app-based verification is planned first.
-      </p>
+      {#if totpLoading}
+        <p class="mt-1 text-sm text-content-secondary">Loading 2FA status...</p>
+      {:else if totpEnabled}
+        <p class="mt-1 text-sm text-content-secondary">2FA is currently enabled for this account.</p>
+        <div class="mt-4 form-grid">
+          <label class="form-field">
+            <span class="form-label">Current password</span>
+            <input class="form-control" type="password" bind:value={totpDisablePassword} />
+          </label>
+          <label class="form-field">
+            <span class="form-label">Authenticator code</span>
+            <input class="form-control" type="text" inputmode="numeric" placeholder="123456" bind:value={totpDisableCode} />
+          </label>
+        </div>
+        <div class="mt-4">
+          <button class="btn btn-secondary" on:click={disableTotp}>Disable 2FA</button>
+        </div>
+      {:else}
+        <p class="mt-1 text-sm text-content-secondary">Protect your account with a time-based authenticator app code.</p>
+        <div class="mt-4 form-grid">
+          <label class="form-field sm:col-span-2">
+            <span class="form-label">Current password</span>
+            <input class="form-control" type="password" bind:value={totpCurrentPassword} />
+          </label>
+        </div>
+        <div class="mt-4">
+          <button class="btn btn-primary" on:click={startTotpSetup}>Start 2FA setup</button>
+        </div>
+        {#if totpPending}
+          <div class="mt-4 space-y-3">
+            {#if totpSetupQr}
+              <img src={totpSetupQr} alt="Scan this QR code with your authenticator app" class="h-44 w-44 rounded border border-border bg-white p-2" />
+            {/if}
+            {#if totpSetupSecret}
+              <p class="text-xs text-content-secondary">Manual code: <span class="font-mono text-content-primary">{totpSetupSecret}</span></p>
+            {/if}
+            <label class="form-field">
+              <span class="form-label">Authenticator code</span>
+              <input class="form-control" type="text" inputmode="numeric" placeholder="123456" bind:value={totpCode} />
+            </label>
+            <button class="btn btn-primary" on:click={enableTotp}>Enable 2FA</button>
+          </div>
+        {/if}
+      {/if}
+      {#if totpMessage}
+        <p class={`mt-4 text-sm ${totpMessage.type === 'success' ? 'text-success' : 'text-danger'}`}>
+          {totpMessage.text}
+        </p>
+      {/if}
     </Card>
 
     <Card>

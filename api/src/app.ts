@@ -23,6 +23,7 @@ import { adminIntegrationsRoutes } from "./routes/admin-integrations";
 import { adminRoleCapabilitiesRoutes } from "./routes/admin-role-capabilities";
 import { integrationsRoutes } from "./routes/integrations";
 import { notificationRoutes } from "./routes/notifications";
+import { scheduleRoutes } from "./routes/schedule";
 import { messagesRoutes } from "./routes/messages";
 import { billingRoutes } from "./routes/billing";
 import { contactRoutes } from "./routes/contact";
@@ -36,6 +37,8 @@ import { applyRoleCapabilityTemplates } from "./services/authorization.js";
 import { sensorRetentionService } from "./services/sensor-retention.js";
 import { SensorRetentionWorker } from "./services/sensor-retention-worker.js";
 import { IntegrationRetryWorker } from "./services/integration-retry-worker.js";
+import { ScheduleRemindersWorker } from "./services/schedule-reminders-worker.js";
+import { scheduleEventsService } from "./services/schedule-events.js";
 
 async function buildApp() {
   const app = Fastify({
@@ -302,6 +305,7 @@ async function buildApp() {
   await app.register(adminRoleCapabilitiesRoutes, { prefix: "/admin/role-capabilities" });
   await app.register(integrationsRoutes, { prefix: "/integrations" });
   await app.register(notificationRoutes, { prefix: "/notifications" });
+  await app.register(scheduleRoutes, { prefix: "/schedule" });
   await app.register(messagesRoutes, { prefix: "/messages" });
   await app.register(billingRoutes, { prefix: "/billing" });
   await app.register(contactRoutes, { prefix: "/contact" });
@@ -327,9 +331,18 @@ async function buildApp() {
   });
   integrationRetryWorker.start();
 
+  const scheduleRemindersWorker = new ScheduleRemindersWorker({
+    enabled: env.SCHEDULE_REMINDERS_ENABLED,
+    tickSeconds: env.SCHEDULE_REMINDERS_TICK_SECONDS,
+    service: scheduleEventsService,
+    logger: app.log,
+  });
+  scheduleRemindersWorker.start();
+
   app.addHook("onClose", async () => {
     await sensorRetentionWorker.stop();
     await integrationRetryWorker.stop();
+    await scheduleRemindersWorker.stop();
   });
 
   // Finalize & print

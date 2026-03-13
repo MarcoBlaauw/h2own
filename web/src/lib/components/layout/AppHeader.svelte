@@ -14,10 +14,11 @@
   let lastPathname = '';
   let lastNotificationsFetchKey = '';
 
-  const userLinks = [
-    { href: '/pools', label: 'My Pools' },
+  const topLinksBase = [
     { href: '/overview', label: 'Pool Overview' },
+    { href: '/calendar', label: 'Calendar' },
     { href: '/inventory', label: 'Inventory' },
+    { href: '/billing', label: 'Billing' },
   ];
 
   function isActive(href: string) {
@@ -86,6 +87,10 @@
     return role === 'admin' || role === 'business';
   };
 
+  $: topLinks = isAdminPanelRole($page.data.session?.user?.role)
+    ? [...topLinksBase, { href: '/admin', label: 'Admin panel' }]
+    : topLinksBase;
+
   $: isAuthenticated = Boolean($page.data.session?.user);
   $: greetingName = deriveGreetingName($page.data.session);
   $: avatarInitial = greetingName.charAt(0).toUpperCase() || 'U';
@@ -150,7 +155,7 @@
     <div class="hidden items-center justify-center sm:flex">
       {#if isAuthenticated}
         <nav class="flex items-center gap-4 text-sm font-medium text-content-secondary">
-          {#each userLinks as link}
+          {#each topLinks as link}
             <a
               href={link.href}
               class={`transition-colors ${
@@ -168,7 +173,7 @@
     <div class="flex items-center justify-end gap-3 text-sm text-content-secondary">
       {#if isAuthenticated}
         <div class="flex gap-2 sm:hidden">
-          {#each userLinks as link}
+          {#each topLinks as link}
             <a
               href={link.href}
               class={`btn btn-sm btn-tonal ${
@@ -211,6 +216,13 @@
                 Hi {greetingName}!
               </div>
               <a
+                href="/pools"
+                class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
+                on:click={handleMenuSelection}
+              >
+                My Pools
+              </a>
+              <a
                 href="/profile"
                 class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
                 on:click={handleMenuSelection}
@@ -232,18 +244,18 @@
                 Security
               </a>
               <a
+                href="/calendar"
+                class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
+                on:click={handleMenuSelection}
+              >
+                Calendar
+              </a>
+              <a
                 href="/messages"
                 class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
                 on:click={handleMenuSelection}
               >
                 Messages
-              </a>
-              <a
-                href="/billing"
-                class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
-                on:click={handleMenuSelection}
-              >
-                Billing
               </a>
               <a
                 href="/integrations"
@@ -252,15 +264,6 @@
               >
                 Integrations
               </a>
-              {#if isAdminPanelRole($page.data.session?.user?.role)}
-                <a
-                  href="/admin"
-                  class="block rounded-lg px-3 py-2 text-content-secondary hover:bg-surface-strong/30 hover:text-content-primary text-center"
-                  on:click={handleMenuSelection}
-                >
-                  Admin panel
-                </a>
-              {/if}
               <div class="flex items-center justify-center gap-3 rounded-lg px-3 py-2">
                 <span class="text-content-secondary">Theme switcher</span>
                 <ThemeSwitcher />

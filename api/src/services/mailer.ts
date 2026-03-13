@@ -173,6 +173,30 @@ Message:
 ${details.message}`,
     });
   }
+
+  async sendScheduleReminderEmail(
+    to: string,
+    details: {
+      title: string;
+      eventType: string;
+      poolName: string;
+      dueAt: string;
+      notes?: string | null;
+    }
+  ) {
+    return this.send({
+      to,
+      subject: `Reminder: ${details.title}`,
+      text: `This is a reminder for your scheduled H2Own event.
+
+Event: ${details.title}
+Type: ${details.eventType}
+Pool: ${details.poolName}
+Due: ${details.dueAt}
+
+${details.notes?.trim() ? `Notes:\n${details.notes.trim()}\n\n` : ''}You can review your schedule at ${env.APP_BASE_URL}/calendar.`,
+    });
+  }
 }
 
 export const mailerService = new MailerService();
