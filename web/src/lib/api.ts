@@ -305,8 +305,14 @@ type ApiClient = {
     del: (eventId: string, customFetch?: FetchLike) => Promise<Response>;
   };
   messages: {
-    list: (customFetch?: FetchLike) => Promise<Response>;
-    send: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    listThreads: (
+      customFetch?: FetchLike,
+      params?: { limit?: number; cursor?: string; poolId?: string; unreadOnly?: boolean }
+    ) => Promise<Response>;
+    getThread: (threadId: string, customFetch?: FetchLike, params?: { before?: string; limit?: number }) => Promise<Response>;
+    createThread: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    sendMessage: (threadId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    markThreadRead: (threadId: string, body?: { readAt?: string }, customFetch?: FetchLike) => Promise<Response>;
   };
   billing: {
     summary: (customFetch?: FetchLike) => Promise<Response>;
@@ -650,8 +656,28 @@ export const api: ApiClient = {
       apiFetch(`/schedule/events/${eventId}`, { method: 'DELETE' }, customFetch),
   },
   messages: {
-    list: (customFetch) => apiFetch('/messages', {}, customFetch),
-    send: (body, customFetch) => apiFetch('/messages/send', jsonRequest(body, { method: 'POST' }), customFetch),
+    listThreads: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      if (params.cursor) search.set('cursor', params.cursor);
+      if (params.poolId) search.set('poolId', params.poolId);
+      if (typeof params.unreadOnly === 'boolean') search.set('unreadOnly', params.unreadOnly ? 'true' : 'false');
+      const query = search.toString();
+      return apiFetch(`/messages${query ? `?${query}` : ''}`, {}, customFetch);
+    },
+    getThread: (threadId, customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.before) search.set('before', params.before);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      return apiFetch(`/messages/${threadId}${query ? `?${query}` : ''}`, {}, customFetch);
+    },
+    createThread: (body, customFetch) =>
+      apiFetch('/messages/threads', jsonRequest(body, { method: 'POST' }), customFetch),
+    sendMessage: (threadId, body, customFetch) =>
+      apiFetch(`/messages/${threadId}/messages`, jsonRequest(body, { method: 'POST' }), customFetch),
+    markThreadRead: (threadId, body, customFetch) =>
+      apiFetch(`/messages/${threadId}/read`, jsonRequest(body ?? {}, { method: 'POST' }), customFetch),
   },
   billing: {
     summary: (customFetch) => apiFetch('/billing/summary', {}, customFetch),
