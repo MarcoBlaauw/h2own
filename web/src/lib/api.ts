@@ -156,6 +156,12 @@ type ApiClient = {
     ) => Promise<Response>;
     show: (sessionId: string, customFetch?: FetchLike) => Promise<Response>;
   };
+
+  treatmentPlans: {
+    generate: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    list: (poolId: string, customFetch?: FetchLike, params?: { limit?: number }) => Promise<Response>;
+    show: (poolId: string, planId: string, customFetch?: FetchLike) => Promise<Response>;
+  };
   recommendations: {
     preview: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
     create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
@@ -466,6 +472,19 @@ export const api: ApiClient = {
       return apiFetch(path, {}, customFetch);
     },
     show: (sessionId, customFetch) => apiFetch(`/tests/${sessionId}`, {}, customFetch),
+  },
+  treatmentPlans: {
+    generate: (poolId, customFetch = fetch) =>
+      apiFetch(`/pools/${poolId}/treatment-plans/generate`, { method: 'POST' }, customFetch),
+    list: (poolId, customFetch = fetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      const path = `/pools/${poolId}/treatment-plans${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    show: (poolId, planId, customFetch = fetch) =>
+      apiFetch(`/pools/${poolId}/treatment-plans/${planId}`, {}, customFetch),
   },
   recommendations: {
     preview: (poolId, customFetch) =>

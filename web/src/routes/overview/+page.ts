@@ -36,6 +36,7 @@ export async function load({ fetch, url, parent }) {
       } | null = null;
       let latestTest = null;
       let recommendations = null;
+      let latestTreatmentPlan = null;
       let recommendationHistory = [];
       let dosingHistory = [];
       let costs = [];
@@ -73,7 +74,8 @@ export async function load({ fetch, url, parent }) {
         };
       }
       if (highlightedPool) {
-        const [testsRes, recsRes, historyRes, dosingRes, costsRes, summaryRes] = await Promise.all([
+        const [plansRes, testsRes, recsRes, historyRes, dosingRes, costsRes, summaryRes] = await Promise.all([
+          api.treatmentPlans.list(highlightedPool.id, fetch, { limit: 1 }),
           api.tests.list(highlightedPool.id, fetch, { limit: 1 }),
           api.recommendations.preview(highlightedPool.id, fetch),
           api.recommendations.list(highlightedPool.id, fetch, { limit: 5 }),
@@ -84,6 +86,10 @@ export async function load({ fetch, url, parent }) {
         if (testsRes.ok) {
           const testsPayload = await testsRes.json();
           latestTest = testsPayload.items?.[0] ?? null;
+        }
+        if (plansRes.ok) {
+          const planPayload = await plansRes.json();
+          latestTreatmentPlan = planPayload.items?.[0] ?? null;
         }
         if (recsRes.ok) {
           recommendations = await recsRes.json();
@@ -132,6 +138,7 @@ export async function load({ fetch, url, parent }) {
         defaultPoolId,
         latestTest,
         recommendations,
+        latestTreatmentPlan,
         recommendationHistory,
         dosingHistory,
         costs,
@@ -146,6 +153,7 @@ export async function load({ fetch, url, parent }) {
       defaultPoolId: null,
       latestTest: null,
       recommendations: null,
+      latestTreatmentPlan: null,
       recommendationHistory: [],
       dosingHistory: [],
       costs: [],
@@ -160,6 +168,7 @@ export async function load({ fetch, url, parent }) {
       defaultPoolId: null,
       latestTest: null,
       recommendations: null,
+      latestTreatmentPlan: null,
       recommendationHistory: [],
       dosingHistory: [],
       costs: [],

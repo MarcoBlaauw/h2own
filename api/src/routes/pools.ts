@@ -17,6 +17,7 @@ import {
 import { photosService } from '../services/photos.js';
 import { recommenderService } from '../services/recommender.js';
 import { accountIntegrationsService } from '../services/account-integrations.js';
+import { treatmentPlannerService } from '../services/treatment-planner.js';
 import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
 
@@ -234,6 +235,14 @@ const getDosingQuery = z.object({
 });
 const getSensorReadingsQuery = z.object({
   limit: z.coerce.number().int().positive().max(500).default(100),
+});
+
+const poolTreatmentPlanParams = z.object({
+  poolId: z.string().uuid(),
+  planId: z.string().uuid(),
+});
+const getTreatmentPlansQuery = z.object({
+  limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
 const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
@@ -758,6 +767,44 @@ export async function poolsRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Recommendation not found' });
       }
       return reply.send(recommendation);
+    })
+  );
+
+
+  // POST /pools/:poolId/treatment-plans/generate
+  app.post(
+    '/:poolId/treatment-plans/generate',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const plan = await treatmentPlannerService.generate(poolId, userId);
+      return reply.code(201).send(plan);
+    })
+  );
+
+  // GET /pools/:poolId/treatment-plans
+  app.get(
+    '/:poolId/treatment-plans',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const { limit } = getTreatmentPlansQuery.parse(req.query);
+      const items = await treatmentPlannerService.list(poolId, userId, limit);
+      return reply.send({ items });
+    })
+  );
+
+  // GET /pools/:poolId/treatment-plans/:planId
+  app.get(
+    '/:poolId/treatment-plans/:planId',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, planId } = poolTreatmentPlanParams.parse(req.params);
+      const userId = req.user!.id;
+      const item = await treatmentPlannerService.get(poolId, planId, userId);
+      if (!item) {
+        return reply.code(404).send({ error: 'Treatment plan not found' });
+      }
+      return reply.send(item);
     })
   );
 

@@ -36,3 +36,4 @@ export * from './message_threads.js';
 export * from './thread_participants.js';
 export * from './messages.js';
 export * from './message_deliveries.js';
+export * from './treatment_plans.js';

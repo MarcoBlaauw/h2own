@@ -45,6 +45,7 @@
       cyanuricAcidPpm?: number | null;
       calciumHardnessPpm?: number | null;
       saltPpm?: number | null;
+      testedAt?: string | Date | null;
     } | null;
     recommendations: {
       primary: {
@@ -63,6 +64,20 @@
         reason: string;
         predictedOutcome: string;
       }>;
+    } | null;
+    latestTreatmentPlan?: {
+      planId: string;
+      status: string;
+      responsePayload?: {
+        interpretationSummary?: string;
+        stepByStepPlan?: Array<{
+          action: string;
+          amount: number | null;
+          unit: string | null;
+          rationale: string;
+        }>;
+      } | null;
+      createdAt: string;
     } | null;
     recommendationHistory: Array<{
       recommendationId: string;
@@ -134,6 +149,26 @@
     }>;
     weatherError?: string | null;
   };
+
+
+  const deriveRecommendationsFromPlan = (plan: typeof data.latestTreatmentPlan) => {
+    const firstStep = plan?.responsePayload?.stepByStepPlan?.[0];
+    if (!firstStep) return null;
+    return {
+      primary: {
+        chemicalId: 'treatment-plan-artifact',
+        chemicalName: firstStep.action,
+        amount: firstStep.amount ?? 0,
+        unit: firstStep.unit,
+        reason: plan?.responsePayload?.interpretationSummary ?? firstStep.rationale,
+        predictedOutcome: firstStep.rationale,
+      },
+      alternatives: [],
+    };
+  };
+
+  $: effectiveRecommendations =
+    deriveRecommendationsFromPlan(data.latestTreatmentPlan) ?? data.recommendations;
 
   const formatMeasurement = (
     value: string | number | null | undefined,
@@ -394,12 +429,12 @@
       ? new Date(latestTestDate.getTime() + 24 * 60 * 60 * 1000)
       : new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-    if (data.recommendations?.primary) {
+    if (effectiveRecommendations?.primary) {
       events.push({
         id: 'dose-primary',
-        title: `Dose ${data.recommendations.primary.chemicalName}`,
+        title: `Dose ${effectiveRecommendations.primary.chemicalName}`,
         dueLabel: 'Now',
-        detail: `${data.recommendations.primary.amount}${data.recommendations.primary.unit ? ` ${data.recommendations.primary.unit}` : ''} recommended. ${data.recommendations.primary.reason}`,
+        detail: `${effectiveRecommendations.primary.amount}${effectiveRecommendations.primary.unit ? ` ${effectiveRecommendations.primary.unit}` : ''} recommended. ${effectiveRecommendations.primary.reason}`,
       });
     }
 
@@ -502,7 +537,7 @@
 
     <div class="lg:col-span-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
       <RecommendationsCard
-        recommendations={data.recommendations}
+        recommendations={effectiveRecommendations}
         hasTest={Boolean(data.latestTest)}
         poolId={data.highlightedPool?.id}
         recommendationHistory={data.recommendationHistory}
@@ -526,7 +561,7 @@
       <AiMaintenanceAdvisorCard
         poolName={data.highlightedPool?.name ?? null}
         hasLatestTest={Boolean(data.latestTest)}
-        recommendations={data.recommendations}
+        recommendations={effectiveRecommendations}
         weatherDaily={data.weatherDaily}
         dosingHistoryCount={data.dosingHistory.length}
       />
