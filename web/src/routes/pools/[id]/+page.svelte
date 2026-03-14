@@ -12,6 +12,9 @@
   let planError = '';
   let tc = '';
   let ph = '';
+  let selectedPlanSteps: Record<string, Record<number, boolean>> = {};
+  let schedulingPlanId: string | null = null;
+  let scheduleError = '';
 
   const toNumberOrUndefined = (value: string) => {
     if (value === '' || value === null || value === undefined) return undefined;
@@ -51,6 +54,94 @@
     } finally {
       generatingPlan = false;
       await invalidateAll();
+    }
+  }
+
+
+
+  const getPlanSteps = (plan: any) => (plan?.responsePayload?.stepByStepPlan ?? []) as Array<{
+    action?: string;
+    timing?: string;
+    rationale?: string;
+    recommendedDueAt?: string | null;
+    eventType?: 'dosage' | 'test' | 'maintenance' | null;
+    leadMinutes?: number | null;
+    recurrence?: 'once' | 'daily' | 'weekly' | 'monthly' | null;
+  }>;
+
+  const hasSelectedStep = (planId: string, index: number) => Boolean(selectedPlanSteps[planId]?.[index]);
+
+  const togglePlanStep = (planId: string, index: number, checked: boolean) => {
+    selectedPlanSteps = {
+      ...selectedPlanSteps,
+      [planId]: {
+        ...(selectedPlanSteps[planId] ?? {}),
+        [index]: checked,
+      },
+    };
+  };
+
+  async function schedulePlanSteps(plan: any, mode: 'all' | 'selected') {
+    const poolId = $page.params.id;
+    if (!poolId) return;
+
+    const steps = getPlanSteps(plan);
+    const selectedIndexes = mode === 'all'
+      ? steps.map((_step, index) => index)
+      : steps.map((_step, index) => index).filter((index) => hasSelectedStep(plan.planId, index));
+
+    if (selectedIndexes.length === 0) {
+      scheduleError = 'Select at least one step to schedule.';
+      return;
+    }
+
+    schedulingPlanId = plan.planId;
+    scheduleError = '';
+
+    const makePayload = (confirmConflicts: boolean) => ({
+      confirmConflicts,
+      steps: selectedIndexes.map((index) => {
+        const step = steps[index] ?? {};
+        return {
+          index,
+          dueAt: step.recommendedDueAt ?? undefined,
+          eventType: step.eventType ?? undefined,
+          leadMinutes: step.leadMinutes ?? undefined,
+          recurrence: step.recurrence ?? undefined,
+        };
+      }),
+    });
+
+    try {
+      let res = await api.treatmentPlans.schedule(poolId, plan.planId, makePayload(false));
+      if (res.status === 409) {
+        const body = await res.json();
+        const overlapCount = body?.conflicts?.overlappingEventIds?.length ?? 0;
+        const reminderCount = body?.conflicts?.existingReminderEventIds?.length ?? 0;
+        const proceed = window.confirm(
+          `Found ${overlapCount} overlapping events and ${reminderCount} existing reminders. Add anyway?`
+        );
+        if (!proceed) {
+          scheduleError = 'Scheduling cancelled due to conflicts.';
+          return;
+        }
+        res = await api.treatmentPlans.schedule(poolId, plan.planId, makePayload(true));
+      }
+
+      if (!res.ok) {
+        scheduleError = `Failed to schedule plan steps (${res.status})`;
+        return;
+      }
+
+      selectedPlanSteps = {
+        ...selectedPlanSteps,
+        [plan.planId]: {},
+      };
+      await invalidateAll();
+    } catch {
+      scheduleError = 'Failed to schedule plan steps.';
+    } finally {
+      schedulingPlanId = null;
     }
   }
 
@@ -164,12 +255,53 @@
           {#if planError}
             <p class="text-sm text-danger">{planError}</p>
           {/if}
+          {#if scheduleError}
+            <p class="text-sm text-danger">{scheduleError}</p>
+          {/if}
           {#if data.plans?.length > 0}
             <ul class="space-y-3 text-sm">
               {#each data.plans as plan}
-                <li class="surface-panel">
+                <li class="surface-panel space-y-3">
                   <p class="font-medium text-content-primary">v{plan.version} · {plan.status}</p>
                   <p class="text-content-secondary">{plan.responsePayload?.interpretationSummary ?? data.recommendationPreview?.primary?.reason ?? 'No summary available.'}</p>
+                  {#if getPlanSteps(plan).length > 0}
+                    <div class="space-y-2">
+                      {#each getPlanSteps(plan) as step, index}
+                        <label class="flex items-start gap-2 text-xs text-content-secondary">
+                          <input
+                            type="checkbox"
+                            checked={hasSelectedStep(plan.planId, index)}
+                            on:change={(event) => togglePlanStep(plan.planId, index, (event.currentTarget as HTMLInputElement).checked)}
+                          >
+                          <span>
+                            <strong class="text-content-primary">{step.action ?? `Step ${index + 1}`}</strong>
+                            {#if step.recommendedDueAt}
+                              · due {new Date(step.recommendedDueAt).toLocaleString()}
+                            {/if}
+                            {#if step.recurrence}
+                              · {step.recurrence}
+                            {/if}
+                          </span>
+                        </label>
+                      {/each}
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        class="btn btn-sm btn-outline"
+                        on:click={() => schedulePlanSteps(plan, 'all')}
+                        disabled={schedulingPlanId === plan.planId}
+                      >
+                        Add all to calendar
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline"
+                        on:click={() => schedulePlanSteps(plan, 'selected')}
+                        disabled={schedulingPlanId === plan.planId}
+                      >
+                        Add selected steps
+                      </button>
+                    </div>
+                  {/if}
                 </li>
               {/each}
             </ul>

@@ -1,4 +1,5 @@
-import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { mailerService } from './mailer.js';
@@ -120,6 +121,21 @@ export class ScheduleEventAccessError extends Error {
   constructor(message = 'You do not have access to that pool or schedule event.') {
     super(message);
     this.name = 'ScheduleEventAccessError';
+  }
+}
+
+
+
+export class ScheduleEventConflictError extends Error {
+  readonly statusCode = 409;
+  readonly code = 'ScheduleEventConflict';
+
+  constructor(
+    readonly conflicts: { overlappingEventIds: string[]; existingReminderEventIds: string[] },
+    message = 'Scheduling conflicts detected. Confirm to proceed.'
+  ) {
+    super(message);
+    this.name = 'ScheduleEventConflictError';
   }
 }
 
@@ -280,6 +296,119 @@ export class ScheduleEventsService {
       .where(eq(schema.scheduleEvents.eventId, eventId));
 
     return this.getOwnedEvent(userId, eventId).then(serializeEvent);
+  }
+
+  async createEventsForTreatmentPlan(
+    userId: string,
+    input: {
+      poolId: string;
+      items: Array<{
+        eventType: ScheduleEventType;
+        title: string;
+        notes?: string | null;
+        dueAt: string;
+        timezone?: string | null;
+        recurrence?: ScheduleRecurrence;
+        leadMinutes?: number | null;
+      }>;
+      confirmConflicts?: boolean;
+    }
+  ) {
+    await this.requirePoolAccess(userId, input.poolId);
+
+    const uniqueCandidates = input.items.map((item) => ({
+      ...item,
+      dueAtDate: new Date(item.dueAt),
+      titleHash: createHash('sha256').update(item.title.trim().toLowerCase()).digest('hex'),
+    }));
+
+    const dueDates = Array.from(new Set(uniqueCandidates.map((item) => item.dueAtDate.toISOString()))).map((v) => new Date(v));
+    const existing = dueDates.length === 0 ? [] : await this.db
+      .select({
+        eventId: schema.scheduleEvents.eventId,
+        dueAt: schema.scheduleEvents.dueAt,
+        eventType: schema.scheduleEvents.eventType,
+        title: schema.scheduleEvents.title,
+      })
+      .from(schema.scheduleEvents)
+      .where(and(
+        eq(schema.scheduleEvents.userId, userId),
+        eq(schema.scheduleEvents.poolId, input.poolId),
+        inArray(schema.scheduleEvents.dueAt, dueDates)
+      ));
+
+    const existingKey = new Set(existing.map((row) => `${row.dueAt.toISOString()}|${row.eventType}|${createHash('sha256').update(row.title.trim().toLowerCase()).digest('hex')}`));
+
+    const toCreate = uniqueCandidates.filter((item) => !existingKey.has(`${item.dueAtDate.toISOString()}|${item.eventType}|${item.titleHash}`));
+
+    const dueStart = toCreate.length ? new Date(Math.min(...toCreate.map((item) => item.dueAtDate.getTime())) - 60 * 60 * 1000) : null;
+    const dueEnd = toCreate.length ? new Date(Math.max(...toCreate.map((item) => item.dueAtDate.getTime())) + 60 * 60 * 1000) : null;
+
+    let overlappingEvents: Array<{ eventId: string; dueAt: Date }> = [];
+    let reminderEvents: Array<{ eventId: string }> = [];
+
+    if (dueStart && dueEnd) {
+      overlappingEvents = await this.db
+        .select({ eventId: schema.scheduleEvents.eventId, dueAt: schema.scheduleEvents.dueAt })
+        .from(schema.scheduleEvents)
+        .where(and(
+          eq(schema.scheduleEvents.userId, userId),
+          eq(schema.scheduleEvents.poolId, input.poolId),
+          gte(schema.scheduleEvents.dueAt, dueStart),
+          lte(schema.scheduleEvents.dueAt, dueEnd),
+          eq(schema.scheduleEvents.status, 'scheduled')
+        ));
+
+      reminderEvents = await this.db
+        .select({ eventId: schema.scheduleEventNotifications.eventId })
+        .from(schema.scheduleEventNotifications)
+        .innerJoin(schema.scheduleEvents, eq(schema.scheduleEvents.eventId, schema.scheduleEventNotifications.eventId))
+        .where(and(
+          eq(schema.scheduleEvents.userId, userId),
+          eq(schema.scheduleEvents.poolId, input.poolId),
+          gte(schema.scheduleEvents.dueAt, dueStart),
+          lte(schema.scheduleEvents.dueAt, dueEnd)
+        ));
+    }
+
+    if ((overlappingEvents.length > 0 || reminderEvents.length > 0) && !input.confirmConflicts) {
+      throw new ScheduleEventConflictError({
+        overlappingEventIds: overlappingEvents.map((event) => event.eventId),
+        existingReminderEventIds: reminderEvents.map((event) => event.eventId),
+      });
+    }
+
+    const createdIds = [];
+    for (const item of toCreate) {
+      const [created] = await this.db.insert(schema.scheduleEvents).values({
+        userId,
+        poolId: input.poolId,
+        eventType: item.eventType,
+        title: item.title.trim(),
+        notes: item.notes?.trim() || null,
+        dueAt: item.dueAtDate,
+        timezone: item.timezone?.trim() || 'UTC',
+        recurrence: item.recurrence ?? 'once',
+        recurrenceInterval: 1,
+        reminderLeadMinutes: item.leadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
+      }).returning({ eventId: schema.scheduleEvents.eventId });
+      createdIds.push(created.eventId);
+    }
+
+    const items = [];
+    for (const eventId of createdIds) {
+      items.push(await this.getOwnedEvent(userId, eventId).then(serializeEvent));
+    }
+
+    return {
+      items,
+      createdEventIds: createdIds,
+      deduplicatedCount: uniqueCandidates.length - toCreate.length,
+      conflicts: {
+        overlappingEventIds: overlappingEvents.map((event) => event.eventId),
+        existingReminderEventIds: reminderEvents.map((event) => event.eventId),
+      },
+    };
   }
 
   async deleteEvent(userId: string, eventId: string) {
