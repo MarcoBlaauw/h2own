@@ -81,6 +81,7 @@ type ApiClient = {
     profile: (customFetch?: FetchLike) => Promise<Response>;
     updateProfile: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     preferences: (customFetch?: FetchLike) => Promise<Response>;
+    notificationReadiness: (customFetch?: FetchLike) => Promise<Response>;
     updatePreferences: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     updatePassword: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
     requestEmailChange: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
@@ -372,6 +373,7 @@ export const api: ApiClient = {
     updateProfile: (body, customFetch) =>
       apiFetch('/me/profile', jsonRequest(body, { method: 'PATCH' }), customFetch),
     preferences: (customFetch) => apiFetch('/me/preferences', {}, customFetch),
+    notificationReadiness: (customFetch) => apiFetch('/me/notification-readiness', {}, customFetch),
     updatePreferences: (body, customFetch) =>
       apiFetch('/me/preferences', jsonRequest(body, { method: 'PATCH' }), customFetch),
     updatePassword: (body, customFetch) =>

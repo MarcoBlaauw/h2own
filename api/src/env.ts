@@ -178,6 +178,11 @@ const envSchema = z.object({
   SMTP_FROM_EMAIL: emptyToUndefined(z.string().email().optional()),
   SMTP_FROM_NAME: emptyToUndefined(z.string().optional()),
   AUTH_LOCKOUT_ALERT_EMAILS: emptyToUndefined(z.string().optional()),
+
+  SMS_PROVIDER_API_KEY: emptyToUndefined(z.string().optional()),
+  SMS_PROVIDER_BASE_URL: emptyToUndefined(z.string().url().optional()),
+  PUSH_PROVIDER_API_KEY: emptyToUndefined(z.string().optional()),
+  PUSH_PROVIDER_BASE_URL: emptyToUndefined(z.string().url().optional()),
   SUPPORT_CONTACT_EMAILS: emptyToUndefined(z.string().optional()),
 
   LLM_PROVIDER: z.enum(['openai', 'anthropic', 'none']).default('none'),

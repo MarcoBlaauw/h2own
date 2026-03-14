@@ -364,6 +364,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   message TEXT NOT NULL,
   data JSONB,
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  provider_message_id VARCHAR(255),
+  error_category VARCHAR(64),
   sent_at TIMESTAMPTZ,
   delivered_at TIMESTAMPTZ,
   read_at TIMESTAMPTZ,
@@ -587,6 +589,9 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   notification_sms_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   notification_push_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   notification_email_address VARCHAR(255),
+  notification_phone_number VARCHAR(32),
+  notification_sms_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  notification_push_device_registered BOOLEAN NOT NULL DEFAULT FALSE,
   reminder_timezone VARCHAR(64),
   reminder_lead_minutes INTEGER NOT NULL DEFAULT 1440,
   quiet_hours_start CHAR(5),
@@ -767,8 +772,37 @@ CREATE TABLE IF NOT EXISTS schedule_event_notifications (
   sent_at TIMESTAMPTZ,
   delivered_at TIMESTAMPTZ,
   error_message TEXT,
+  error_category VARCHAR(64),
+  provider_message_id VARCHAR(255),
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at TIMESTAMPTZ,
+  next_retry_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS schedule_event_notifications_event_channel_reminder_idx
   ON schedule_event_notifications(event_id, channel, reminder_at);
+
+
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255);
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS error_category VARCHAR(64);
+
+ALTER TABLE schedule_event_notifications
+  ADD COLUMN IF NOT EXISTS error_category VARCHAR(64);
+ALTER TABLE schedule_event_notifications
+  ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255);
+ALTER TABLE schedule_event_notifications
+  ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE schedule_event_notifications
+  ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ;
+ALTER TABLE schedule_event_notifications
+  ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ;
+
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS notification_phone_number VARCHAR(32);
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS notification_sms_verified BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE user_preferences
+  ADD COLUMN IF NOT EXISTS notification_push_device_registered BOOLEAN NOT NULL DEFAULT FALSE;

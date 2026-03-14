@@ -13,6 +13,8 @@ export const notifications = pgTable('notifications', {
   message: text('message').notNull(),
   data: jsonb('data'),
   status: varchar('status', { length: 20 }).notNull().default('pending'),
+  providerMessageId: varchar('provider_message_id', { length: 255 }),
+  errorCategory: varchar('error_category', { length: 64 }),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   deliveredAt: timestamp('delivered_at', { withTimezone: true }),
   readAt: timestamp('read_at', { withTimezone: true }),

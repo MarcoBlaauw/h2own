@@ -16,6 +16,9 @@
     notificationSmsEnabled: boolean;
     notificationPushEnabled: boolean;
     notificationEmailAddress: string;
+    notificationPhoneNumber: string;
+    notificationSmsVerified: boolean;
+    notificationPushDeviceRegistered: boolean;
     reminderTimezone: string | null;
     reminderLeadMinutes: number;
     quietHoursStart: string | null;
@@ -40,11 +43,20 @@
     notificationSmsEnabled: data?.preferences?.notificationSmsEnabled ?? false,
     notificationPushEnabled: data?.preferences?.notificationPushEnabled ?? false,
     notificationEmailAddress: data?.preferences?.notificationEmailAddress ?? data?.session?.user?.email ?? '',
+    notificationPhoneNumber: data?.preferences?.notificationPhoneNumber ?? '',
+    notificationSmsVerified: data?.preferences?.notificationSmsVerified ?? false,
+    notificationPushDeviceRegistered: data?.preferences?.notificationPushDeviceRegistered ?? false,
     reminderTimezone: data?.preferences?.reminderTimezone ?? '',
     reminderLeadMinutes: data?.preferences?.reminderLeadMinutes ?? 1440,
     quietHoursStart: data?.preferences?.quietHoursStart ?? '',
     quietHoursEnd: data?.preferences?.quietHoursEnd ?? '',
   };
+
+
+  type ChannelReadiness = { channel: string; detail?: string; details?: string; ready?: boolean; verified?: boolean }
+  const readinessByChannel = new Map<string, ChannelReadiness>(
+    (data?.notificationReadiness?.channels ?? []).map((entry: ChannelReadiness) => [entry.channel, entry])
+  );
 
   let preferences = { ...initialPreferences };
   let defaultPoolSelection = preferences.defaultPoolId ?? '';
@@ -77,6 +89,9 @@
             : Number(preferences.preferredPoolTemp),
         defaultPoolId: preferences.defaultPoolId ?? null,
         notificationEmailAddress: preferences.notificationEmailAddress.trim() || null,
+        notificationPhoneNumber: preferences.notificationPhoneNumber.trim() || null,
+        notificationSmsVerified: preferences.notificationSmsVerified,
+        notificationPushDeviceRegistered: preferences.notificationPushDeviceRegistered,
         reminderTimezone: preferences.reminderTimezone?.trim() || null,
         reminderLeadMinutes: Number(preferences.reminderLeadMinutes),
         quietHoursStart: preferences.quietHoursStart?.trim() || null,
@@ -179,15 +194,21 @@
         </label>
         <label class="flex items-center gap-2 text-sm text-content-primary">
           <input type="checkbox" bind:checked={preferences.notificationPushEnabled} />
-          In-app push notifications
+          Push notifications
+          <span class="text-xs text-content-secondary">({readinessByChannel.get('push')?.detail ?? 'Unknown status'})</span>
         </label>
         <label class="flex items-center gap-2 text-sm text-content-primary">
           <input type="checkbox" bind:checked={preferences.notificationSmsEnabled} />
           SMS notifications
+          <span class="text-xs text-content-secondary">({readinessByChannel.get('sms')?.detail ?? 'Unknown status'})</span>
         </label>
         <label class="form-field">
           <span class="form-label">Notification email destination</span>
           <input class="form-control" type="email" bind:value={preferences.notificationEmailAddress} />
+        </label>
+        <label class="form-field">
+          <span class="form-label">SMS phone number</span>
+          <input class="form-control" type="tel" bind:value={preferences.notificationPhoneNumber} placeholder="+1 555 555 5555" />
         </label>
         <label class="form-field">
           <span class="form-label">Reminder timezone</span>
