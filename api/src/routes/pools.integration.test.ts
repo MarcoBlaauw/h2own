@@ -12,6 +12,8 @@ import {
   PoolValidationError,
 } from '../services/pools/index.js';
 import { accountIntegrationsService } from '../services/account-integrations.js';
+import { treatmentPlannerService } from '../services/treatment-planner.js';
+import { scheduleEventsService, ScheduleEventConflictError } from '../services/schedule-events.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
@@ -440,5 +442,109 @@ describe('GET /pools/:poolId integration', () => {
     expect(response.statusCode).toBe(200);
     expect(listSpy).toHaveBeenCalledWith(poolId, currentUserId, 25);
     expect(response.json().items).toHaveLength(1);
+  });
+});
+
+
+describe('POST /pools/:poolId/treatment-plans/:planId/schedule integration', () => {
+  let app: ReturnType<typeof Fastify>;
+  const currentUserId = '2b5c4d1a-6e12-4d2a-b9f3-0a6f3a29e1f2';
+  const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+  const planId = '9f7f7dd4-9442-45a2-9fd4-c23d46ddf6db';
+
+  beforeEach(async () => {
+    app = Fastify();
+    app.decorate('auth', {
+      verifySession: vi.fn(async (req: any) => {
+        req.user = { id: currentUserId, role: 'member' };
+      }),
+      requireRole: () => async () => {},
+    } as any);
+    app.decorate('audit', { log: vi.fn() } as any);
+
+    await app.register(poolsRoutes, { prefix: '/pools' });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  it('schedules selected treatment plan steps', async () => {
+    vi.spyOn(treatmentPlannerService, 'get').mockResolvedValue({
+      planId,
+      poolId,
+      responsePayload: {
+        stepByStepPlan: [
+          {
+            action: 'Add chlorine',
+            rationale: 'Raise FC',
+            recommendedDueAt: '2026-03-14T12:00:00.000Z',
+            eventType: 'dosage',
+            recurrence: 'weekly',
+            leadMinutes: 30,
+          },
+        ],
+      },
+    } as any);
+
+    vi.spyOn(scheduleEventsService, 'createEventsForTreatmentPlan').mockResolvedValue({
+      items: [],
+      createdEventIds: ['766f727e-76e4-427b-a0fd-2e07dfe4e924'],
+      deduplicatedCount: 0,
+      conflicts: { overlappingEventIds: [], existingReminderEventIds: [] },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/pools/${poolId}/treatment-plans/${planId}/schedule`,
+      payload: {
+        steps: [{ index: 0 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(scheduleEventsService.createEventsForTreatmentPlan).toHaveBeenCalledWith(currentUserId, expect.objectContaining({
+      poolId,
+      confirmConflicts: false,
+      items: [expect.objectContaining({
+        title: 'Add chlorine',
+        recurrence: 'weekly',
+      })],
+    }));
+  });
+
+  it('returns 409 when scheduling conflicts are detected', async () => {
+    vi.spyOn(treatmentPlannerService, 'get').mockResolvedValue({
+      planId,
+      poolId,
+      responsePayload: {
+        stepByStepPlan: [
+          { action: 'Brush walls', recommendedDueAt: '2026-03-14T12:00:00.000Z', eventType: 'maintenance', recurrence: 'once' },
+        ],
+      },
+    } as any);
+
+    vi.spyOn(scheduleEventsService, 'createEventsForTreatmentPlan').mockRejectedValue(new ScheduleEventConflictError({
+      overlappingEventIds: ['b2d2df43-1f13-4fe9-a92e-9fcb35b2452f'],
+      existingReminderEventIds: ['cda377af-a5dd-4460-adfa-e821f5a7129f'],
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/pools/${poolId}/treatment-plans/${planId}/schedule`,
+      payload: {
+        steps: [{ index: 0 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual(expect.objectContaining({
+      error: 'ScheduleEventConflict',
+      conflicts: expect.objectContaining({
+        overlappingEventIds: ['b2d2df43-1f13-4fe9-a92e-9fcb35b2452f'],
+      }),
+    }));
   });
 });

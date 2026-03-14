@@ -18,6 +18,7 @@ import { photosService } from '../services/photos.js';
 import { recommenderService } from '../services/recommender.js';
 import { accountIntegrationsService } from '../services/account-integrations.js';
 import { treatmentPlannerService } from '../services/treatment-planner.js';
+import { scheduleEventsService, ScheduleEventConflictError } from '../services/schedule-events.js';
 import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
 
@@ -243,6 +244,20 @@ const poolTreatmentPlanParams = z.object({
 });
 const getTreatmentPlansQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
+});
+
+
+const treatmentPlanScheduleStepSchema = z.object({
+  index: z.coerce.number().int().min(0),
+  dueAt: z.string().datetime({ offset: true }).optional(),
+  eventType: z.enum(['dosage', 'test', 'maintenance']).optional(),
+  leadMinutes: z.coerce.number().int().min(0).max(60 * 24 * 30).nullable().optional(),
+  recurrence: z.enum(['once', 'daily', 'weekly', 'monthly']).optional(),
+});
+
+const scheduleTreatmentPlanBody = z.object({
+  steps: z.array(treatmentPlanScheduleStepSchema).min(1),
+  confirmConflicts: z.coerce.boolean().optional().default(false),
 });
 
 const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
@@ -805,6 +820,104 @@ export async function poolsRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Treatment plan not found' });
       }
       return reply.send(item);
+    })
+  );
+
+
+
+  // POST /pools/:poolId/treatment-plans/:planId/schedule
+  app.post(
+    '/:poolId/treatment-plans/:planId/schedule',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, planId } = poolTreatmentPlanParams.parse(req.params);
+      const userId = req.user!.id;
+      const payload = scheduleTreatmentPlanBody.parse(req.body ?? {});
+
+      const plan = await treatmentPlannerService.get(poolId, planId, userId);
+      if (!plan) {
+        return reply.code(404).send({ error: 'Treatment plan not found' });
+      }
+
+      const responsePayload = plan.responsePayload as {
+        stepByStepPlan?: Array<{
+          action?: string;
+          rationale?: string;
+          recommendedDueAt?: string | null;
+          eventType?: 'dosage' | 'test' | 'maintenance' | null;
+          leadMinutes?: number | null;
+          recurrence?: 'once' | 'daily' | 'weekly' | 'monthly' | null;
+        }>;
+      } | null;
+
+      const steps = responsePayload?.stepByStepPlan ?? [];
+      const selected = payload.steps.map((selection) => ({
+        selection,
+        step: steps[selection.index],
+      }));
+
+      const invalidIndex = selected.find((item) => !item.step);
+      if (invalidIndex) {
+        return reply.code(400).send({ error: 'InvalidStepSelection', message: `No step at index ${invalidIndex.selection.index}` });
+      }
+
+      const missingSchedule = selected.find((item) => !(item.selection.dueAt ?? item.step?.recommendedDueAt));
+      if (missingSchedule) {
+        return reply.code(400).send({
+          error: 'MissingDueAt',
+          message: `Step ${missingSchedule.selection.index} is missing recommendedDueAt and no dueAt override was provided.`,
+        });
+      }
+
+      const unsupportedRecurrence = selected.find((item) => {
+        const recurrence = item.selection.recurrence ?? item.step?.recurrence ?? 'once';
+        return !['once', 'daily', 'weekly', 'monthly'].includes(recurrence as string);
+      });
+      if (unsupportedRecurrence) {
+        return reply.code(400).send({
+          error: 'UnsupportedRecurrence',
+          message: `Unsupported recurrence value for step ${unsupportedRecurrence.selection.index}. Allowed values: once|daily|weekly|monthly.`,
+        });
+      }
+
+      try {
+        const result = await scheduleEventsService.createEventsForTreatmentPlan(userId, {
+          poolId,
+          confirmConflicts: payload.confirmConflicts,
+          items: selected.map((item) => ({
+            title: item.step!.action ?? `Treatment step ${item.selection.index + 1}`,
+            notes: item.step!.rationale ?? null,
+            dueAt: item.selection.dueAt ?? item.step!.recommendedDueAt!,
+            eventType: item.selection.eventType ?? item.step!.eventType ?? 'maintenance',
+            leadMinutes: item.selection.leadMinutes ?? item.step!.leadMinutes ?? null,
+            recurrence: (item.selection.recurrence ?? item.step!.recurrence ?? 'once') as 'once' | 'daily' | 'weekly' | 'monthly',
+          })),
+        });
+
+        await writeAuditLog(app, req, {
+          action: 'treatment_plan.scheduled',
+          entity: 'treatment_plan',
+          entityId: planId,
+          userId,
+          poolId,
+          data: {
+            planId,
+            scheduleEventIds: result.createdEventIds,
+            deduplicatedCount: result.deduplicatedCount,
+            selectedStepIndexes: payload.steps.map((step) => step.index),
+          },
+        });
+
+        return reply.code(201).send(result);
+      } catch (error) {
+        if (error instanceof ScheduleEventConflictError) {
+          return reply.code(409).send({
+            error: error.code,
+            message: error.message,
+            conflicts: error.conflicts,
+          });
+        }
+        throw error;
+      }
     })
   );
 

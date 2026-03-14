@@ -161,6 +161,7 @@ type ApiClient = {
     generate: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
     list: (poolId: string, customFetch?: FetchLike, params?: { limit?: number }) => Promise<Response>;
     show: (poolId: string, planId: string, customFetch?: FetchLike) => Promise<Response>;
+    schedule: (poolId: string, planId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   recommendations: {
     preview: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
@@ -485,6 +486,8 @@ export const api: ApiClient = {
     },
     show: (poolId, planId, customFetch = fetch) =>
       apiFetch(`/pools/${poolId}/treatment-plans/${planId}`, {}, customFetch),
+    schedule: (poolId, planId, body, customFetch = fetch) =>
+      apiFetch(`/pools/${poolId}/treatment-plans/${planId}/schedule`, jsonRequest(body, { method: 'POST' }), customFetch),
   },
   recommendations: {
     preview: (poolId, customFetch) =>
