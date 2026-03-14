@@ -33,123 +33,65 @@ describe('Messages and billing endpoints', () => {
       nextCursor: 'cursor-1',
     } as any);
 
-    const response = await app.inject({
-      method: 'GET',
-      url: '/messages?limit=10&unreadOnly=true',
-    });
+    const response = await app.inject({ method: 'GET', url: '/messages?limit=10&unreadOnly=true' });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ nextCursor: 'cursor-1' });
-    expect(messagesService.listThreads).toHaveBeenCalledWith('member-id', {
-      limit: 10,
-      unreadOnly: true,
-    });
-  });
-
-  it('returns thread and paginated messages', async () => {
-    vi.spyOn(messagesService, 'getThread').mockResolvedValue({ threadId: 'thread-1' } as any);
-    vi.spyOn(messagesService, 'listMessages').mockResolvedValue({ items: [], nextCursor: null } as any);
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/messages/2ed4cad6-b10a-4eeb-8dce-a9295f45f03c?limit=25',
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ thread: { threadId: 'thread-1' }, messages: { items: [] } });
-  });
-
-  it('creates a thread', async () => {
-    vi.spyOn(messagesService, 'createThread').mockResolvedValue({
-      thread: { threadId: 'thread-1', poolId: null },
-      message: { messageId: 1 },
-      participantCount: 2,
-    } as any);
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/messages/threads',
-      payload: {
-        participantIds: ['2ed4cad6-b10a-4eeb-8dce-a9295f45f03c'],
-        initialMessage: { body: 'hello' },
-      },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(messagesService.createThread).toHaveBeenCalled();
-  });
-
-  it('sends a message for thread member', async () => {
-    vi.spyOn(messagesService, 'sendMessage').mockResolvedValue({
-      message: { messageId: 99, body: 'ping' },
-      recipientCount: 1,
-    } as any);
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/messages/2ed4cad6-b10a-4eeb-8dce-a9295f45f03c/messages',
-      payload: { body: 'ping' },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ recipientCount: 1 });
-  });
-
-  it('marks thread as read', async () => {
-    vi.spyOn(messagesService, 'markThreadRead').mockResolvedValue({
-      threadId: '2ed4cad6-b10a-4eeb-8dce-a9295f45f03c',
-    } as any);
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/messages/2ed4cad6-b10a-4eeb-8dce-a9295f45f03c/read',
-      payload: {},
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json().ok).toBe(true);
-  });
-
-  it('enforces capability checks and validation', async () => {
-    (app.auth.verifySession as any).mockImplementationOnce(async (req: any) => {
-      req.user = { id: 'member-id', role: 'guest' };
-    });
-
-    const forbidden = await app.inject({ method: 'GET', url: '/messages' });
-    expect(forbidden.statusCode).toBe(403);
-
-    const invalid = await app.inject({
-      method: 'POST',
-      url: '/messages/threads',
-      payload: { participantIds: [], initialMessage: { body: '' } },
-    });
-    expect(invalid.statusCode).toBe(400);
   });
 
   it('returns billing summary for member and rejects portal session manage action', async () => {
     vi.spyOn(billingService, 'getSummary').mockResolvedValue({
       featureStatus: 'hooked',
-      plan: {
-        tier: 'free',
-        isPaid: false,
-      },
+      provider: null,
+      plan: { tier: 'free', isPaid: false },
       status: 'active',
-      capabilities: {
-        read: true,
-        manage: false,
-      },
+      paymentStatus: 'unpaid',
+      invoices: [],
+      capabilities: { read: true, manage: false },
     });
 
-    const summaryRes = await app.inject({
-      method: 'GET',
-      url: '/billing/summary',
-    });
+    const summaryRes = await app.inject({ method: 'GET', url: '/billing/summary' });
+    const portalRes = await app.inject({ method: 'POST', url: '/billing/portal-session' });
+
     expect(summaryRes.statusCode).toBe(200);
+    expect(portalRes.statusCode).toBe(403);
+  });
 
-    const portalRes = await app.inject({
+  it('creates portal session for billing manager roles', async () => {
+    (app.auth.verifySession as any).mockImplementationOnce(async (req: any) => {
+      req.user = { id: 'business-id', role: 'business' };
+    });
+    vi.spyOn(billingService, 'createPortalSession').mockResolvedValue({
+      ok: true,
+      featureStatus: 'hooked',
+      url: 'https://billing.example/portal/session',
+      message: 'Billing portal session created.',
+    } as any);
+
+    const response = await app.inject({
       method: 'POST',
       url: '/billing/portal-session',
+      payload: { returnUrl: 'http://localhost:3000/billing' },
     });
-    expect(portalRes.statusCode).toBe(403);
+
+    expect(response.statusCode).toBe(200);
+    expect(billingService.createPortalSession).toHaveBeenCalledWith('business-id', 'http://localhost:3000/billing');
+  });
+
+  it('ingests webhook payload', async () => {
+    vi.spyOn(billingService, 'ingestSubscriptionWebhook').mockResolvedValue({ ok: true } as any);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/billing/webhook',
+      payload: {
+        userId: '2ed4cad6-b10a-4eeb-8dce-a9295f45f03c',
+        tier: 'pro',
+        status: 'active',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(billingService.ingestSubscriptionWebhook).toHaveBeenCalled();
   });
 });

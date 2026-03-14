@@ -2,6 +2,7 @@ import { db as dbClient } from '../../db/index.js';
 import * as schema from '../../db/schema/index.js';
 import { and, desc, eq, lt, or } from 'drizzle-orm';
 import { PoolCoreService } from './core.js';
+import { inventoryService } from '../inventory.js';
 
 export interface CreateTestData {
   fc?: number;
@@ -186,6 +187,15 @@ export class PoolTestingService {
       .insert(schema.chemicalActions)
       .values(dbData)
       .returning();
+
+    await inventoryService.decrementForChemicalAction({
+      poolId,
+      productId: data.chemicalId,
+      amount: data.amount,
+      unit: data.unit,
+      userId,
+      chemicalActionId: dosingEvent.actionId,
+    });
 
     return dosingEvent;
   }

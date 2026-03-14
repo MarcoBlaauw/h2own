@@ -57,6 +57,8 @@ export const ACCOUNT_CAPABILITIES = [
   'messages.send',
   'billing.read',
   'billing.manage',
+  'inventory.read',
+  'inventory.manage',
 ] as const;
 export type AccountCapability = (typeof ACCOUNT_CAPABILITIES)[number];
 
@@ -87,6 +89,7 @@ export const DEFAULT_ACCOUNT_ROLE_CAPABILITIES: Record<
     'messages.read',
     'messages.send',
     'billing.read',
+    'inventory.read',
   ]),
 };
 

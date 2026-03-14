@@ -139,6 +139,9 @@ const envSchema = z.object({
     .transform((value) => Number(value))
     .pipe(z.number().int().positive())
     .default('60'),
+  BILLING_PROVIDER_BASE_URL: emptyToUndefined(z.string().url().optional()),
+  BILLING_PROVIDER_API_KEY: emptyToUndefined(z.string().optional()),
+  BILLING_WEBHOOK_SECRET: emptyToUndefined(z.string().optional()),
   INTEGRATION_WEBHOOK_SHARED_SECRET: emptyToUndefined(z.string().optional()),
   WEATHER_STATION_WEBHOOK_SECRET: emptyToUndefined(z.string().optional()),
   WEATHER_CACHE_TTL_MINUTES: z

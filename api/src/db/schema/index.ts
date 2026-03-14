@@ -37,3 +37,5 @@ export * from './thread_participants.js';
 export * from './messages.js';
 export * from './message_deliveries.js';
 export * from './treatment_plans.js';
+export * from './inventory_stock.js';
+export * from './inventory_transactions.js';

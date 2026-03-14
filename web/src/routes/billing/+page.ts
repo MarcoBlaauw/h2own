@@ -21,7 +21,9 @@ export const load: PageLoad = async ({ parent, fetch }) => {
     payload: {
       featureStatus: 'placeholder',
       status: 'not_configured',
+      paymentStatus: 'unknown',
       plan: null,
+      invoices: [],
       capabilities: { read: false, manage: false },
     },
   };

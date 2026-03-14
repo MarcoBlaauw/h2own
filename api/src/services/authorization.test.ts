@@ -43,8 +43,11 @@ describe('authorization capability registry', () => {
     expect(hasAccountCapability('member', 'messages.send')).toBe(true);
     expect(hasAccountCapability('member', 'billing.read')).toBe(true);
     expect(hasAccountCapability('member', 'billing.manage')).toBe(false);
+    expect(hasAccountCapability('member', 'inventory.read')).toBe(true);
+    expect(hasAccountCapability('member', 'inventory.manage')).toBe(false);
     expect(hasAccountCapability('business', 'billing.manage')).toBe(true);
     expect(hasAccountCapability('admin', 'billing.manage')).toBe(true);
+    expect(hasAccountCapability('business', 'inventory.manage')).toBe(true);
   });
 
   it('enforces owner-only destructive capabilities', () => {
@@ -71,6 +74,8 @@ describe('authorization capability registry', () => {
   it('applies persisted role capability templates to runtime checks', () => {
     expect(hasSystemCapability('business', 'admin.users.read')).toBe(false);
     expect(hasAccountCapability('member', 'billing.manage')).toBe(false);
+    expect(hasAccountCapability('member', 'inventory.read')).toBe(true);
+    expect(hasAccountCapability('member', 'inventory.manage')).toBe(false);
 
     applyRoleCapabilityTemplates([
       {

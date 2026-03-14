@@ -43,6 +43,8 @@
     'messages.send': 'Send in-app messages.',
     'billing.read': 'View billing status and summaries.',
     'billing.manage': 'Manage billing actions such as portal access.',
+    'inventory.read': 'View inventory levels, stock health, and forecasts.',
+    'inventory.manage': 'Manage inventory adjustments and replenishment settings.',
   };
 
   $: activeRole = roles.find((role) => role.role === selectedRole) ?? null;

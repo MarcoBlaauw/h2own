@@ -23,6 +23,8 @@ import { messagesService } from '../services/messages.js';
 import { internalEventBus } from '../services/internal-events.js';
 import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
+import { inventoryService } from '../services/inventory.js';
+import { hasAccountCapability } from '../services/authorization.js';
 
 const createPoolSchema = z.object({
   ownerId: z.string().uuid().optional(),
@@ -549,6 +551,22 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { limit } = getDosingQuery.parse(req.query);
       const dosingEvents = await poolTestingService.getDosingEventsByPoolId(poolId, userId, limit);
       return reply.send(dosingEvents);
+    })
+  );
+
+
+  // GET /pools/:poolId/inventory
+  app.get(
+    '/:poolId/inventory',
+    wrapPoolRoute(async (req, reply) => {
+      if (!hasAccountCapability(req.user?.role, 'inventory.read')) {
+        return reply.code(403).send({ error: 'Forbidden' });
+      }
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      await poolCoreService.ensurePoolAccess(poolId, userId);
+      const inventory = await inventoryService.listPoolInventory(poolId);
+      return reply.send(inventory);
     })
   );
 
