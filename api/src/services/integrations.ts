@@ -8,6 +8,8 @@ export const INTEGRATION_PROVIDERS = [
   'google_maps',
   'captcha',
   'billing',
+  'sms',
+  'push',
 ] as const;
 
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
@@ -57,6 +59,8 @@ const DEFAULT_DISPLAY_NAMES: Record<IntegrationProvider, string> = {
   google_maps: 'Google Maps',
   captcha: 'CAPTCHA Provider',
   billing: 'Billing Provider',
+  sms: 'SMS Provider',
+  push: 'Push Provider',
 };
 
 type IntegrationSeed = {
@@ -104,6 +108,22 @@ const getProviderSeedFromEnv = (provider: IntegrationProvider): IntegrationSeed 
       enabled: true,
       config: hasConfigValues ? config : undefined,
       credentials,
+    };
+  }
+
+  if (provider === 'sms') {
+    return {
+      enabled: true,
+      config: env.SMS_PROVIDER_BASE_URL ? { baseUrl: env.SMS_PROVIDER_BASE_URL } : undefined,
+      credentials: env.SMS_PROVIDER_API_KEY ? { apiKey: env.SMS_PROVIDER_API_KEY } : undefined,
+    };
+  }
+
+  if (provider === 'push') {
+    return {
+      enabled: true,
+      config: env.PUSH_PROVIDER_BASE_URL ? { baseUrl: env.PUSH_PROVIDER_BASE_URL } : undefined,
+      credentials: env.PUSH_PROVIDER_API_KEY ? { apiKey: env.PUSH_PROVIDER_API_KEY } : undefined,
     };
   }
 

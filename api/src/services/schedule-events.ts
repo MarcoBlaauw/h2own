@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
-import { mailerService } from './mailer.js';
-import { auditWriterService } from './audit-writer.js';
+import { notificationDispatcherService, type NotificationChannel } from './notification-dispatcher.js';
 
 export type ScheduleEventType = 'dosage' | 'test' | 'maintenance';
 export type ScheduleRecurrence = 'once' | 'daily' | 'weekly' | 'monthly';
@@ -49,7 +48,11 @@ export type ScheduleEventUpdate = Partial<ScheduleEventInput> & {
 type ReminderPreferences = {
   notificationEmailEnabled: boolean;
   notificationEmailAddress: string | null;
+  notificationSmsEnabled: boolean;
   notificationPushEnabled: boolean;
+  notificationPhoneNumber: string | null;
+  notificationSmsVerified: boolean;
+  notificationPushDeviceRegistered: boolean;
   reminderTimezone: string | null;
   reminderLeadMinutes: number;
   quietHoursStart: string | null;
@@ -458,7 +461,11 @@ export class ScheduleEventsService {
       .select({
         notificationEmailEnabled: schema.userPreferences.notificationEmailEnabled,
         notificationEmailAddress: schema.userPreferences.notificationEmailAddress,
+        notificationSmsEnabled: schema.userPreferences.notificationSmsEnabled,
         notificationPushEnabled: schema.userPreferences.notificationPushEnabled,
+        notificationPhoneNumber: schema.userPreferences.notificationPhoneNumber,
+        notificationSmsVerified: schema.userPreferences.notificationSmsVerified,
+        notificationPushDeviceRegistered: schema.userPreferences.notificationPushDeviceRegistered,
         reminderTimezone: schema.userPreferences.reminderTimezone,
         reminderLeadMinutes: schema.userPreferences.reminderLeadMinutes,
         quietHoursStart: schema.userPreferences.quietHoursStart,
@@ -471,7 +478,11 @@ export class ScheduleEventsService {
     return {
       notificationEmailEnabled: prefs?.notificationEmailEnabled ?? true,
       notificationEmailAddress: prefs?.notificationEmailAddress ?? user?.email ?? null,
+      notificationSmsEnabled: prefs?.notificationSmsEnabled ?? false,
       notificationPushEnabled: prefs?.notificationPushEnabled ?? false,
+      notificationPhoneNumber: prefs?.notificationPhoneNumber ?? null,
+      notificationSmsVerified: prefs?.notificationSmsVerified ?? false,
+      notificationPushDeviceRegistered: prefs?.notificationPushDeviceRegistered ?? false,
       reminderTimezone: prefs?.reminderTimezone ?? null,
       reminderLeadMinutes: prefs?.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
       quietHoursStart: prefs?.quietHoursStart ?? null,
@@ -497,6 +508,31 @@ export class ScheduleEventsService {
     };
   }
 
+  private isQuietHours(now: Date, prefs: ReminderPreferences) {
+    if (!prefs.quietHoursStart || !prefs.quietHoursEnd) return false;
+    const [startHour, startMinute] = prefs.quietHoursStart.split(':').map(Number);
+    const [endHour, endMinute] = prefs.quietHoursEnd.split(':').map(Number);
+    const minutesNow = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const start = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    if (Number.isNaN(start) || Number.isNaN(end)) return false;
+    if (start === end) return false;
+    if (start < end) return minutesNow >= start && minutesNow < end;
+    return minutesNow >= start || minutesNow < end;
+  }
+
+  private getReminderChannels(prefs: ReminderPreferences): NotificationChannel[] {
+    const channels: NotificationChannel[] = ['in_app'];
+    if (prefs.notificationEmailEnabled && prefs.notificationEmailAddress) channels.push('email');
+    if (prefs.notificationSmsEnabled && prefs.notificationSmsVerified && prefs.notificationPhoneNumber) channels.push('sms');
+    if (prefs.notificationPushEnabled && prefs.notificationPushDeviceRegistered) channels.push('push');
+    return channels;
+  }
+
+  private backoffMinutes(attempt: number) {
+    return Math.min(60, Math.max(1, 2 ** Math.max(0, attempt - 1)));
+  }
+
   async processDueReminders(now = new Date()) {
     const dueRows = await this.db
       .select({
@@ -508,11 +544,7 @@ export class ScheduleEventsService {
         title: schema.scheduleEvents.title,
         notes: schema.scheduleEvents.notes,
         dueAt: schema.scheduleEvents.dueAt,
-        timezone: schema.scheduleEvents.timezone,
-        recurrence: schema.scheduleEvents.recurrence,
-        recurrenceInterval: schema.scheduleEvents.recurrenceInterval,
         reminderLeadMinutes: schema.scheduleEvents.reminderLeadMinutes,
-        lastReminderAt: schema.scheduleEvents.lastReminderAt,
       })
       .from(schema.scheduleEvents)
       .innerJoin(schema.pools, eq(schema.scheduleEvents.poolId, schema.pools.poolId))
@@ -528,132 +560,132 @@ export class ScheduleEventsService {
       const prefs = await this.getReminderPreferences(row.userId);
       const leadMinutes = row.reminderLeadMinutes ?? prefs.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES;
       const reminderAt = new Date(row.dueAt.getTime() - leadMinutes * 60_000);
-      if (reminderAt > now) {
-        continue;
-      }
+      if (reminderAt > now) continue;
+      if (this.isQuietHours(now, prefs)) continue;
 
-      const [existingReminder] = await this.db
-        .select({ reminderId: schema.scheduleEventNotifications.reminderId })
-        .from(schema.scheduleEventNotifications)
-        .where(
-          and(
-            eq(schema.scheduleEventNotifications.eventId, row.eventId),
-            eq(schema.scheduleEventNotifications.channel, 'in_app'),
-            eq(schema.scheduleEventNotifications.reminderAt, reminderAt)
-          )
-        )
-        .limit(1);
-
-      if (existingReminder) {
-        continue;
-      }
-
-      processed += 1;
       const reminderText = this.buildReminderText(row);
-      const deliveredAt = new Date();
+      const channels = this.getReminderChannels(prefs);
 
-      const [inAppNotification] = await this.db
-        .insert(schema.notifications)
-        .values({
+      for (const channel of channels) {
+        const [existingReminder] = await this.db
+          .select({
+            reminderId: schema.scheduleEventNotifications.reminderId,
+            attemptCount: schema.scheduleEventNotifications.attemptCount,
+            status: schema.scheduleEventNotifications.status,
+          })
+          .from(schema.scheduleEventNotifications)
+          .where(
+            and(
+              eq(schema.scheduleEventNotifications.eventId, row.eventId),
+              eq(schema.scheduleEventNotifications.channel, channel),
+              eq(schema.scheduleEventNotifications.reminderAt, reminderAt)
+            )
+          )
+          .limit(1);
+
+        if (existingReminder?.status === 'delivered') continue;
+
+        const attemptCount = Number(existingReminder?.attemptCount ?? 0) + 1;
+        const dispatchResult = await notificationDispatcherService.dispatch({
           userId: row.userId,
-          poolId: row.poolId,
-          channel: 'in_app',
+          channel,
           title: reminderText.title,
           message: reminderText.message,
-          data: {
-            eventId: row.eventId,
-            dueAt: row.dueAt.toISOString(),
-            eventType: row.eventType,
-          },
-          status: 'delivered',
-          sentAt: deliveredAt,
-          deliveredAt,
-        })
-        .returning({ notificationId: schema.notifications.notificationId });
+          email: prefs.notificationEmailAddress,
+          phone: prefs.notificationPhoneNumber,
+          pushDeviceRegistered: prefs.notificationPushDeviceRegistered,
+          metadata: { eventId: row.eventId },
+        });
 
-      notificationsCreated += 1;
-
-      await this.db.insert(schema.scheduleEventNotifications).values({
-        eventId: row.eventId,
-        userId: row.userId,
-        channel: 'in_app',
-        reminderAt,
-        status: 'delivered',
-        notificationId: inAppNotification.notificationId,
-        sentAt: deliveredAt,
-        deliveredAt,
-      });
-
-      if (prefs.notificationEmailEnabled && prefs.notificationEmailAddress) {
-        try {
-          await mailerService.sendScheduleReminderEmail(prefs.notificationEmailAddress, {
-            title: row.title,
-            eventType: row.eventType,
-            poolName: row.poolName,
-            dueAt: row.dueAt.toISOString(),
-            notes: row.notes,
-          });
-
-          const [emailNotification] = await this.db
+        const deliveredAt = new Date();
+        if (dispatchResult.ok) {
+          const [notification] = await this.db
             .insert(schema.notifications)
             .values({
               userId: row.userId,
               poolId: row.poolId,
-              channel: 'email',
+              channel,
               title: reminderText.title,
               message: reminderText.message,
-              data: {
-                eventId: row.eventId,
-                dueAt: row.dueAt.toISOString(),
-                eventType: row.eventType,
-              },
+              data: { eventId: row.eventId, dueAt: row.dueAt.toISOString(), eventType: row.eventType },
               status: 'delivered',
+              providerMessageId: dispatchResult.providerMessageId,
               sentAt: deliveredAt,
               deliveredAt,
             })
             .returning({ notificationId: schema.notifications.notificationId });
 
-          await this.db.insert(schema.scheduleEventNotifications).values({
-            eventId: row.eventId,
-            userId: row.userId,
-            channel: 'email',
-            reminderAt,
-            status: 'delivered',
-            notificationId: emailNotification.notificationId,
-            sentAt: deliveredAt,
-            deliveredAt,
-          });
+          if (existingReminder) {
+            await this.db
+              .update(schema.scheduleEventNotifications)
+              .set({
+                status: 'delivered',
+                notificationId: notification.notificationId,
+                sentAt: deliveredAt,
+                deliveredAt,
+                providerMessageId: dispatchResult.providerMessageId,
+                errorMessage: null,
+                errorCategory: null,
+                attemptCount,
+                lastAttemptAt: deliveredAt,
+                nextRetryAt: null,
+              })
+              .where(eq(schema.scheduleEventNotifications.reminderId, existingReminder.reminderId));
+          } else {
+            await this.db.insert(schema.scheduleEventNotifications).values({
+              eventId: row.eventId,
+              userId: row.userId,
+              channel,
+              reminderAt,
+              status: 'delivered',
+              notificationId: notification.notificationId,
+              providerMessageId: dispatchResult.providerMessageId,
+              sentAt: deliveredAt,
+              deliveredAt,
+              attemptCount,
+              lastAttemptAt: deliveredAt,
+            });
+          }
+
           notificationsCreated += 1;
-          emailsSent += 1;
-        } catch (error) {
-          await this.db.insert(schema.scheduleEventNotifications).values({
-            eventId: row.eventId,
-            userId: row.userId,
-            channel: 'email',
-            reminderAt,
-            status: 'failed',
-            errorMessage: error instanceof Error ? error.message : 'Unknown reminder email failure',
-          });
+          if (channel === 'email') emailsSent += 1;
+        } else {
+          const nextRetryAt = new Date(now.getTime() + this.backoffMinutes(attemptCount) * 60_000);
+          const status = attemptCount >= 5 ? 'failed' : 'retry';
+          if (existingReminder) {
+            await this.db
+              .update(schema.scheduleEventNotifications)
+              .set({
+                status,
+                errorMessage: dispatchResult.errorMessage ?? 'Notification dispatch failed',
+                errorCategory: dispatchResult.errorCategory ?? 'unknown',
+                attemptCount,
+                lastAttemptAt: now,
+                nextRetryAt: status === 'retry' ? nextRetryAt : null,
+              })
+              .where(eq(schema.scheduleEventNotifications.reminderId, existingReminder.reminderId));
+          } else {
+            await this.db.insert(schema.scheduleEventNotifications).values({
+              eventId: row.eventId,
+              userId: row.userId,
+              channel,
+              reminderAt,
+              status,
+              errorMessage: dispatchResult.errorMessage ?? 'Notification dispatch failed',
+              errorCategory: dispatchResult.errorCategory ?? 'unknown',
+              attemptCount,
+              lastAttemptAt: now,
+              nextRetryAt: status === 'retry' ? nextRetryAt : null,
+            });
+          }
         }
       }
 
+      processed += 1;
       await this.db
         .update(schema.scheduleEvents)
-        .set({ lastReminderAt: deliveredAt, updatedAt: new Date() })
+        .set({ lastReminderAt: now, updatedAt: new Date() })
         .where(eq(schema.scheduleEvents.eventId, row.eventId));
-
-      await auditWriterService.write({
-        action: 'schedule.reminder.sent',
-        entity: 'schedule_event',
-        entityId: row.eventId,
-        userId: row.userId,
-        poolId: row.poolId,
-        data: {
-          reminderAt: reminderAt.toISOString(),
-          dueAt: row.dueAt.toISOString(),
-          emailSent: prefs.notificationEmailEnabled && Boolean(prefs.notificationEmailAddress),
-        },
-      });
     }
 
     return { processed, notificationsCreated, emailsSent };

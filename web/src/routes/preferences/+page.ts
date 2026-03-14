@@ -7,16 +7,18 @@ export const load: PageLoad = async ({ parent, fetch }) => {
   if (!session?.user) throw redirect(302, '/auth/login');
 
   try {
-    const [preferencesRes, poolsRes] = await Promise.all([
+    const [preferencesRes, poolsRes, readinessRes] = await Promise.all([
       api.me.preferences(fetch),
       api.pools.list(fetch),
+      api.me.notificationReadiness(fetch),
     ]);
     const preferences = preferencesRes.ok ? await preferencesRes.json() : null;
     const pools = poolsRes.ok ? await poolsRes.json() : [];
-    return { session, preferences, pools };
+    const notificationReadiness = readinessRes.ok ? await readinessRes.json() : { channels: [] };
+    return { session, preferences, pools, notificationReadiness };
   } catch (error) {
     console.error('Failed to load preferences', error);
   }
 
-  return { session, preferences: null, pools: [] };
+  return { session, preferences: null, pools: [], notificationReadiness: { channels: [] } };
 };

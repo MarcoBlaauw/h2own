@@ -8,6 +8,7 @@ import { mailerService } from '../services/mailer.js';
 import { totpService } from '../services/totp.js';
 import { env } from '../env.js';
 import { writeAuditLog } from './audit.js';
+import { notificationDispatcherService } from '../services/notification-dispatcher.js';
 
 const nullableTrimmedString = (maxLength: number) =>
   z
@@ -47,6 +48,9 @@ const updatePreferencesBodySchema = z
     notificationSmsEnabled: z.boolean().optional(),
     notificationPushEnabled: z.boolean().optional(),
     notificationEmailAddress: z.string().trim().email().nullable().optional(),
+    notificationPhoneNumber: z.string().trim().min(7).max(32).nullable().optional(),
+    notificationSmsVerified: z.boolean().optional(),
+    notificationPushDeviceRegistered: z.boolean().optional(),
     reminderTimezone: z.string().trim().min(1).max(64).nullable().optional(),
     reminderLeadMinutes: z.number().int().min(0).max(60 * 24 * 30).optional(),
     quietHoursStart: timeOfDaySchema.nullable().optional(),
@@ -209,6 +213,51 @@ export async function meRoutes(app: FastifyInstance) {
     }
 
     return reply.send(preferences);
+  });
+
+
+  app.get('/notification-readiness', async (req, reply) => {
+    const preferences = await preferencesService.getPreferences(req.user!.id);
+    if (!preferences) {
+      return reply.code(404).send({ error: 'NotFound' });
+    }
+
+    const channels = notificationDispatcherService.getChannelHealth().map((channel) => {
+      if (channel.channel === 'sms') {
+        return {
+          ...channel,
+          verified: preferences.notificationSmsVerified,
+          recipientReady: Boolean(preferences.notificationPhoneNumber),
+          detail: !preferences.notificationPhoneNumber
+            ? 'Phone not registered.'
+            : !preferences.notificationSmsVerified
+              ? 'Phone not verified.'
+              : channel.details,
+        };
+      }
+
+      if (channel.channel === 'push') {
+        return {
+          ...channel,
+          verified: preferences.notificationPushDeviceRegistered,
+          recipientReady: preferences.notificationPushDeviceRegistered,
+          detail: preferences.notificationPushDeviceRegistered ? channel.details : 'Device not registered.',
+        };
+      }
+
+      if (channel.channel === 'email') {
+        return {
+          ...channel,
+          verified: Boolean(preferences.notificationEmailAddress),
+          recipientReady: Boolean(preferences.notificationEmailAddress),
+          detail: preferences.notificationEmailAddress ? channel.details : 'Email destination not set.',
+        };
+      }
+
+      return { ...channel, verified: true, recipientReady: true, detail: channel.details };
+    });
+
+    return reply.send({ channels });
   });
 
   app.patch('/preferences', async (req, reply) => {

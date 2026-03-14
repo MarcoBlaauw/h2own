@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, varchar, uniqueIndex } from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, uuid, varchar, uniqueIndex } from 'drizzle-orm/pg-core';
 import { notifications } from './notifications.js';
 import { scheduleEvents } from './schedule_events.js';
 import { users } from './users.js';
@@ -22,6 +22,11 @@ export const scheduleEventNotifications = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     errorMessage: text('error_message'),
+    errorCategory: varchar('error_category', { length: 64 }),
+    providerMessageId: varchar('provider_message_id', { length: 255 }),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+    nextRetryAt: timestamp('next_retry_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

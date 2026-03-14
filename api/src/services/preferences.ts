@@ -14,6 +14,9 @@ export type PreferencesData = {
   notificationSmsEnabled: boolean;
   notificationPushEnabled: boolean;
   notificationEmailAddress: string | null;
+  notificationPhoneNumber: string | null;
+  notificationSmsVerified: boolean;
+  notificationPushDeviceRegistered: boolean;
   reminderTimezone: string | null;
   reminderLeadMinutes: number;
   quietHoursStart: string | null;
@@ -34,6 +37,9 @@ const defaultPreferences = (userId: string, email: string): PreferencesData => (
   notificationSmsEnabled: false,
   notificationPushEnabled: false,
   notificationEmailAddress: email,
+  notificationPhoneNumber: null,
+  notificationSmsVerified: false,
+  notificationPushDeviceRegistered: false,
   reminderTimezone: null,
   reminderLeadMinutes: 1440,
   quietHoursStart: null,
@@ -46,6 +52,13 @@ const normalizeCurrency = (value: string | undefined) => {
 };
 
 const normalizeEmail = (value: string | null | undefined) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const normalizePhone = (value: string | null | undefined) => {
   if (value === undefined) return undefined;
   if (value === null) return null;
   const trimmed = value.trim();
@@ -101,6 +114,9 @@ export class PreferencesService {
         notificationSmsEnabled: schema.userPreferences.notificationSmsEnabled,
         notificationPushEnabled: schema.userPreferences.notificationPushEnabled,
         notificationEmailAddress: schema.userPreferences.notificationEmailAddress,
+        notificationPhoneNumber: schema.userPreferences.notificationPhoneNumber,
+        notificationSmsVerified: schema.userPreferences.notificationSmsVerified,
+        notificationPushDeviceRegistered: schema.userPreferences.notificationPushDeviceRegistered,
         reminderTimezone: schema.userPreferences.reminderTimezone,
         reminderLeadMinutes: schema.userPreferences.reminderLeadMinutes,
         quietHoursStart: schema.userPreferences.quietHoursStart,
@@ -124,6 +140,9 @@ export class PreferencesService {
       notificationSmsEnabled: row.notificationSmsEnabled ?? false,
       notificationPushEnabled: row.notificationPushEnabled ?? false,
       notificationEmailAddress: row.notificationEmailAddress ?? user.email,
+      notificationPhoneNumber: row.notificationPhoneNumber ?? null,
+      notificationSmsVerified: row.notificationSmsVerified ?? false,
+      notificationPushDeviceRegistered: row.notificationPushDeviceRegistered ?? false,
       reminderTimezone: row.reminderTimezone ?? null,
       reminderLeadMinutes: row.reminderLeadMinutes ?? 1440,
       quietHoursStart: row.quietHoursStart ?? null,
@@ -140,6 +159,7 @@ export class PreferencesService {
       ...data,
       currency: normalizeCurrency(data.currency) ?? current.currency,
       notificationEmailAddress: normalizeEmail(data.notificationEmailAddress) ?? current.notificationEmailAddress,
+      notificationPhoneNumber: normalizePhone(data.notificationPhoneNumber) ?? current.notificationPhoneNumber,
       defaultPoolId: await this.validateDefaultPool(
         userId,
         data.defaultPoolId !== undefined ? data.defaultPoolId : current.defaultPoolId
@@ -166,6 +186,9 @@ export class PreferencesService {
           notificationSmsEnabled: merged.notificationSmsEnabled,
           notificationPushEnabled: merged.notificationPushEnabled,
           notificationEmailAddress: merged.notificationEmailAddress,
+          notificationPhoneNumber: merged.notificationPhoneNumber,
+          notificationSmsVerified: merged.notificationSmsVerified,
+          notificationPushDeviceRegistered: merged.notificationPushDeviceRegistered,
           reminderTimezone: merged.reminderTimezone,
           reminderLeadMinutes: merged.reminderLeadMinutes,
           quietHoursStart: merged.quietHoursStart,
@@ -186,6 +209,9 @@ export class PreferencesService {
         notificationSmsEnabled: merged.notificationSmsEnabled,
         notificationPushEnabled: merged.notificationPushEnabled,
         notificationEmailAddress: merged.notificationEmailAddress,
+        notificationPhoneNumber: merged.notificationPhoneNumber,
+        notificationSmsVerified: merged.notificationSmsVerified,
+        notificationPushDeviceRegistered: merged.notificationPushDeviceRegistered,
         reminderTimezone: merged.reminderTimezone,
         reminderLeadMinutes: merged.reminderLeadMinutes,
         quietHoursStart: merged.quietHoursStart,

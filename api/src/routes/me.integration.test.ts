@@ -162,6 +162,13 @@ describe('me routes', () => {
       notificationSmsEnabled: false,
       notificationPushEnabled: false,
       notificationEmailAddress: 'member@example.com',
+      notificationPhoneNumber: null,
+      notificationSmsVerified: false,
+      notificationPushDeviceRegistered: false,
+      reminderTimezone: null,
+      reminderLeadMinutes: 1440,
+      quietHoursStart: null,
+      quietHoursEnd: null,
     });
 
     const response = await app.inject({ method: 'GET', url: '/me/preferences' });
@@ -172,6 +179,36 @@ describe('me routes', () => {
       theme: 'light',
       preferredPoolTemp: 84,
     });
+  });
+
+
+  it('returns notification readiness for authenticated user', async () => {
+    vi.spyOn(preferencesService, 'getPreferences').mockResolvedValue({
+      userId: currentUserId,
+      theme: 'light',
+      temperatureUnit: 'F',
+      measurementSystem: 'imperial',
+      currency: 'USD',
+      preferredPoolTemp: null,
+      defaultPoolId: null,
+      notificationEmailEnabled: true,
+      notificationSmsEnabled: true,
+      notificationPushEnabled: true,
+      notificationEmailAddress: 'member@example.com',
+      notificationPhoneNumber: null,
+      notificationSmsVerified: false,
+      notificationPushDeviceRegistered: false,
+      reminderTimezone: null,
+      reminderLeadMinutes: 1440,
+      quietHoursStart: null,
+      quietHoursEnd: null,
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/me/notification-readiness' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().channels.map((c: any) => c.channel)).toEqual(
+      expect.arrayContaining(['email', 'sms', 'push', 'in_app'])
+    );
   });
 
   it('updates preferences fields', async () => {
@@ -187,6 +224,13 @@ describe('me routes', () => {
       notificationSmsEnabled: false,
       notificationPushEnabled: true,
       notificationEmailAddress: 'member@example.com',
+      notificationPhoneNumber: null,
+      notificationSmsVerified: false,
+      notificationPushDeviceRegistered: false,
+      reminderTimezone: null,
+      reminderLeadMinutes: 1440,
+      quietHoursStart: null,
+      quietHoursEnd: null,
     });
 
     const response = await app.inject({
