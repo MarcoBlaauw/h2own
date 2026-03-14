@@ -39,6 +39,7 @@ import { SensorRetentionWorker } from "./services/sensor-retention-worker.js";
 import { IntegrationRetryWorker } from "./services/integration-retry-worker.js";
 import { ScheduleRemindersWorker } from "./services/schedule-reminders-worker.js";
 import { scheduleEventsService } from "./services/schedule-events.js";
+import { treatmentPlanEventsService } from "./services/treatment-plan-events.js";
 
 async function buildApp() {
   const app = Fastify({
@@ -165,6 +166,8 @@ async function buildApp() {
       }
     },
   });
+
+  treatmentPlanEventsService.register();
 
   try {
     const templates = await roleCapabilityTemplatesService.listTemplates();

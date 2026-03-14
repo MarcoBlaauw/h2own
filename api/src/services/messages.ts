@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 
@@ -29,6 +29,8 @@ const encodeMessageCursor = (createdAt: Date, messageId: number) =>
 
 export class MessagesService {
   constructor(private readonly db = dbClient) {}
+
+  static readonly DEFAULT_POOL_THREAD_SUBJECT = 'Pool team updates';
 
   async listThreads(userId: string, filters: ListThreadsFilters = {}) {
     const limit = Math.min(50, Math.max(1, filters.limit ?? 20));
@@ -71,6 +73,20 @@ export class MessagesService {
       .where(
         and(
           eq(schema.threadParticipants.userId, userId),
+          or(
+            isNull(schema.messageThreads.poolId),
+            exists(
+              this.db
+                .select({ poolId: schema.poolMembers.poolId })
+                .from(schema.poolMembers)
+                .where(
+                  and(
+                    eq(schema.poolMembers.poolId, schema.messageThreads.poolId),
+                    eq(schema.poolMembers.userId, userId)
+                  )
+                )
+            )
+          ),
           filters.poolId ? eq(schema.messageThreads.poolId, filters.poolId) : undefined,
           filters.cursor ? ltCursorClause(filters.cursor) : undefined
         )
@@ -184,6 +200,13 @@ export class MessagesService {
     initialMessage: { body: string; attachments?: unknown; subject?: string },
     poolId?: string
   ) {
+    if (poolId) {
+      const permitted = await this.getPoolMemberIds(poolId);
+      const filtered = new Set(permitted);
+      if (!filtered.has(senderId)) return null;
+      participantIds = participantIds.filter((id) => filtered.has(id));
+    }
+
     const dedupedParticipants = Array.from(new Set([senderId, ...participantIds]));
 
     const [thread] = await this.db
@@ -205,6 +228,43 @@ export class MessagesService {
     return { thread, message, participantCount: dedupedParticipants.length };
   }
 
+  async getOrCreatePoolDefaultThread(poolId: string, actorUserId: string, autoCreate = true) {
+    const memberIds = await this.getPoolMemberIds(poolId);
+    if (!memberIds.includes(actorUserId)) {
+      return null;
+    }
+
+    const [existing] = await this.db
+      .select({ threadId: schema.messageThreads.threadId })
+      .from(schema.messageThreads)
+      .where(and(eq(schema.messageThreads.poolId, poolId), eq(schema.messageThreads.subject, MessagesService.DEFAULT_POOL_THREAD_SUBJECT)))
+      .limit(1);
+
+    if (existing) {
+      await this.syncPoolThreadParticipants(existing.threadId, poolId, memberIds);
+      return existing;
+    }
+
+    if (!autoCreate) return null;
+
+    const [thread] = await this.db.insert(schema.messageThreads).values({
+      createdBy: actorUserId,
+      poolId,
+      subject: MessagesService.DEFAULT_POOL_THREAD_SUBJECT,
+    }).returning({ threadId: schema.messageThreads.threadId });
+
+    await this.db.insert(schema.threadParticipants).values(
+      memberIds.map((userId) => ({
+        threadId: thread.threadId,
+        userId,
+        role: userId === actorUserId ? 'owner' : 'member',
+        lastReadAt: userId === actorUserId ? new Date() : null,
+      }))
+    );
+
+    return thread;
+  }
+
   async sendMessage(threadId: string, senderId: string, body: string, attachments?: unknown) {
     const isMember = await this.isParticipant(threadId, senderId);
     if (!isMember) return null;
@@ -224,10 +284,35 @@ export class MessagesService {
       .set({ updatedAt: new Date() })
       .where(eq(schema.messageThreads.threadId, threadId));
 
+    const [thread] = await this.db
+      .select({ poolId: schema.messageThreads.poolId })
+      .from(schema.messageThreads)
+      .where(eq(schema.messageThreads.threadId, threadId))
+      .limit(1);
+
+    if (thread?.poolId) {
+      const senderAllowed = await this.isPoolMember(thread.poolId, senderId);
+      if (!senderAllowed) return null;
+    }
+
     const recipients = await this.db
       .select({ userId: schema.threadParticipants.userId })
       .from(schema.threadParticipants)
-      .where(and(eq(schema.threadParticipants.threadId, threadId), ne(schema.threadParticipants.userId, senderId)));
+      .where(and(
+        eq(schema.threadParticipants.threadId, threadId),
+        ne(schema.threadParticipants.userId, senderId),
+        thread?.poolId
+          ? exists(
+              this.db
+                .select({ userId: schema.poolMembers.userId })
+                .from(schema.poolMembers)
+                .where(and(
+                  eq(schema.poolMembers.poolId, thread.poolId),
+                  eq(schema.poolMembers.userId, schema.threadParticipants.userId)
+                ))
+            )
+          : undefined
+      ));
 
     if (recipients.length > 0) {
       await this.db.insert(schema.messageDeliveries).values(
@@ -260,6 +345,47 @@ export class MessagesService {
       .from(schema.threadParticipants)
       .where(and(eq(schema.threadParticipants.threadId, threadId), eq(schema.threadParticipants.userId, userId)));
     return Boolean(row);
+  }
+
+  private async getPoolMemberIds(poolId: string) {
+    const rows = await this.db
+      .select({ userId: schema.poolMembers.userId })
+      .from(schema.poolMembers)
+      .where(eq(schema.poolMembers.poolId, poolId));
+    return rows.map((row) => row.userId);
+  }
+
+  private async isPoolMember(poolId: string, userId: string) {
+    const [row] = await this.db
+      .select({ userId: schema.poolMembers.userId })
+      .from(schema.poolMembers)
+      .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, userId)))
+      .limit(1);
+    return Boolean(row);
+  }
+
+  private async syncPoolThreadParticipants(threadId: string, poolId: string, memberIds?: string[]) {
+    const members = memberIds ?? await this.getPoolMemberIds(poolId);
+    if (members.length === 0) return;
+
+    const existingRows = await this.db
+      .select({ userId: schema.threadParticipants.userId })
+      .from(schema.threadParticipants)
+      .where(eq(schema.threadParticipants.threadId, threadId));
+    const existing = new Set(existingRows.map((row) => row.userId));
+    const toAdd = members.filter((id) => !existing.has(id));
+    const toRemove = existingRows.map((row) => row.userId).filter((id) => !members.includes(id));
+
+    if (toAdd.length > 0) {
+      await this.db.insert(schema.threadParticipants).values(
+        toAdd.map((userId) => ({ threadId, userId, role: 'member' }))
+      );
+    }
+    if (toRemove.length > 0) {
+      await this.db.delete(schema.threadParticipants).where(
+        and(eq(schema.threadParticipants.threadId, threadId), inArray(schema.threadParticipants.userId, toRemove))
+      );
+    }
   }
 }
 

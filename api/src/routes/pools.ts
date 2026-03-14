@@ -19,6 +19,8 @@ import { recommenderService } from '../services/recommender.js';
 import { accountIntegrationsService } from '../services/account-integrations.js';
 import { treatmentPlannerService } from '../services/treatment-planner.js';
 import { scheduleEventsService, ScheduleEventConflictError } from '../services/schedule-events.js';
+import { messagesService } from '../services/messages.js';
+import { internalEventBus } from '../services/internal-events.js';
 import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
 
@@ -258,6 +260,11 @@ const treatmentPlanScheduleStepSchema = z.object({
 const scheduleTreatmentPlanBody = z.object({
   steps: z.array(treatmentPlanScheduleStepSchema).min(1),
   confirmConflicts: z.coerce.boolean().optional().default(false),
+});
+
+const shareTreatmentPlanBody = z.object({
+  threadId: z.string().uuid().optional(),
+  autoCreatePoolThread: z.coerce.boolean().optional().default(true),
 });
 
 const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
@@ -793,6 +800,12 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
       const plan = await treatmentPlannerService.generate(poolId, userId);
+      internalEventBus.emit('treatment_plan.generated', {
+        planId: plan.planId,
+        poolId,
+        generatedBy: userId,
+        version: plan.version,
+      });
       return reply.code(201).send(plan);
     })
   );
@@ -820,6 +833,59 @@ export async function poolsRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Treatment plan not found' });
       }
       return reply.send(item);
+    })
+  );
+
+
+  // POST /pools/:poolId/treatment-plans/:planId/share
+  app.post(
+    '/:poolId/treatment-plans/:planId/share',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, planId } = poolTreatmentPlanParams.parse(req.params);
+      const userId = req.user!.id;
+      const payload = shareTreatmentPlanBody.parse(req.body ?? {});
+
+      const shareData = await treatmentPlannerService.buildSharePlanMessage(poolId, planId, userId);
+      if (!shareData) {
+        return reply.code(404).send({ error: 'Treatment plan not found' });
+      }
+
+      const thread = payload.threadId
+        ? { threadId: payload.threadId }
+        : await messagesService.getOrCreatePoolDefaultThread(poolId, userId, payload.autoCreatePoolThread);
+
+      if (!thread) {
+        return reply.code(400).send({ error: 'ThreadUnavailable', message: 'No thread provided and pool default thread could not be created.' });
+      }
+
+      const sent = await messagesService.sendMessage(
+        thread.threadId,
+        userId,
+        shareData.messageBody,
+        shareData.attachment,
+      );
+
+      if (!sent) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You cannot post this plan to the selected thread.' });
+      }
+
+      await writeAuditLog(app, req, {
+        action: 'treatment_plan.shared',
+        entity: 'treatment_plan',
+        entityId: planId,
+        userId,
+        poolId,
+        data: {
+          threadId: thread.threadId,
+        },
+      });
+
+      return reply.code(201).send({
+        planId,
+        threadId: thread.threadId,
+        deepLink: shareData.deepLink,
+        messageId: sent.message.messageId,
+      });
     })
   );
 
@@ -905,6 +971,20 @@ export async function poolsRoutes(app: FastifyInstance) {
             deduplicatedCount: result.deduplicatedCount,
             selectedStepIndexes: payload.steps.map((step) => step.index),
           },
+        });
+
+        internalEventBus.emit('treatment_plan.updated', {
+          planId,
+          poolId,
+          updatedBy: userId,
+          status: 'scheduled',
+        });
+
+        internalEventBus.emit('treatment_plan.scheduled', {
+          planId,
+          poolId,
+          scheduledBy: userId,
+          scheduleEventIds: result.createdEventIds,
         });
 
         return reply.code(201).send(result);

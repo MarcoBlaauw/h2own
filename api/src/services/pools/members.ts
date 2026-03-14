@@ -2,6 +2,7 @@ import { db as dbClient } from '../../db/index.js';
 import * as schema from '../../db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
 import { PoolCoreService } from './core.js';
+import { messagesService } from '../messages.js';
 
 export class PoolMembershipService {
   constructor(
@@ -28,6 +29,7 @@ export class PoolMembershipService {
         addedAt: now,
       })
       .returning();
+    await messagesService.getOrCreatePoolDefaultThread(poolId, requestingUserId, true);
     return member;
   }
 
@@ -40,6 +42,7 @@ export class PoolMembershipService {
         and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, userId))
       )
       .returning();
+    await messagesService.getOrCreatePoolDefaultThread(poolId, requestingUserId, true);
     return member;
   }
 
@@ -48,6 +51,7 @@ export class PoolMembershipService {
     await this.db
       .delete(schema.poolMembers)
       .where(and(eq(schema.poolMembers.poolId, poolId), eq(schema.poolMembers.userId, userId)));
+    await messagesService.getOrCreatePoolDefaultThread(poolId, requestingUserId, false);
   }
 }
 
