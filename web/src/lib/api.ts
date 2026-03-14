@@ -179,6 +179,11 @@ type ApiClient = {
     ) => Promise<Response>;
     show: (poolId: string, recommendationId: string, customFetch?: FetchLike) => Promise<Response>;
   };
+  outcomes: {
+    due: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+    update: (poolId: string, outcomeId: string, body: Record<string, unknown>) => Promise<Response>;
+    effectiveness: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
+  };
   dosing: {
     list: (
       poolId: string,
@@ -511,6 +516,13 @@ export const api: ApiClient = {
     },
     show: (poolId, recommendationId, customFetch) =>
       apiFetch(`/pools/${poolId}/recommendations/${recommendationId}`, {}, customFetch),
+  },
+  outcomes: {
+    due: (poolId, customFetch) => apiFetch(`/pools/${poolId}/prediction-outcomes/due`, {}, customFetch),
+    update: (poolId, outcomeId, body) =>
+      apiFetch(`/pools/${poolId}/prediction-outcomes/${outcomeId}`, jsonRequest(body, { method: 'PATCH' })),
+    effectiveness: (poolId, customFetch) =>
+      apiFetch(`/pools/${poolId}/recommendation-effectiveness`, {}, customFetch),
   },
   dosing: {
     list: (poolId, customFetch, params = {}) => {

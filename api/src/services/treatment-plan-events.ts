@@ -43,7 +43,7 @@ export class TreatmentPlanEventsService {
       await this.notifyPoolMembers(payload.poolId, {
         actorUserId: payload.scheduledBy,
         title: 'Treatment plan scheduled',
-        message: `Plan actions were scheduled (${payload.scheduleEventIds.length} event${payload.scheduleEventIds.length === 1 ? '' : 's'}).`,
+        message: `Plan actions were scheduled (${payload.scheduleEventIds.length} event${payload.scheduleEventIds.length === 1 ? '' : 's'}). Please log outcomes at 24h and 72h with new test values and observed issues.`,
         data: {
           eventType: 'treatment_plan.scheduled',
           planId: payload.planId,

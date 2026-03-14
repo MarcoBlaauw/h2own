@@ -249,7 +249,7 @@ export class TreatmentPlannerService {
   }
 
   private async buildContext(poolId: string) {
-    const [[pool], [latestTest], recommendationPreview, recentDosing, recentCosts, latestWeatherRows, sensorReadings] = await Promise.all([
+    const [[pool], [latestTest], recommendationPreview, recentDosing, recentCosts, latestWeatherRows, sensorReadings, outcomeQualityRows] = await Promise.all([
       this.db.select().from(schema.pools).where(eq(schema.pools.poolId, poolId)).limit(1),
       this.db.select().from(schema.testSessions).where(eq(schema.testSessions.poolId, poolId)).orderBy(desc(schema.testSessions.testedAt)).limit(1),
       recommenderService.getRecommendations(poolId),
@@ -271,6 +271,16 @@ export class TreatmentPlannerService {
         .where(and(eq(schema.sensorReadings.poolId, poolId), inArray(schema.sensorReadings.metric, ['water_temp_f', 'air_temp_f', 'humidity_percent', 'uv_index'])))
         .orderBy(desc(schema.sensorReadings.recordedAt))
         .limit(10),
+      this.db.select({
+        recommendationType: schema.predictionOutcomes.recommendationType,
+        treatmentType: schema.predictionOutcomes.treatmentType,
+        qualitySignal: schema.predictionOutcomes.qualitySignal,
+        status: schema.predictionOutcomes.status,
+      })
+      .from(schema.predictionOutcomes)
+      .where(eq(schema.predictionOutcomes.poolId, poolId))
+      .orderBy(desc(schema.predictionOutcomes.recordedAt))
+      .limit(20),
     ]);
 
     return {
@@ -281,6 +291,7 @@ export class TreatmentPlannerService {
       recentCosts,
       weatherSnapshot: latestWeatherRows[0]?.weather_data ?? null,
       sensorReadings,
+      outcomeQualitySignals: outcomeQualityRows,
       quality: {
         hasLatestTest: Boolean(latestTest),
         hasWeatherData: latestWeatherRows.length > 0,
