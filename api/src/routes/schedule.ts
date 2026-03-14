@@ -4,10 +4,6 @@ import { scheduleEventsService, ScheduleEventAccessError, ScheduleEventNotFoundE
 import { writeAuditLog } from './audit.js';
 
 const isoDateSchema = z.string().datetime({ offset: true });
-const timeOfDaySchema = z
-  .string()
-  .regex(/^\d{2}:\d{2}$/, 'Time must be in HH:MM format');
-
 const createEventBodySchema = z.object({
   poolId: z.string().uuid(),
   eventType: z.enum(['dosage', 'test', 'maintenance']),

@@ -179,6 +179,17 @@ const envSchema = z.object({
   SMTP_FROM_NAME: emptyToUndefined(z.string().optional()),
   AUTH_LOCKOUT_ALERT_EMAILS: emptyToUndefined(z.string().optional()),
   SUPPORT_CONTACT_EMAILS: emptyToUndefined(z.string().optional()),
+
+  LLM_PROVIDER: z.enum(['openai', 'anthropic', 'none']).default('none'),
+  LLM_MODEL_ID: z.string().default('gpt-4o-mini'),
+  LLM_API_KEY: emptyToUndefined(z.string().optional()),
+  LLM_MAX_TOKENS: z.string().transform((value) => Number(value)).pipe(z.number().int().min(128).max(8192)).default('1200'),
+  LLM_TEMPERATURE: z.string().transform((value) => Number(value)).pipe(z.number().min(0).max(1)).default('0.2'),
+  LLM_TIMEOUT_MS: z.string().transform((value) => Number(value)).pipe(z.number().int().min(1000).max(60000)).default('12000'),
+  LLM_MAX_RETRIES: z.string().transform((value) => Number(value)).pipe(z.number().int().min(0).max(5)).default('2'),
+  LLM_CIRCUIT_BREAKER_THRESHOLD: z.string().transform((value) => Number(value)).pipe(z.number().int().min(1).max(20)).default('3'),
+  LLM_CIRCUIT_BREAKER_COOLDOWN_MS: z.string().transform((value) => Number(value)).pipe(z.number().int().min(1000).max(300000)).default('30000'),
+  LLM_FALLBACK_BEHAVIOR: z.enum(['computed_preview', 'refuse']).default('computed_preview'),
 });
 
 function parseEnv() {

@@ -8,6 +8,8 @@
   export let data: PageData;
 
   let fc = '';
+  let generatingPlan = false;
+  let planError = '';
   let tc = '';
   let ph = '';
 
@@ -32,6 +34,24 @@
 
     await api.tests.create(poolId, payload);
     await invalidateAll();
+  }
+
+  async function handleGeneratePlan() {
+    const poolId = $page.params.id;
+    if (!poolId) return;
+    generatingPlan = true;
+    planError = '';
+    try {
+      const response = await api.treatmentPlans.generate(poolId);
+      if (!response.ok) {
+        planError = `Failed to generate plan (${response.status})`;
+      }
+    } catch {
+      planError = 'Failed to generate plan.';
+    } finally {
+      generatingPlan = false;
+      await invalidateAll();
+    }
   }
 
   async function handleRoleChange(userId: string | undefined, role: string) {
@@ -132,6 +152,33 @@
           {/if}
         </div>
       </Card>
+
+      <Card className="shadow-card h-full md:col-span-2">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-xl font-semibold text-content-primary">Saved treatment plans</h2>
+            <button class="btn btn-base btn-primary" on:click={handleGeneratePlan} disabled={generatingPlan}>
+              {generatingPlan ? 'Generating...' : 'Generate plan'}
+            </button>
+          </div>
+          {#if planError}
+            <p class="text-sm text-danger">{planError}</p>
+          {/if}
+          {#if data.plans?.length > 0}
+            <ul class="space-y-3 text-sm">
+              {#each data.plans as plan}
+                <li class="surface-panel">
+                  <p class="font-medium text-content-primary">v{plan.version} · {plan.status}</p>
+                  <p class="text-content-secondary">{plan.responsePayload?.interpretationSummary ?? data.recommendationPreview?.primary?.reason ?? 'No summary available.'}</p>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="text-content-secondary/80">No saved treatment plans yet. Fallback recommendations will continue to be used until one is generated.</p>
+          {/if}
+        </div>
+      </Card>
+
       <Card className="shadow-card h-full md:col-span-2">
         <form class="form-grid" on:submit|preventDefault={handleSubmit}>
           <div class="sm:col-span-2 flex items-center justify-between gap-3">
