@@ -198,6 +198,49 @@ export class TreatmentPlannerService {
     return plan ?? null;
   }
 
+
+
+  async updateStatus(poolId: string, planId: string, userId: string, status: 'generated' | 'fallback' | 'failed' | 'refused' | 'scheduled') {
+    await this.core.ensurePoolAccess(poolId, userId);
+    const [updated] = await this.db.update(schema.treatmentPlans).set({ status, updatedAt: new Date() })
+      .where(and(eq(schema.treatmentPlans.poolId, poolId), eq(schema.treatmentPlans.planId, planId)))
+      .returning();
+    return updated ?? null;
+  }
+
+  async buildSharePlanMessage(poolId: string, planId: string, userId: string) {
+    const plan = await this.get(poolId, planId, userId);
+    if (!plan) return null;
+
+    const payload = plan.responsePayload as TreatmentPlanPayload | null;
+    const topSteps = payload?.stepByStepPlan?.slice(0, 3) ?? [];
+    const lines = topSteps.map((step, index) => `${index + 1}. ${step.action} (${step.timing})`);
+    const summary = payload?.interpretationSummary ?? 'Treatment plan is ready to review.';
+    const appBaseUrl = (env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const deepLink = `${appBaseUrl}/pools/${poolId}?tab=treatment-plans&planId=${planId}`;
+
+    return {
+      plan,
+      summary,
+      deepLink,
+      messageBody: [
+        'Shared treatment plan update',
+        '',
+        summary,
+        lines.length ? `Top steps:\n${lines.join('\n')}` : null,
+        `Open plan: ${deepLink}`
+      ].filter(Boolean).join('\n'),
+      attachment: {
+        kind: 'treatment_plan_share',
+        planId,
+        poolId,
+        version: plan.version,
+        status: plan.status,
+        deepLink,
+      },
+    };
+  }
+
   private async getNextVersion(poolId: string) {
     const [row] = await this.db.select({ version: sql<number>`coalesce(max(${schema.treatmentPlans.version}), 0)` })
       .from(schema.treatmentPlans)

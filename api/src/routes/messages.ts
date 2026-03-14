@@ -104,6 +104,10 @@ export async function messagesRoutes(app: FastifyInstance) {
         body.poolId
       );
 
+      if (!created) {
+        return reply.code(403).send({ error: 'Forbidden' });
+      }
+
       await writeAuditLog(app, req, {
         action: 'messages.thread.created',
         entity: 'message_thread',

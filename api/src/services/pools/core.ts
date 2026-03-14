@@ -7,6 +7,7 @@ import {
   requiresOwnerForCapability,
   type PoolCapability,
 } from '../authorization.js';
+import { messagesService } from '../messages.js';
 
 export class PoolNotFoundError extends Error {
   constructor(poolId: string) {
@@ -490,6 +491,12 @@ export class PoolCoreService {
       userId: ownerId,
       roleName: 'owner',
     });
+
+    try {
+      await messagesService.getOrCreatePoolDefaultThread(pool.poolId, ownerId, true);
+    } catch {
+      // best-effort bootstrapping for messaging thread
+    }
 
     if (ownerId !== requestingUserId) {
       await this.db
