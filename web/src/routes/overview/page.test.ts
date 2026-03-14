@@ -96,6 +96,8 @@ const baseData = {
   costSummary: null,
   weatherDaily: [],
   weatherError: null,
+  effectiveness: { byPool: [], byTreatmentType: [] },
+  dueOutcomePrompts: [],
 };
 
 describe('overview page', () => {

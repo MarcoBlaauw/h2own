@@ -547,6 +547,37 @@
         poolId={data.highlightedPool?.id ?? null}
       />
     </div>
+    <div class="lg:col-span-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section class="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 class="text-base font-semibold text-content-primary">Recommendation effectiveness by treatment type</h3>
+        <div class="mt-3 space-y-2">
+          {#if data.effectiveness?.byTreatmentType?.length}
+            {#each data.effectiveness.byTreatmentType as row}
+              <div class="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-sm">
+                <span class="text-content-primary">{row.treatmentType ?? 'unspecified'}</span>
+                <span class="text-content-secondary">{row.loggedOutcomes}/{row.outcomes} logged • quality {row.averageQuality === null ? 'n/a' : Number(row.averageQuality).toFixed(2)}</span>
+              </div>
+            {/each}
+          {:else}
+            <p class="text-sm text-content-secondary">No recommendation outcomes logged yet.</p>
+          {/if}
+        </div>
+      </section>
+      <section class="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 class="text-base font-semibold text-content-primary">Outcome follow-ups due (24h / 72h)</h3>
+        <div class="mt-3 space-y-2 text-sm text-content-secondary">
+          {#if data.dueOutcomePrompts?.length}
+            {#each data.dueOutcomePrompts as due}
+              <p class="rounded-lg border border-border/70 px-3 py-2">
+                {new Date(due.dueAt).toLocaleString()} • {due.checkpointHours}h checkpoint. Log new test values and observed issues.
+              </p>
+            {/each}
+          {:else}
+            <p class="rounded-lg border border-border/70 px-3 py-2">No due follow-ups right now.</p>
+          {/if}
+        </div>
+      </section>
+    </div>
     <div class="lg:col-span-3">
       <CostsCard
         costs={data.costs}

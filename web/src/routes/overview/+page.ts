@@ -43,6 +43,8 @@ export async function load({ fetch, url, parent }) {
       let costSummary = null;
       let weatherDaily = [];
       let weatherError: string | null = null;
+      let effectiveness = { byPool: [], byTreatmentType: [] };
+      let dueOutcomePrompts = [];
       if (pools.length > 0) {
         const selectedPoolId =
           requestedPoolId && pools.some((pool: { poolId?: string }) => pool.poolId === requestedPoolId)
@@ -74,7 +76,7 @@ export async function load({ fetch, url, parent }) {
         };
       }
       if (highlightedPool) {
-        const [plansRes, testsRes, recsRes, historyRes, dosingRes, costsRes, summaryRes] = await Promise.all([
+        const [plansRes, testsRes, recsRes, historyRes, dosingRes, costsRes, summaryRes, effectivenessRes, dueOutcomesRes] = await Promise.all([
           api.treatmentPlans.list(highlightedPool.id, fetch, { limit: 1 }),
           api.tests.list(highlightedPool.id, fetch, { limit: 1 }),
           api.recommendations.preview(highlightedPool.id, fetch),
@@ -82,6 +84,8 @@ export async function load({ fetch, url, parent }) {
           api.dosing.list(highlightedPool.id, fetch, { limit: 5 }),
           api.costs.list(highlightedPool.id, fetch, { limit: 5 }),
           api.costs.summary(highlightedPool.id, fetch, { window: 'month' }),
+          api.outcomes.effectiveness(highlightedPool.id, fetch),
+          api.outcomes.due(highlightedPool.id, fetch),
         ]);
         if (testsRes.ok) {
           const testsPayload = await testsRes.json();
@@ -108,6 +112,13 @@ export async function load({ fetch, url, parent }) {
         }
         if (summaryRes.ok) {
           costSummary = await summaryRes.json();
+        }
+        if (effectivenessRes.ok) {
+          effectiveness = await effectivenessRes.json();
+        }
+        if (dueOutcomesRes.ok) {
+          const duePayload = await dueOutcomesRes.json();
+          dueOutcomePrompts = duePayload.items ?? [];
         }
       }
       if (highlightedPool?.locationId) {
@@ -145,6 +156,8 @@ export async function load({ fetch, url, parent }) {
         costSummary,
         weatherDaily,
         weatherError,
+        effectiveness,
+        dueOutcomePrompts,
       };
     }
     return {
@@ -160,6 +173,8 @@ export async function load({ fetch, url, parent }) {
       costSummary: null,
       weatherDaily: [],
       weatherError: null,
+      effectiveness: { byPool: [], byTreatmentType: [] },
+      dueOutcomePrompts: [],
     };
   } catch (err) {
     return {
@@ -175,6 +190,8 @@ export async function load({ fetch, url, parent }) {
       costSummary: null,
       weatherDaily: [],
       weatherError: null,
+      effectiveness: { byPool: [], byTreatmentType: [] },
+      dueOutcomePrompts: [],
     };
   }
 }

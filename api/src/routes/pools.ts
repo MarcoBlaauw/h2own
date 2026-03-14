@@ -25,6 +25,7 @@ import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
 import { inventoryService } from '../services/inventory.js';
 import { hasAccountCapability } from '../services/authorization.js';
+import { predictionOutcomesService } from '../services/prediction-outcomes.js';
 
 const createPoolSchema = z.object({
   ownerId: z.string().uuid().optional(),
@@ -267,6 +268,19 @@ const scheduleTreatmentPlanBody = z.object({
 const shareTreatmentPlanBody = z.object({
   threadId: z.string().uuid().optional(),
   autoCreatePoolThread: z.coerce.boolean().optional().default(true),
+});
+
+const updatePredictionOutcomeBody = z.object({
+  actualValues: z.unknown().optional(),
+  observedIssues: z.string().optional(),
+  outcomeLink: z.string().url().optional(),
+  status: z.enum(['logged', 'skipped']).optional(),
+  qualitySignal: z.coerce.number().min(0).max(1).optional(),
+});
+
+const predictionOutcomeParams = z.object({
+  poolId: z.string().uuid(),
+  outcomeId: z.string().uuid(),
 });
 
 const equipmentTypeSchema = z.enum(['none', 'heater', 'chiller', 'combo']);
@@ -741,7 +755,30 @@ export async function poolsRoutes(app: FastifyInstance) {
           userId,
           data
         );
-        return reply.code(201).send(recommendation);
+
+        if ((data.status ?? 'pending') === 'applied') {
+          try {
+            await predictionOutcomesService.createCheckpointsForRecommendation({
+              poolId,
+              recommendationId: recommendation.recommendationId,
+              recommendationType: data.type,
+              predictedValues: data.payload,
+              userId,
+            });
+          } catch {
+            req.log.warn({ poolId, recommendationId: recommendation.recommendationId }, 'Failed to create recommendation outcome checkpoints');
+          }
+        }
+
+        return reply.code(201).send(
+          (data.status ?? 'pending') === 'applied'
+            ? {
+                ...recommendation,
+                outcomePrompt:
+                  'Log outcome checks at 24h and 72h with updated test values and any observed issues.',
+              }
+            : recommendation
+        );
       },
       {
         onError: (err, _req, reply) => {
@@ -806,7 +843,67 @@ export async function poolsRoutes(app: FastifyInstance) {
       if (!recommendation) {
         return reply.code(404).send({ error: 'Recommendation not found' });
       }
-      return reply.send(recommendation);
+
+      if (data.status === 'applied') {
+        try {
+          await predictionOutcomesService.createCheckpointsForRecommendation({
+            poolId,
+            recommendationId: recommendation.recommendationId,
+            recommendationType: recommendation.type,
+            predictedValues: recommendation.payload,
+            userId,
+          });
+        } catch {
+          req.log.warn({ poolId, recommendationId: recommendation.recommendationId }, 'Failed to create recommendation outcome checkpoints');
+        }
+      }
+
+      return reply.send(
+        data.status === 'applied'
+          ? {
+              ...recommendation,
+              outcomePrompt:
+                'Log outcome checks at 24h and 72h with updated test values and any observed issues.',
+            }
+          : recommendation
+      );
+    })
+  );
+
+  // GET /pools/:poolId/prediction-outcomes/due
+  app.get(
+    '/:poolId/prediction-outcomes/due',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const items = await predictionOutcomesService.listDueOutcomes(poolId, userId);
+      return reply.send(items);
+    })
+  );
+
+  // PATCH /pools/:poolId/prediction-outcomes/:outcomeId
+  app.patch(
+    '/:poolId/prediction-outcomes/:outcomeId',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, outcomeId } = predictionOutcomeParams.parse(req.params);
+      const userId = req.user!.id;
+      const payload = updatePredictionOutcomeBody.parse(req.body ?? {});
+      const updated = await predictionOutcomesService.logOutcome(poolId, outcomeId, userId, payload);
+      if (!updated) {
+        return reply.code(404).send({ error: 'Prediction outcome not found' });
+      }
+      return reply.send(updated);
+    })
+  );
+
+  // GET /pools/:poolId/recommendation-effectiveness
+  app.get(
+    '/:poolId/recommendation-effectiveness',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId } = poolIdParams.parse(req.params);
+      const userId = req.user!.id;
+      const metrics = await predictionOutcomesService.getEffectivenessDashboard(poolId, userId);
+      return reply.send(metrics);
     })
   );
 
@@ -1005,7 +1102,24 @@ export async function poolsRoutes(app: FastifyInstance) {
           scheduleEventIds: result.createdEventIds,
         });
 
-        return reply.code(201).send(result);
+        try {
+          await predictionOutcomesService.createCheckpointsForPlan({
+            poolId,
+            planId,
+            treatmentType: selected[0]?.step?.eventType ?? 'maintenance',
+            predictedValues: {
+              selectedStepIndexes: payload.steps.map((step) => step.index),
+            },
+            userId,
+          });
+        } catch {
+          req.log.warn({ poolId, planId }, 'Failed to create treatment plan outcome checkpoints');
+        }
+
+        return reply.code(201).send({
+          ...result,
+          outcomePrompt: 'After each scheduled treatment action, log outcomes at 24h and 72h (new test values and observed issues).',
+        });
       } catch (error) {
         if (error instanceof ScheduleEventConflictError) {
           return reply.code(409).send({

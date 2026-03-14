@@ -1,6 +1,7 @@
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { eq, desc, and, isNotNull, inArray } from 'drizzle-orm';
+import { predictionOutcomesService } from './prediction-outcomes.js';
 
 const IDEAL_FC_MIN = 2.0;
 const IDEAL_FC_MAX = 4.0;
@@ -296,7 +297,14 @@ export class RecommenderService {
       unit: string | null;
       reason: string;
       predictedOutcome: string;
+      recommendationType: 'chlorine' | 'ph';
+      confidenceScore: number;
     }[] = [];
+
+    const qualityByType = await predictionOutcomesService.getRecommendationTypeQuality(poolId, [
+      'chlorine',
+      'ph',
+    ]);
 
     // Chlorine recommendation
     if (latestTest.freeChlorinePpm && parseFloat(latestTest.freeChlorinePpm) < IDEAL_FC_MIN) {
@@ -325,6 +333,8 @@ export class RecommenderService {
               temperatureGuidanceNote
             ),
             predictedOutcome: `Raise free chlorine to approximately ${targetFc} ppm.`,
+            recommendationType: 'chlorine',
+            confidenceScore: Math.min(1, Math.max(0, 0.65 + (qualityByType.get('chlorine') ?? 0.5) * 0.35)),
           });
         }
       }
@@ -357,10 +367,14 @@ export class RecommenderService {
               temperatureGuidanceNote
             ),
             predictedOutcome: `Lower pH to approximately ${targetPh}.`,
+            recommendationType: 'ph',
+            confidenceScore: Math.min(1, Math.max(0, 0.65 + (qualityByType.get('ph') ?? 0.5) * 0.35)),
           });
         }
       }
     }
+
+    recommendations.sort((a, b) => b.confidenceScore - a.confidenceScore);
 
     const primary = recommendations.length > 0 ? recommendations[0] : null;
     const alternatives = recommendations.length > 1 ? recommendations.slice(1, 3) : [];
