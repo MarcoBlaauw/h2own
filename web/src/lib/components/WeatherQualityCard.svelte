@@ -1,6 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/components/ui/icon-map';
 
   type WeatherDay = {
     recordedAt: string | Date;
@@ -25,6 +26,8 @@
 
   export let dailyWeather: WeatherDay[] = [];
   export let error: string | null = null;
+
+  type Severity = 'success' | 'info' | 'warning' | 'danger';
 
   const toNumber = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return null;
@@ -121,6 +124,56 @@
     return 12;
   };
 
+  const severityClassMap: Record<Severity, string> = {
+    success: 'border-success/40 bg-success/15 text-success',
+    info: 'border-info/40 bg-info/15 text-info',
+    warning: 'border-warning/40 bg-warning/15 text-warning',
+    danger: 'border-danger/40 bg-danger/15 text-danger',
+  };
+
+  const uvSeverity = (value?: number | null): Severity => {
+    if (value === null || value === undefined) return 'info';
+    if (value >= 8) return 'danger';
+    if (value >= 6) return 'warning';
+    if (value >= 3) return 'info';
+    return 'success';
+  };
+
+  const rainfallSeverity = (value?: string | number | null): Severity => {
+    const numeric = toNumber(value);
+    if (numeric === null) return 'info';
+    if (numeric >= 1) return 'danger';
+    if (numeric >= 0.25) return 'warning';
+    if (numeric > 0) return 'info';
+    return 'success';
+  };
+
+  const windSeverity = (value?: number | null): Severity => {
+    if (value === null || value === undefined) return 'info';
+    if (value >= 25) return 'danger';
+    if (value >= 15) return 'warning';
+    if (value >= 8) return 'info';
+    return 'success';
+  };
+
+  const tempStressSeverity = (value?: number | null): Severity => {
+    if (value === null || value === undefined) return 'info';
+    if (value <= 50 || value >= 95) return 'danger';
+    if (value <= 60 || value >= 90) return 'warning';
+    return 'success';
+  };
+
+  const conditionIcon = (day?: WeatherDay): IconName => {
+    if (!day) return 'weatherQuality';
+    const rain = toNumber(day.rainfallIn) ?? 0;
+    const uv = day.uvIndex ?? 0;
+    const wind = day.windSpeedMph ?? 0;
+    if (rain >= 0.25) return 'weatherRain';
+    if (wind >= 15) return 'weatherWind';
+    if (uv >= 7) return 'weatherUv';
+    return 'weatherQuality';
+  };
+
   const computeQuality = (day?: WeatherDay) => {
     if (!day) {
       if (error) {
@@ -169,6 +222,7 @@
 
   const today = sorted[0];
   const quality = computeQuality(today);
+  const summaryIconName = conditionIcon(today);
   const normalizedWindDirection =
     today?.windDirectionDeg === null || today?.windDirectionDeg === undefined
       ? null
@@ -201,176 +255,100 @@
     </div>
   </svelte:fragment>
 
-  <svelte:fragment slot="actions">
-    <div class="text-right">
-      <div class="text-2xl font-semibold text-content-primary">
-        {quality.score !== null ? quality.score : '—'}
-      </div>
-      <div class="text-xs uppercase tracking-wide text-content-secondary">{quality.label}</div>
-    </div>
-  </svelte:fragment>
-
   {#if today}
-    <div class="grid gap-3 sm:grid-cols-2">
-      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
-        <div class="text-xs uppercase tracking-wide text-content-secondary">Today</div>
-        <div class="mt-1 text-lg font-semibold text-content-primary">{formatDate(today.recordedAt)}</div>
-        <div class="mt-2 text-sm text-content-secondary">
-          Temp: <span class="font-medium text-content-primary">{formatTemp(today.airTempF)}</span>
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-center gap-4 rounded-xl border border-border/60 bg-surface-subtle p-4">
+        <span class="rounded-full border border-border bg-surface px-3 py-3 text-content-primary">
+          <Icon name={summaryIconName} size={24} decorative={false} />
+        </span>
+        <div class="min-w-[8rem]">
+          <p class="text-2xl font-semibold text-content-primary">
+            {quality.score !== null ? quality.score : '—'}
+            <span class="ml-1 text-sm font-medium uppercase tracking-wide text-content-secondary">{quality.label}</span>
+          </p>
+          <p class="text-xs text-content-secondary">{formatDate(today.recordedAt)}</p>
         </div>
-        <div class="text-sm text-content-secondary">
-          Rain: <span class="font-medium text-content-primary">{formatInches(today.rainfallIn)}</span>
+        <p class="flex-1 text-sm text-content-secondary">{quality.detail}</p>
+      </div>
+
+      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div class={`rounded-lg border px-3 py-2 ${severityClassMap[uvSeverity(today.uvIndex)]}`} data-testid="impact-uv" data-severity={uvSeverity(today.uvIndex)}>
+          <div class="flex items-center gap-2 text-xs uppercase tracking-wide">
+            <Icon name="weatherUv" size={16} tone={uvSeverity(today.uvIndex)} decorative={false} />
+            UV
+          </div>
+          <div class="mt-1 text-sm font-semibold">{today.uvIndex ?? '—'}</div>
+        </div>
+        <div class={`rounded-lg border px-3 py-2 ${severityClassMap[rainfallSeverity(today.rainfallIn)]}`} data-testid="impact-rainfall" data-severity={rainfallSeverity(today.rainfallIn)}>
+          <div class="flex items-center gap-2 text-xs uppercase tracking-wide">
+            <Icon name="weatherRain" size={16} tone={rainfallSeverity(today.rainfallIn)} decorative={false} />
+            Rainfall
+          </div>
+          <div class="mt-1 text-sm font-semibold">{formatInches(today.rainfallIn)}</div>
+        </div>
+        <div class={`rounded-lg border px-3 py-2 ${severityClassMap[windSeverity(today.windSpeedMph)]}`} data-testid="impact-wind" data-severity={windSeverity(today.windSpeedMph)}>
+          <div class="flex items-center gap-2 text-xs uppercase tracking-wide">
+            <Icon name="weatherWind" size={16} tone={windSeverity(today.windSpeedMph)} decorative={false} />
+            Wind
+          </div>
+          <div class="mt-1 text-sm font-semibold">{formatMph(today.windSpeedMph)}</div>
+        </div>
+        <div class={`rounded-lg border px-3 py-2 ${severityClassMap[tempStressSeverity(today.airTempF)]}`} data-testid="impact-temp-stress" data-severity={tempStressSeverity(today.airTempF)}>
+          <div class="flex items-center gap-2 text-xs uppercase tracking-wide">
+            <Icon name="weatherHeatStress" size={16} tone={tempStressSeverity(today.airTempF)} decorative={false} />
+            Temp stress
+          </div>
+          <div class="mt-1 text-sm font-semibold">{formatTemp(today.airTempF)}</div>
         </div>
       </div>
-      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
-        <div class="text-xs uppercase tracking-wide text-content-secondary">Next 3 days</div>
-        <div class="mt-2 space-y-2">
-          {#each sorted.slice(1, 4) as day}
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-content-secondary">{formatDate(day.recordedAt)}</span>
-              <span class="font-medium text-content-primary">{formatTemp(day.airTempF)}</span>
+
+      <details class="rounded-xl border border-border/60 bg-surface-subtle p-4" open>
+        <summary class="cursor-pointer text-sm font-medium text-content-primary">Detailed weather metrics</summary>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="rounded-lg border border-border/60 bg-surface p-3 text-sm">
+            <div class="flex items-center gap-2 text-content-secondary">
+              <Icon name="weatherCloudBase" size={16} decorative={false} />
+              Cloud base
             </div>
-          {/each}
-          {#if sorted.length <= 1}
-            <div class="text-sm text-content-secondary">No upcoming forecast yet.</div>
-          {/if}
-        </div>
-      </div>
-    </div>
-
-    <div class="mt-3 grid gap-3 lg:grid-cols-2">
-      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
-        <div class="text-xs uppercase tracking-wide text-content-secondary">Solar</div>
-        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherSunrise" size={16} />
-            <span>
-              Sunrise:
-              <span class="font-medium text-content-primary">{formatTime(today.sunriseTime)}</span>
-            </span>
+            <div class="mt-1 font-semibold text-content-primary">{formatKm(today.cloudBaseKm)}</div>
           </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherSunset" size={16} />
-            <span>
-              Sunset:
-              <span class="font-medium text-content-primary">{formatTime(today.sunsetTime)}</span>
-            </span>
+          <div class="rounded-lg border border-border/60 bg-surface p-3 text-sm">
+            <div class="flex items-center gap-2 text-content-secondary">
+              <Icon name="weatherCloudCeiling" size={16} decorative={false} />
+              Cloud ceiling
+            </div>
+            <div class="mt-1 font-semibold text-content-primary">{formatKm(today.cloudCeilingKm)}</div>
           </div>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
-        <div class="text-xs uppercase tracking-wide text-content-secondary">Sky</div>
-        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherVisibility" size={16} />
-            <span>
-              Visibility:
-              <span class="font-medium text-content-primary">{formatMiles(today.visibilityMi)}</span>
-            </span>
+          <div class="rounded-lg border border-border/60 bg-surface p-3 text-sm">
+            <div class="flex items-center gap-2 text-content-secondary">
+              <Icon name="weatherVisibility" size={16} decorative={false} />
+              Visibility
+            </div>
+            <div class="mt-1 font-semibold text-content-primary">{formatMiles(today.visibilityMi)}</div>
           </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherCloudCover" size={16} />
-            <span>
-              Cloud cover:
-              <span class="font-medium text-content-primary">{formatPercent(today.cloudCoverPercent)}</span>
-            </span>
+          <div class="rounded-lg border border-border/60 bg-surface p-3 text-sm">
+            <div class="flex items-center gap-2 text-content-secondary">
+              <Icon name="weatherSunrise" size={16} decorative={false} />
+              Sunrise
+            </div>
+            <div class="mt-1 font-semibold text-content-primary">{formatTime(today.sunriseTime)}</div>
           </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherCloudBase" size={16} />
-            <span>
-              Cloud base:
-              <span class="font-medium text-content-primary">{formatKm(today.cloudBaseKm)}</span>
-            </span>
+          <div class="rounded-lg border border-border/60 bg-surface p-3 text-sm">
+            <div class="flex items-center gap-2 text-content-secondary">
+              <Icon name="weatherSunset" size={16} decorative={false} />
+              Sunset
+            </div>
+            <div class="mt-1 font-semibold text-content-primary">{formatTime(today.sunsetTime)}</div>
           </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherCloudCeiling" size={16} />
-            <span>
-              Cloud ceiling:
-              <span class="font-medium text-content-primary">{formatKm(today.cloudCeilingKm)}</span>
-            </span>
+          <div class="rounded-lg border border-border/60 bg-surface p-3 text-sm">
+            <div class="flex items-center gap-2 text-content-secondary">
+              <Icon name="weatherWindDirection" size={16} style={`transform: rotate(${normalizedWindDirection ?? 0}deg);`} decorative={false} />
+              Wind direction
+            </div>
+            <div class="mt-1 font-semibold text-content-primary">{windDirectionText}</div>
           </div>
         </div>
-      </div>
-
-      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
-        <div class="text-xs uppercase tracking-wide text-content-secondary">UV And Heat</div>
-        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherUv" size={16} />
-            <span>
-              UV index:
-              <span class="font-medium text-content-primary">{today.uvIndex ?? '—'}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherUvConcern" size={16} />
-            <span>
-              UV concern:
-              <span class="font-medium text-content-primary">{today.uvHealthConcern ?? '—'}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherApparentTemp" size={16} />
-            <span>
-              Apparent temp:
-              <span class="font-medium text-content-primary">{formatTemp(today.temperatureApparentF)}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherHeatStress" size={16} />
-            <span>
-              Heat stress:
-              <span class="font-medium text-content-primary">{today.ezHeatStressIndex ?? '—'}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
-        <div class="text-xs uppercase tracking-wide text-content-secondary">Wind And Air</div>
-        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherWind" size={16} />
-            <span>
-              Wind speed:
-              <span class="font-medium text-content-primary">{formatMph(today.windSpeedMph)}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon
-              name="weatherWindDirection"
-              size={16}
-              style={`transform: rotate(${normalizedWindDirection ?? 0}deg);`}
-            />
-            <span>
-              Wind direction:
-              <span class="font-medium text-content-primary">{windDirectionText}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherWindGust" size={16} />
-            <span>
-              Wind gust:
-              <span class="font-medium text-content-primary">{formatMph(today.windGustMph)}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherHumidity" size={16} />
-            <span>
-              Humidity:
-              <span class="font-medium text-content-primary">{formatPercent(today.humidityPercent)}</span>
-            </span>
-          </div>
-          <div class="text-content-secondary flex items-center gap-2">
-            <Icon name="weatherWindForce" size={16} />
-            <span>
-              Wind force:
-              <span class="font-medium text-content-primary">{beaufortValue ?? '—'}</span>
-            </span>
-          </div>
-        </div>
-      </div>
+      </details>
     </div>
   {:else}
     <p class="mt-4 text-sm text-content-secondary">
