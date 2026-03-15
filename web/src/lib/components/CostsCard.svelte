@@ -257,11 +257,19 @@
 </script>
 
 <Card status={error ? 'danger' : success ? 'success' : 'default'}>
-  <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-    <div>
-      <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="costs" size={20} tone="muted" /> Costs</h2>
-      <p class="text-xs text-content-secondary">{getWindowLabel(currentSummary?.window)}</p>
+  <svelte:fragment slot="header">
+    <div class="card-heading">
+      <span class="card-icon-badge" data-shape="circle">
+        <Icon name="costs" size={20} tone="muted" />
+      </span>
+      <div class="card-title-group">
+        <h2 class="card-title">Costs</h2>
+        <p class="card-subtitle">{getWindowLabel(currentSummary?.window)}</p>
+      </div>
     </div>
+  </svelte:fragment>
+
+  <svelte:fragment slot="actions">
     <div class="flex items-end gap-4">
       {#if mode === 'account'}
         <label class="form-field min-w-[180px]">
@@ -281,10 +289,10 @@
         <div class="text-xs text-content-secondary">Total spend</div>
       </div>
     </div>
-  </div>
+  </svelte:fragment>
 
   <form
-    class="mt-4 form-grid"
+    class="form-grid"
     aria-describedby={error ? 'cost-form-error' : success ? 'cost-form-success' : undefined}
     aria-busy={isSubmitting}
     on:submit|preventDefault={handleSubmit}
