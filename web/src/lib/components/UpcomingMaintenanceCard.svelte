@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   type UpcomingEvent = {
     id: string;
@@ -16,7 +17,7 @@
 <Card>
   <div class="flex items-start justify-between gap-3">
     <div>
-      <h2 class="text-lg font-semibold text-content-primary">Upcoming Maintenance</h2>
+      <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="maintenance" size={20} tone="muted" /> Upcoming Maintenance</h2>
       <p class="text-sm text-content-secondary">
         Near-term pool tasks for {poolName ?? 'your active pool'} based on recent tests, weather, and recommendations.
       </p>

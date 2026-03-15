@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   type Recommendation = {
     chemicalId: string;
@@ -71,7 +72,7 @@
 <Card>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <h2 class="text-lg font-semibold text-content-primary">AI Maintenance Advisor (Beta)</h2>
+      <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="aiAdvisor" size={20} tone="muted" /> AI Maintenance Advisor (Beta)</h2>
       <p class="text-sm text-content-secondary">
         Read-only phased plan for {poolName ?? 'your pool'} based on latest chemistry and context signals.
       </p>

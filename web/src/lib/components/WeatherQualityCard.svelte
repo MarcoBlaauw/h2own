@@ -1,19 +1,4 @@
 <script lang="ts">
-  import {
-    IconCloud,
-    IconCloudDown,
-    IconCloudUp,
-    IconDroplet,
-    IconEye,
-    IconNavigation,
-    IconSun,
-    IconSunrise,
-    IconSunset2,
-    IconTemperature,
-    IconTemperatureSun,
-    IconUvIndex,
-    IconWind,
-  } from '@tabler/icons-svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -205,7 +190,7 @@
 <Card>
   <div class="flex items-start justify-between gap-4">
     <div>
-      <h2 class="text-lg font-semibold text-content-primary">Pool weather quality</h2>
+      <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="weatherQuality" size={20} tone="muted" /> Pool weather quality</h2>
       <p class="text-xs text-content-secondary">{quality.detail}</p>
       <p class="text-xs text-content-secondary mt-1">
         Last refreshed: {formatDateTime(lastRefreshedAt)}
@@ -252,14 +237,14 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">Solar</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconSunrise} size={16} className="text-content-primary" />
+            <Icon name="weatherSunrise" size={16} />
             <span>
               Sunrise:
               <span class="font-medium text-content-primary">{formatTime(today.sunriseTime)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconSunset2} size={16} className="text-content-primary" />
+            <Icon name="weatherSunset" size={16} />
             <span>
               Sunset:
               <span class="font-medium text-content-primary">{formatTime(today.sunsetTime)}</span>
@@ -272,28 +257,28 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">Sky</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconEye} size={16} className="text-content-primary" />
+            <Icon name="weatherVisibility" size={16} />
             <span>
               Visibility:
               <span class="font-medium text-content-primary">{formatMiles(today.visibilityMi)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconCloud} size={16} className="text-content-primary" />
+            <Icon name="weatherCloudCover" size={16} />
             <span>
               Cloud cover:
               <span class="font-medium text-content-primary">{formatPercent(today.cloudCoverPercent)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconCloudDown} size={16} className="text-content-primary" />
+            <Icon name="weatherCloudBase" size={16} />
             <span>
               Cloud base:
               <span class="font-medium text-content-primary">{formatKm(today.cloudBaseKm)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconCloudUp} size={16} className="text-content-primary" />
+            <Icon name="weatherCloudCeiling" size={16} />
             <span>
               Cloud ceiling:
               <span class="font-medium text-content-primary">{formatKm(today.cloudCeilingKm)}</span>
@@ -306,28 +291,28 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">UV And Heat</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconUvIndex} size={16} className="text-content-primary" />
+            <Icon name="weatherUv" size={16} />
             <span>
               UV index:
               <span class="font-medium text-content-primary">{today.uvIndex ?? '—'}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconSun} size={16} className="text-content-primary" />
+            <Icon name="weatherUvConcern" size={16} />
             <span>
               UV concern:
               <span class="font-medium text-content-primary">{today.uvHealthConcern ?? '—'}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconTemperature} size={16} className="text-content-primary" />
+            <Icon name="weatherApparentTemp" size={16} />
             <span>
               Apparent temp:
               <span class="font-medium text-content-primary">{formatTemp(today.temperatureApparentF)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconTemperatureSun} size={16} className="text-content-primary" />
+            <Icon name="weatherHeatStress" size={16} />
             <span>
               Heat stress:
               <span class="font-medium text-content-primary">{today.ezHeatStressIndex ?? '—'}</span>
@@ -340,7 +325,7 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">Wind And Air</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconWind} size={16} className="text-content-primary" />
+            <Icon name="weatherWind" size={16} />
             <span>
               Wind speed:
               <span class="font-medium text-content-primary">{formatMph(today.windSpeedMph)}</span>
@@ -348,9 +333,8 @@
           </div>
           <div class="text-content-secondary flex items-center gap-2">
             <Icon
-              icon={IconNavigation}
+              name="weatherWindDirection"
               size={16}
-              className="text-content-primary"
               style={`transform: rotate(${normalizedWindDirection ?? 0}deg);`}
             />
             <span>
@@ -359,21 +343,21 @@
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconWind} size={16} className="text-content-primary" />
+            <Icon name="weatherWindGust" size={16} />
             <span>
               Wind gust:
               <span class="font-medium text-content-primary">{formatMph(today.windGustMph)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconDroplet} size={16} className="text-content-primary" />
+            <Icon name="weatherHumidity" size={16} />
             <span>
               Humidity:
               <span class="font-medium text-content-primary">{formatPercent(today.humidityPercent)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <Icon icon={IconWind} size={16} className="text-content-primary" />
+            <Icon name="weatherWindForce" size={16} />
             <span>
               Wind force:
               <span class="font-medium text-content-primary">{beaufortValue ?? '—'}</span>
