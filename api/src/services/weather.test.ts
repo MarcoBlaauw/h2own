@@ -21,6 +21,14 @@ describe('WeatherService', () => {
       longitude: '-84.39',
       isActive: true,
     });
+    vi.spyOn(service as any, 'getTomorrowIoRuntimeConfig').mockResolvedValue({
+      enabled: true,
+      apiKey: 'test-key',
+      baseUrl: 'https://example.test',
+      cacheTtlMs: 30 * 60 * 1000,
+      rateLimitCooldownMs: 5 * 60 * 1000,
+      nextAllowedRequestAt: null,
+    });
   });
 
   it('uses cached weather without calling upstream when cache is fresh', async () => {

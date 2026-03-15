@@ -16,6 +16,7 @@ import { chemicalsRoutes } from "./routes/chemicals";
 import { adminUsersRoutes } from "./routes/admin-users";
 import { adminLocationsRoutes } from "./routes/admin-locations";
 import { adminPoolsRoutes } from "./routes/admin-pools";
+import { adminVendorsRoutes } from "./routes/admin-vendors";
 import { adminAuditLogRoutes } from "./routes/admin-audit-log";
 import { adminNotificationTemplateRoutes } from "./routes/admin-notification-templates";
 import { adminReadinessRoutes } from "./routes/admin-readiness";
@@ -29,6 +30,8 @@ import { billingRoutes } from "./routes/billing";
 import { contactRoutes } from "./routes/contact";
 import { locationsRoutes } from "./routes/locations";
 import { photosRoutes } from "./routes/photos";
+import { inventoryRoutes } from "./routes/inventory";
+import { vendorsRoutes } from "./routes/vendors";
 import { meRoutes } from "./routes/me";
 import { createRedisSessionStore } from "./services/session-store.js";
 import { auditWriterService } from "./services/audit-writer.js";
@@ -40,6 +43,8 @@ import { IntegrationRetryWorker } from "./services/integration-retry-worker.js";
 import { ScheduleRemindersWorker } from "./services/schedule-reminders-worker.js";
 import { scheduleEventsService } from "./services/schedule-events.js";
 import { treatmentPlanEventsService } from "./services/treatment-plan-events.js";
+import { VendorPriceSyncWorker } from "./services/vendor-price-sync-worker.js";
+import { vendorPriceSyncService } from "./services/vendor-price-sync.js";
 
 async function buildApp() {
   const app = Fastify({
@@ -299,6 +304,7 @@ async function buildApp() {
   await app.register(adminLocationsRoutes, { prefix: "/admin/locations" });
   await app.register(locationsRoutes, { prefix: "/locations" });
   await app.register(adminPoolsRoutes, { prefix: "/admin/pools" });
+  await app.register(adminVendorsRoutes, { prefix: "/admin/vendors" });
   await app.register(adminAuditLogRoutes, { prefix: "/admin/audit-log" });
   await app.register(adminNotificationTemplateRoutes, {
     prefix: "/admin/notification-templates",
@@ -313,6 +319,8 @@ async function buildApp() {
   await app.register(billingRoutes, { prefix: "/billing" });
   await app.register(contactRoutes, { prefix: "/contact" });
   await app.register(photosRoutes, { prefix: "/photos" });
+  await app.register(inventoryRoutes, { prefix: "/inventory" });
+  await app.register(vendorsRoutes, { prefix: "/vendors" });
 
   // --- Dev convenience route ---
   app.get("/test", async () => ({ ok: true, message: "test route" }));
@@ -342,10 +350,20 @@ async function buildApp() {
   });
   scheduleRemindersWorker.start();
 
+  const vendorPriceSyncWorker = new VendorPriceSyncWorker({
+    enabled: env.VENDOR_PRICE_SYNC_ENABLED,
+    tickSeconds: env.VENDOR_PRICE_SYNC_TICK_SECONDS,
+    batchSize: env.VENDOR_PRICE_SYNC_BATCH_SIZE,
+    service: vendorPriceSyncService,
+    logger: app.log,
+  });
+  vendorPriceSyncWorker.start();
+
   app.addHook("onClose", async () => {
     await sensorRetentionWorker.stop();
     await integrationRetryWorker.stop();
     await scheduleRemindersWorker.stop();
+    await vendorPriceSyncWorker.stop();
   });
 
   // Finalize & print

@@ -162,6 +162,18 @@ type ApiClient = {
     generate: (poolId: string, customFetch?: FetchLike) => Promise<Response>;
     list: (poolId: string, customFetch?: FetchLike, params?: { limit?: number }) => Promise<Response>;
     show: (poolId: string, planId: string, customFetch?: FetchLike) => Promise<Response>;
+    report: (
+      poolId: string,
+      planId: string,
+      params: { audience: 'owner' | 'service_tech' | 'audit' },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
+    emailReport: (
+      poolId: string,
+      planId: string,
+      body: { audience: 'owner' | 'service_tech' | 'audit'; to?: string },
+      customFetch?: FetchLike
+    ) => Promise<Response>;
     schedule: (poolId: string, planId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   recommendations: {
@@ -205,6 +217,22 @@ type ApiClient = {
     ) => Promise<Response>;
     create: (poolId: string, body: Record<string, unknown>) => Promise<Response>;
   };
+  inventory: {
+    list: (
+      customFetch?: FetchLike,
+      params?: { poolId?: string }
+    ) => Promise<Response>;
+    listTransactions: (
+      customFetch?: FetchLike,
+      params?: { poolId?: string; limit?: number }
+    ) => Promise<Response>;
+    createTransaction: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    updateStock: (stockId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    costs: (
+      customFetch?: FetchLike,
+      params?: { poolId?: string; limit?: number; window?: 'week' | 'month' | 'year' }
+    ) => Promise<Response>;
+  };
   members: {
     update: (poolId: string, userId: string, body: Record<string, unknown>) => Promise<Response>;
     del: (poolId: string, userId: string) => Promise<Response>;
@@ -218,6 +246,9 @@ type ApiClient = {
     listCategories: (customFetch?: FetchLike) => Promise<Response>;
     update: (id: string, body: Record<string, unknown>) => Promise<Response>;
     del: (id: string) => Promise<Response>;
+  };
+  vendors: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
   };
   adminPools: {
     list: (customFetch?: FetchLike) => Promise<Response>;
@@ -236,6 +267,21 @@ type ApiClient = {
       body: Record<string, unknown>,
       customFetch?: FetchLike
     ) => Promise<Response>;
+  };
+  adminVendors: {
+    list: (customFetch?: FetchLike) => Promise<Response>;
+    listImportHistory: (
+      customFetch?: FetchLike,
+      params?: { vendorId?: string; limit?: number }
+    ) => Promise<Response>;
+    listSyncRuns: (
+      customFetch?: FetchLike,
+      params?: { vendorId?: string; limit?: number }
+    ) => Promise<Response>;
+    create: (body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    update: (vendorId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
+    syncPrices: (vendorId: string, customFetch?: FetchLike) => Promise<Response>;
+    importPrices: (vendorId: string, body: Record<string, unknown>, customFetch?: FetchLike) => Promise<Response>;
   };
   adminReadiness: {
     get: (customFetch?: FetchLike) => Promise<Response>;
@@ -493,6 +539,13 @@ export const api: ApiClient = {
     },
     show: (poolId, planId, customFetch = fetch) =>
       apiFetch(`/pools/${poolId}/treatment-plans/${planId}`, {}, customFetch),
+    report: (poolId, planId, params, customFetch = fetch) => {
+      const search = new URLSearchParams();
+      search.set('audience', params.audience);
+      return apiFetch(`/pools/${poolId}/treatment-plans/${planId}/report?${search.toString()}`, {}, customFetch);
+    },
+    emailReport: (poolId, planId, body, customFetch = fetch) =>
+      apiFetch(`/pools/${poolId}/treatment-plans/${planId}/report/email`, jsonRequest(body, { method: 'POST' }), customFetch),
     schedule: (poolId, planId, body, customFetch = fetch) =>
       apiFetch(`/pools/${poolId}/treatment-plans/${planId}/schedule`, jsonRequest(body, { method: 'POST' }), customFetch),
   },
@@ -554,6 +607,36 @@ export const api: ApiClient = {
     },
     create: (poolId, body) => apiFetch(`/pools/${poolId}/costs`, jsonRequest(body, { method: 'POST' })),
   },
+  inventory: {
+    list: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.poolId) search.set('poolId', params.poolId);
+      const query = search.toString();
+      const path = `/inventory${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    listTransactions: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.poolId) search.set('poolId', params.poolId);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      const path = `/inventory/transactions${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+    createTransaction: (body, customFetch) =>
+      apiFetch('/inventory/transactions', jsonRequest(body, { method: 'POST' }), customFetch),
+    updateStock: (stockId, body, customFetch) =>
+      apiFetch(`/inventory/${stockId}`, jsonRequest(body, { method: 'PATCH' }), customFetch),
+    costs: (customFetch, params = {}) => {
+      const search = new URLSearchParams();
+      if (params.poolId) search.set('poolId', params.poolId);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      if (params.window) search.set('window', params.window);
+      const query = search.toString();
+      const path = `/inventory/costs${query ? `?${query}` : ''}`;
+      return apiFetch(path, {}, customFetch);
+    },
+  },
   members: {
     update: (poolId, userId, body) =>
       apiFetch(`/pools/${poolId}/members/${userId}`, jsonRequest(body, { method: 'PUT' })),
@@ -573,6 +656,9 @@ export const api: ApiClient = {
     update: (id, body) => apiFetch(`/chemicals/${id}`, jsonRequest(body, { method: 'PATCH' })),
     del: (id) => apiFetch(`/chemicals/${id}`, { method: 'DELETE' }),
   },
+  vendors: {
+    list: (customFetch) => apiFetch('/vendors', {}, customFetch),
+  },
   adminPools: {
     list: (customFetch) => apiFetch('/admin/pools', {}, customFetch),
     show: (poolId, customFetch) => apiFetch(`/admin/pools/${poolId}`, {}, customFetch),
@@ -591,6 +677,31 @@ export const api: ApiClient = {
         jsonRequest(body, { method: 'PUT' }),
         customFetch
       ),
+  },
+  adminVendors: {
+    list: (customFetch) => apiFetch('/admin/vendors', {}, customFetch),
+    listImportHistory: (customFetch, params: { vendorId?: string; limit?: number } = {}) => {
+      const search = new URLSearchParams();
+      if (params.vendorId) search.set('vendorId', params.vendorId);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      return apiFetch(`/admin/vendors/import-history${query ? `?${query}` : ''}`, {}, customFetch);
+    },
+    listSyncRuns: (customFetch, params: { vendorId?: string; limit?: number } = {}) => {
+      const search = new URLSearchParams();
+      if (params.vendorId) search.set('vendorId', params.vendorId);
+      if (typeof params.limit === 'number') search.set('limit', params.limit.toString());
+      const query = search.toString();
+      return apiFetch(`/admin/vendors/sync-runs${query ? `?${query}` : ''}`, {}, customFetch);
+    },
+    create: (body, customFetch) =>
+      apiFetch('/admin/vendors', jsonRequest(body, { method: 'POST' }), customFetch),
+    update: (vendorId, body, customFetch) =>
+      apiFetch(`/admin/vendors/${vendorId}`, jsonRequest(body, { method: 'PATCH' }), customFetch),
+    syncPrices: (vendorId, customFetch) =>
+      apiFetch(`/admin/vendors/${vendorId}/sync-prices`, { method: 'POST' }, customFetch),
+    importPrices: (vendorId, body, customFetch) =>
+      apiFetch(`/admin/vendors/${vendorId}/import-prices`, jsonRequest(body, { method: 'POST' }), customFetch),
   },
   adminReadiness: {
     get: (customFetch) => apiFetch('/admin/readiness', {}, customFetch),

@@ -402,6 +402,7 @@ describe("POST /auth/register integration", () => {
   });
 
   it("accepts forgot-password requests and sends reset email when user exists", async () => {
+    (env as any).APP_BASE_URL = "http://localhost:3000";
     vi.spyOn(authService, "getUserByEmail").mockResolvedValueOnce({
       userId: "u-1",
       email: "member@example.com",
@@ -422,6 +423,11 @@ describe("POST /auth/register integration", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().ok).toBe(true);
     expect(resetSpy).toHaveBeenCalledTimes(1);
+    expect(resetSpy).toHaveBeenCalledWith(
+      "member@example.com",
+      expect.stringMatching(/^http:\/\/localhost:3000\/reset-password\?token=/),
+      env.PASSWORD_RESET_TOKEN_TTL_SECONDS,
+    );
   });
 
   it("resets password using a valid token", async () => {

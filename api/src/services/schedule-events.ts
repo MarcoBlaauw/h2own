@@ -271,6 +271,13 @@ export class ScheduleEventsService {
 
   async updateEvent(userId: string, eventId: string, input: ScheduleEventUpdate) {
     const current = await this.getOwnedEvent(userId, eventId);
+    const nextStatus = input.status ?? (current.status as ScheduleStatus);
+    const nextCanceledAt =
+      nextStatus === 'canceled'
+        ? new Date()
+        : input.status !== undefined
+          ? null
+          : current.canceledAt;
     if (input.poolId && input.poolId !== current.poolId) {
       await this.requirePoolAccess(userId, input.poolId);
     }
@@ -287,13 +294,8 @@ export class ScheduleEventsService {
         recurrence: input.recurrence ?? (current.recurrence as ScheduleRecurrence),
         recurrenceInterval: input.recurrenceInterval ?? current.recurrenceInterval,
         reminderLeadMinutes: input.reminderLeadMinutes ?? current.reminderLeadMinutes,
-        status: input.status ?? (current.status as ScheduleStatus),
-        canceledAt:
-          input.status === 'canceled'
-            ? new Date()
-            : input.status && input.status !== 'canceled'
-              ? null
-              : current.canceledAt,
+        status: nextStatus,
+        canceledAt: nextCanceledAt,
         updatedAt: new Date(),
       })
       .where(eq(schema.scheduleEvents.eventId, eventId));

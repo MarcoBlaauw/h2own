@@ -39,3 +39,7 @@ export * from './message_deliveries.js';
 export * from './treatment_plans.js';
 export * from './inventory_stock.js';
 export * from './inventory_transactions.js';
+export * from './vendors.js';
+export * from './product_vendor_prices.js';
+export * from './vendor_price_import_runs.js';
+export * from './vendor_price_sync_runs.js';

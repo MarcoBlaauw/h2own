@@ -33,7 +33,7 @@ describe('Admin readiness route', () => {
     const body = response.json();
     expect(Array.isArray(body.modules)).toBe(true);
     expect(body.modules.map((m: any) => m.key)).toEqual(
-      expect.arrayContaining(['messages', 'billing', 'notifications'])
+      expect.arrayContaining(['llm', 'messages', 'billing', 'notifications'])
     );
   });
 });

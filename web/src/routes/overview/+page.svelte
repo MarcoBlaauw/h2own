@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   import Container from '$lib/components/layout/Container.svelte';
   import MetricTile from '$lib/components/MetricTile.svelte';
   import PoolSummaryCard from '$lib/components/PoolSummaryCard.svelte';
   import QuickTestForm from '$lib/components/QuickTestForm.svelte';
   import RecommendationsCard from '$lib/components/RecommendationsCard.svelte';
   import DosingHistoryCard from '$lib/components/DosingHistoryCard.svelte';
-  import CostsCard from '$lib/components/CostsCard.svelte';
   import WeatherQualityCard from '$lib/components/WeatherQualityCard.svelte';
   import AdSlot from '$lib/components/AdSlot.svelte';
   import AiMaintenanceAdvisorCard from '$lib/components/AiMaintenanceAdvisorCard.svelte';
@@ -23,8 +22,22 @@
     volumeGallons?: number | null;
     surfaceType?: string | null;
     sanitizerType?: string | null;
+    chlorineSource?: string | null;
+    saltLevelPpm?: number | null;
+    sanitizerTargetMinPpm?: number | null;
+    sanitizerTargetMaxPpm?: number | null;
     locationId?: string | null;
     lastTestedAt?: string | Date | null;
+    tests?: Array<{
+      id?: string;
+      testedAt?: string | Date | null;
+      freeChlorine?: number | null;
+      ph?: number | null;
+      totalAlkalinity?: number | null;
+      cyanuricAcid?: number | null;
+      calciumHardness?: number | null;
+      salt?: number | null;
+    }> | null;
     equipment?: {
       equipmentType?: string | null;
       energySource?: string | null;
@@ -33,8 +46,23 @@
     } | null;
   };
 
+  type UserLocationSummary = {
+    locationId: string;
+    name: string;
+    formattedAddress?: string | null;
+    googlePlaceId?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    timezone?: string | null;
+    isActive?: boolean;
+  };
+
   export let data: {
     pools: Array<{ poolId: string; name?: string }>;
+    locations: UserLocationSummary[];
+    preferences?: {
+      measurementSystem?: 'metric' | 'imperial' | null;
+    } | null;
     highlightedPool: HighlightedPool | null;
     defaultPoolId?: string | null;
     latestTest: {
@@ -47,6 +75,16 @@
       saltPpm?: number | null;
       testedAt?: string | Date | null;
     } | null;
+    recentTests: Array<{
+      id?: string;
+      testedAt?: string | Date | null;
+      freeChlorine?: number | null;
+      ph?: number | null;
+      totalAlkalinity?: number | null;
+      cyanuricAcid?: number | null;
+      calciumHardness?: number | null;
+      salt?: number | null;
+    }>;
     recommendations: {
       primary: {
         chemicalId: string;
@@ -104,27 +142,33 @@
       reason?: string | null;
       additionMethod?: string | null;
     }>;
-    costs: Array<{
-      costId: string;
-      amount: string | number;
-      currency?: string | null;
-      categoryName?: string | null;
-      description?: string | null;
-      vendor?: string | null;
-      incurredAt: string | Date | null;
+    inventoryItems: Array<{
+      productId: string;
+      itemClass?: string | null;
+      productName?: string | null;
+      productBrand?: string | null;
+      unit?: string | null;
+      quantityOnHand?: string | number | null;
     }>;
-    costSummary: {
-      window: 'week' | 'month' | 'year';
-      from: string;
-      to: string;
-      total: string | number;
-      currency?: string | null;
-      byCategory: Array<{
-        categoryId?: string | null;
-        categoryName?: string | null;
-        total: string | number;
+    effectiveness: {
+      byPool: Array<{
+        poolId?: string | null;
+        poolName?: string | null;
+        outcomes: number;
+        loggedOutcomes: number;
+        averageQuality: number | null;
       }>;
-    } | null;
+      byTreatmentType: Array<{
+        treatmentType?: string | null;
+        outcomes: number;
+        loggedOutcomes: number;
+        averageQuality: number | null;
+      }>;
+    };
+    dueOutcomePrompts: Array<{
+      dueAt: string;
+      checkpointHours: number;
+    }>;
     weatherDaily: Array<{
       weatherId: string;
       locationId: string;
@@ -185,60 +229,115 @@
     return `${numeric.toFixed(decimals)}${suffix}`;
   };
 
-  const metrics = (
-    data.latestTest
-      ? [
-          {
-            label: 'Free Chlorine',
-            value: formatMeasurement(data.latestTest.freeChlorinePpm, ' ppm'),
-            trend: 'flat',
-            hint: 'target 3–5',
-          },
-          {
-            label: 'pH',
-            value: formatMeasurement(data.latestTest.phLevel, '', 1),
-            trend: 'flat',
-            hint: 'target 7.4–7.6',
-          },
-          {
-            label: 'Total Alkalinity',
-            value: formatMeasurement(data.latestTest.totalAlkalinityPpm, ' ppm', 0),
-            trend: 'flat',
-            hint: 'target 80–120',
-          },
-          {
-            label: 'Cyanuric Acid',
-            value: formatMeasurement(data.latestTest.cyanuricAcidPpm, ' ppm', 0),
-            trend: 'flat',
-            hint: 'target 30–50',
-          },
-          {
-            label: 'Calcium Hardness',
-            value: formatMeasurement(data.latestTest.calciumHardnessPpm, ' ppm', 0),
-            trend: 'flat',
-            hint: 'target 200–400',
-          },
-          {
-            label: 'Salt',
-            value: formatMeasurement(data.latestTest.saltPpm, ' ppm', 0),
-            trend: 'flat',
-            hint: 'target 2700–3400',
-          },
-        ]
-      : []
-  ) satisfies Array<{
+  const findLatestMetricValue = (
+    tests: typeof data.recentTests,
+    selector: (test: (typeof data.recentTests)[number]) => number | string | null | undefined,
+  ) => {
+    for (const test of tests ?? []) {
+      const value = selector(test);
+      if (value !== null && value !== undefined && value !== '') {
+        return value;
+      }
+    }
+    return null;
+  };
+
+  const formatTargetRange = (
+    min: number | string | null | undefined,
+    max: number | string | null | undefined,
+    suffix = '',
+  ) => {
+    if (min === null || min === undefined || max === null || max === undefined) {
+      return null;
+    }
+    return `target ${min}\u2013${max}${suffix}`;
+  };
+
+  const defaultSanitizerTargetHint = (pool: HighlightedPool | null) => {
+    const derived = formatTargetRange(
+      pool?.sanitizerTargetMinPpm ?? null,
+      pool?.sanitizerTargetMaxPpm ?? null,
+    );
+    if (derived) return derived;
+    return pool?.sanitizerType?.toLowerCase() === 'bromine' ? 'target 3–5' : 'target 2–4';
+  };
+
+  const defaultSaltTargetHint = (pool: HighlightedPool | null) => {
+    const saltTarget = pool?.saltLevelPpm;
+    if (typeof saltTarget === 'number' && Number.isFinite(saltTarget) && saltTarget > 0) {
+      return `target ${saltTarget.toLocaleString()} ppm`;
+    }
+    return 'target 2700–3400';
+  };
+
+  $: latestMetricValues = {
+    freeChlorinePpm: findLatestMetricValue(data.recentTests, (test) => test.freeChlorine),
+    phLevel: findLatestMetricValue(data.recentTests, (test) => test.ph),
+    totalAlkalinityPpm: findLatestMetricValue(data.recentTests, (test) => test.totalAlkalinity),
+    cyanuricAcidPpm: findLatestMetricValue(data.recentTests, (test) => test.cyanuricAcid),
+    calciumHardnessPpm: findLatestMetricValue(data.recentTests, (test) => test.calciumHardness),
+    saltPpm: findLatestMetricValue(data.recentTests, (test) => test.salt),
+  };
+
+  let metrics: Array<{
     label: string;
     value: string | number;
     trend?: 'flat' | 'up' | 'down';
     hint?: string;
-  }>;
+  }> = [];
+
+  $: metrics = data.recentTests?.length
+    ? [
+        {
+          label: 'Free Chlorine',
+          value: formatMeasurement(latestMetricValues.freeChlorinePpm, ' ppm'),
+          trend: 'flat',
+          hint: defaultSanitizerTargetHint(data.highlightedPool),
+        },
+        {
+          label: 'pH',
+          value: formatMeasurement(latestMetricValues.phLevel, '', 1),
+          trend: 'flat',
+          hint: 'target 7.4–7.6',
+        },
+        {
+          label: 'Total Alkalinity',
+          value: formatMeasurement(latestMetricValues.totalAlkalinityPpm, ' ppm', 0),
+          trend: 'flat',
+          hint: 'target 80–120',
+        },
+        {
+          label: 'Cyanuric Acid',
+          value: formatMeasurement(latestMetricValues.cyanuricAcidPpm, ' ppm', 0),
+          trend: 'flat',
+          hint: 'target 30–50',
+        },
+        {
+          label: 'Calcium Hardness',
+          value: formatMeasurement(latestMetricValues.calciumHardnessPpm, ' ppm', 0),
+          trend: 'flat',
+          hint: 'target 200–400',
+        },
+        {
+          label: 'Salt',
+          value: formatMeasurement(latestMetricValues.saltPpm, ' ppm', 0),
+          trend: 'flat',
+          hint: defaultSaltTargetHint(data.highlightedPool),
+        },
+      ]
+    : [];
 
   let showQuickModal = false;
   let showGuidedModal = false;
   let showCreatePoolModal = false;
+  let generatingTreatmentPlan = false;
+  let treatmentPlanMessage = '';
+  let treatmentPlanError = '';
   let creatingPool = false;
   let createPoolError = '';
   let createPoolSuccess = '';
+  let showCreatePoolAdvanced = false;
+  let createPoolLocationSelection = '__new__';
   let createPoolForm = {
     name: '',
     volumeGallons: '',
@@ -266,6 +365,12 @@
   const chlorineSourceOptions = ['manual', 'swg'];
   const surfaceOptions = ['plaster', 'vinyl', 'fiberglass', 'tile', 'concrete', 'other'];
   const sanitizerResidualMaxPpm = 20;
+  const newLocationOptionValue = '__new__';
+
+  const normalizeAddress = (value: string | null | undefined) =>
+    (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+  $: overviewActiveLocations = (data.locations ?? []).filter((location) => location?.isActive !== false);
 
   function closeModals() {
     showQuickModal = false;
@@ -273,6 +378,30 @@
     showCreatePoolModal = false;
     createPoolError = '';
     createPoolSuccess = '';
+  }
+
+  function openCreatePoolModal() {
+    showCreatePoolModal = true;
+    createPoolError = '';
+    createPoolSuccess = '';
+    showCreatePoolAdvanced = false;
+    createPoolForm = {
+      name: '',
+      volumeGallons: '',
+      sanitizerType: '',
+      chlorineSource: '',
+      saltTargetPpm: '',
+      sanitizerTargetMinPpm: '',
+      sanitizerTargetMaxPpm: '',
+      surfaceType: '',
+      formattedAddress: '',
+      googlePlaceId: '',
+      googlePlusCode: '',
+      latitude: '',
+      longitude: '',
+      timezone: '',
+    };
+    createPoolLocationSelection = overviewActiveLocations.length > 0 ? overviewActiveLocations[0].locationId : newLocationOptionValue;
   }
 
   const parseOptionalNumber = (value: string | number | null | undefined) => {
@@ -288,6 +417,27 @@
     isChlorineSanitizer(sanitizerType) && chlorineSource.trim().toLowerCase() === 'swg';
   const showsSanitizerTargetRange = (value: string) =>
     ['chlorine', 'bromine'].includes(value.trim().toLowerCase());
+
+  const findExistingLocationMatch = () =>
+    overviewActiveLocations.find((location) => {
+      const placeId = createPoolForm.googlePlaceId.trim();
+      if (placeId && location.googlePlaceId?.trim() === placeId) {
+        return true;
+      }
+
+      const selectedAddress = normalizeAddress(createPoolForm.formattedAddress);
+      if (!selectedAddress || normalizeAddress(location.formattedAddress) !== selectedAddress) {
+        return false;
+      }
+
+      const selectedLat = createPoolForm.latitude.trim() ? Number(createPoolForm.latitude.trim()) : null;
+      const selectedLng = createPoolForm.longitude.trim() ? Number(createPoolForm.longitude.trim()) : null;
+      if (selectedLat === null || selectedLng === null || Number.isNaN(selectedLat) || Number.isNaN(selectedLng)) {
+        return true;
+      }
+
+      return location.latitude === selectedLat && location.longitude === selectedLng;
+    }) ?? null;
 
   async function handleCreatePoolSubmit() {
     createPoolError = '';
@@ -324,46 +474,65 @@
     if (showsSanitizerTargetRange(createPoolForm.sanitizerType)) {
       const min = parseOptionalNumber(createPoolForm.sanitizerTargetMinPpm);
       const max = parseOptionalNumber(createPoolForm.sanitizerTargetMaxPpm);
-      if (min === null || max === null || min <= 0 || max <= 0 || min > max) {
-        createPoolError = 'Sanitizer target range must include valid min/max ppm values.';
-        return;
+      if (min !== null || max !== null) {
+        if (min === null || max === null || min <= 0 || max <= 0 || min > max) {
+          createPoolError = 'Sanitizer target range must include valid min/max ppm values.';
+          return;
+        }
+        if (min > sanitizerResidualMaxPpm || max > sanitizerResidualMaxPpm) {
+          createPoolError =
+            'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.';
+          return;
+        }
       }
-      if (min > sanitizerResidualMaxPpm || max > sanitizerResidualMaxPpm) {
-        createPoolError =
-          'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.';
-        return;
-      }
-    }
-    const latitude = createPoolForm.latitude.trim() ? Number(createPoolForm.latitude.trim()) : undefined;
-    const longitude = createPoolForm.longitude.trim() ? Number(createPoolForm.longitude.trim()) : undefined;
-    if (latitude === undefined || Number.isNaN(latitude) || longitude === undefined || Number.isNaN(longitude)) {
-      createPoolError = 'Select a valid location using the map picker.';
-      return;
     }
 
     creatingPool = true;
     try {
-      const fallbackLocationName = `${createPoolForm.name.trim()} location`;
-      const autoLocationName =
-        createPoolForm.formattedAddress.trim().split(',')[0]?.trim() || fallbackLocationName;
-      const locationRes = await api.userLocations.create({
-        name: autoLocationName,
-        formattedAddress: createPoolForm.formattedAddress.trim() || undefined,
-        googlePlaceId: createPoolForm.googlePlaceId.trim() || undefined,
-        googlePlusCode: createPoolForm.googlePlusCode.trim() || undefined,
-        latitude,
-        longitude,
-        timezone: createPoolForm.timezone.trim() || undefined,
-      });
-      if (!locationRes.ok) {
-        const body = await locationRes.json().catch(() => ({}));
-        createPoolError = body.error ?? body.message ?? `Unable to create location (${locationRes.status}).`;
-        return;
-      }
-      const locationBody = (await locationRes.json().catch(() => null)) as { locationId?: string } | null;
-      const locationId = locationBody?.locationId;
+      let locationId =
+        createPoolLocationSelection !== newLocationOptionValue ? createPoolLocationSelection : null;
+
       if (!locationId) {
-        createPoolError = 'Location created without a location ID.';
+        const latitude = createPoolForm.latitude.trim() ? Number(createPoolForm.latitude.trim()) : undefined;
+        const longitude = createPoolForm.longitude.trim() ? Number(createPoolForm.longitude.trim()) : undefined;
+        if (latitude === undefined || Number.isNaN(latitude) || longitude === undefined || Number.isNaN(longitude)) {
+          createPoolError = 'Select a valid location using the map picker.';
+          return;
+        }
+
+        const existingLocation = findExistingLocationMatch();
+        if (existingLocation) {
+          locationId = existingLocation.locationId;
+        } else {
+          const fallbackLocationName = `${createPoolForm.name.trim()} location`;
+          const autoLocationName =
+            createPoolForm.formattedAddress.trim().split(',')[0]?.trim() || fallbackLocationName;
+          const locationRes = await api.userLocations.create({
+            name: autoLocationName,
+            formattedAddress: createPoolForm.formattedAddress.trim() || undefined,
+            googlePlaceId: createPoolForm.googlePlaceId.trim() || undefined,
+            googlePlusCode: createPoolForm.googlePlusCode.trim() || undefined,
+            latitude,
+            longitude,
+            timezone: createPoolForm.timezone.trim() || undefined,
+          });
+          if (!locationRes.ok) {
+            const body = await locationRes.json().catch(() => ({}));
+            if (locationRes.status === 409 && typeof body.locationId === 'string') {
+              locationId = body.locationId;
+            } else {
+              createPoolError = body.error ?? body.message ?? `Unable to create location (${locationRes.status}).`;
+              return;
+            }
+          } else {
+            const locationBody = (await locationRes.json().catch(() => null)) as { locationId?: string } | null;
+            locationId = locationBody?.locationId ?? null;
+          }
+        }
+      }
+
+      if (!locationId) {
+        createPoolError = 'Location could not be resolved.';
         return;
       }
 
@@ -377,12 +546,14 @@
         saltLevelPpm: isSwgChlorinePool(createPoolForm.sanitizerType, createPoolForm.chlorineSource)
           ? parseOptionalNumber(createPoolForm.saltTargetPpm)
           : null,
-        sanitizerTargetMinPpm: showsSanitizerTargetRange(createPoolForm.sanitizerType)
-          ? parseOptionalNumber(createPoolForm.sanitizerTargetMinPpm)
-          : null,
-        sanitizerTargetMaxPpm: showsSanitizerTargetRange(createPoolForm.sanitizerType)
-          ? parseOptionalNumber(createPoolForm.sanitizerTargetMaxPpm)
-          : null,
+        sanitizerTargetMinPpm:
+          showsSanitizerTargetRange(createPoolForm.sanitizerType) && showCreatePoolAdvanced
+            ? parseOptionalNumber(createPoolForm.sanitizerTargetMinPpm)
+            : null,
+        sanitizerTargetMaxPpm:
+          showsSanitizerTargetRange(createPoolForm.sanitizerType) && showCreatePoolAdvanced
+            ? parseOptionalNumber(createPoolForm.sanitizerTargetMaxPpm)
+            : null,
         surfaceType: createPoolForm.surfaceType.trim(),
         locationId,
       });
@@ -472,6 +643,35 @@
     await api.me.updatePreferences({ defaultPoolId: selectedPoolId }).catch(() => null);
     await goto(`/overview?poolId=${selectedPoolId}`, { invalidateAll: true });
   }
+
+  async function handleGenerateTreatmentPlan() {
+    if (!data.highlightedPool?.id) return;
+    generatingTreatmentPlan = true;
+    treatmentPlanMessage = '';
+    treatmentPlanError = '';
+
+    try {
+      const response = await api.treatmentPlans.generate(data.highlightedPool.id);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        treatmentPlanError =
+          payload?.message ?? payload?.error ?? `Unable to generate treatment plan (${response.status}).`;
+        return;
+      }
+
+      const payload = await response.json().catch(() => null);
+      const status = typeof payload?.status === 'string' ? payload.status : 'generated';
+      treatmentPlanMessage =
+        status === 'refused'
+          ? 'Treatment plan generated with blocking safety checks.'
+          : 'Treatment plan generated.';
+      await invalidateAll();
+    } catch {
+      treatmentPlanError = 'Unable to generate treatment plan.';
+    } finally {
+      generatingTreatmentPlan = false;
+    }
+  }
 </script>
 
 <Container>
@@ -491,7 +691,7 @@
       </select>
     </div>
     <div class="flex flex-wrap gap-2">
-      <button class="btn btn-sm btn-tonal" on:click={() => (showCreatePoolModal = true)}>
+      <button class="btn btn-sm btn-tonal" on:click={openCreatePoolModal}>
         Create new pool
       </button>
       <button class="btn btn-sm btn-primary" on:click={() => (showQuickModal = true)} disabled={!data.highlightedPool}>
@@ -514,7 +714,7 @@
       </a>
     {/if}
   </div>
-  {#if data.latestTest}
+  {#if data.recentTests?.length}
     <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {#each metrics as m}
         <MetricTile {...m} />
@@ -545,6 +745,8 @@
       <DosingHistoryCard
         dosingHistory={data.dosingHistory}
         poolId={data.highlightedPool?.id ?? null}
+        availableChemicals={data.inventoryItems.filter((item) => item.itemClass === 'chemical')}
+        measurementSystem={data.preferences?.measurementSystem === 'metric' ? 'metric' : 'imperial'}
       />
     </div>
     <div class="lg:col-span-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -579,23 +781,47 @@
       </section>
     </div>
     <div class="lg:col-span-3">
-      <CostsCard
-        costs={data.costs}
-        summary={data.costSummary}
-        poolId={data.highlightedPool?.id ?? null}
-      />
-    </div>
-    <div class="lg:col-span-3">
       <UpcomingMaintenanceCard events={upcomingEvents} poolName={data.highlightedPool?.name ?? null} />
     </div>
     <div class="lg:col-span-3">
-      <AiMaintenanceAdvisorCard
-        poolName={data.highlightedPool?.name ?? null}
-        hasLatestTest={Boolean(data.latestTest)}
-        recommendations={effectiveRecommendations}
-        weatherDaily={data.weatherDaily}
-        dosingHistoryCount={data.dosingHistory.length}
-      />
+      <section class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 shadow-card">
+          <div>
+            <h3 class="text-base font-semibold text-content-primary">AI Treatment Plan</h3>
+            <p class="text-sm text-content-secondary">
+              Trigger the LLM-backed treatment-plan flow for the active pool.
+            </p>
+            <p class="mt-1 text-xs text-content-secondary">
+              Requirements: active pool access, at least one saved water test, and treatment-plan migrations initialized.
+            </p>
+            {#if data.latestTreatmentPlan}
+              <p class="mt-1 text-xs text-content-secondary">
+                Latest plan: {new Date(data.latestTreatmentPlan.createdAt).toLocaleString()} · status {data.latestTreatmentPlan.status}
+              </p>
+            {/if}
+          </div>
+          <button
+            class="btn btn-sm btn-primary"
+            on:click={handleGenerateTreatmentPlan}
+            disabled={!data.highlightedPool || generatingTreatmentPlan || !data.latestTest}
+          >
+            {generatingTreatmentPlan ? 'Generating AI plan...' : 'Generate AI treatment plan'}
+          </button>
+        </div>
+        {#if treatmentPlanMessage}
+          <p class="text-sm text-success" role="status">{treatmentPlanMessage}</p>
+        {/if}
+        {#if treatmentPlanError}
+          <p class="text-sm text-danger" role="alert">{treatmentPlanError}</p>
+        {/if}
+        <AiMaintenanceAdvisorCard
+          poolName={data.highlightedPool?.name ?? null}
+          hasLatestTest={Boolean(data.latestTest)}
+          recommendations={effectiveRecommendations}
+          weatherDaily={data.weatherDaily}
+          dosingHistoryCount={data.dosingHistory.length}
+        />
+      </section>
     </div>
     <div class="lg:col-span-3">
       <WeatherQualityCard dailyWeather={data.weatherDaily} error={data.weatherError ?? null} />
@@ -688,6 +914,19 @@
               </label>
             {/if}
             {#if showsSanitizerTargetRange(createPoolForm.sanitizerType)}
+              <label class="flex items-center gap-3 text-sm font-medium text-content-secondary sm:col-span-2">
+                <span>Advanced settings</span>
+                <input
+                  type="checkbox"
+                  class="sr-only peer"
+                  bind:checked={showCreatePoolAdvanced}
+                />
+                <span class="relative inline-flex h-6 w-11 items-center rounded-full bg-border transition peer-checked:bg-accent">
+                  <span class={`inline-block h-5 w-5 transform rounded-full bg-white transition ${showCreatePoolAdvanced ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                </span>
+              </label>
+            {/if}
+            {#if showsSanitizerTargetRange(createPoolForm.sanitizerType) && showCreatePoolAdvanced}
               <label class="text-sm font-medium text-content-secondary">
                 Sanitizer target min (ppm)
                 <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" type="number" min="0" max={sanitizerResidualMaxPpm} step="0.1" bind:value={createPoolForm.sanitizerTargetMinPpm} placeholder="e.g. 2" />
@@ -717,6 +956,23 @@
         <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
           <p class="text-xs font-semibold uppercase tracking-wide text-content-secondary">Location</p>
           <div class="mt-3 grid gap-4 sm:grid-cols-2">
+            {#if overviewActiveLocations.length > 0}
+              <label class="text-sm font-medium text-content-secondary sm:col-span-2">
+                Existing location
+                <select
+                  class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  bind:value={createPoolLocationSelection}
+                >
+                  {#each overviewActiveLocations as location}
+                    <option value={location.locationId}>
+                      {location.name}{location.formattedAddress ? ` • ${location.formattedAddress}` : ''}
+                    </option>
+                  {/each}
+                  <option value={newLocationOptionValue}>Add a new location</option>
+                </select>
+              </label>
+            {/if}
+            {#if createPoolLocationSelection === newLocationOptionValue}
             <div class="sm:col-span-2">
               <GoogleMapPicker
                 idPrefix="overview-create-location"
@@ -732,6 +988,15 @@
               Selected address
               <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={createPoolForm.formattedAddress} />
             </label>
+            {:else}
+              <div class="sm:col-span-2 rounded-lg border border-border/60 bg-surface px-3 py-3 text-sm text-content-secondary">
+                {#if overviewActiveLocations.find((location) => location.locationId === createPoolLocationSelection)?.formattedAddress}
+                  {overviewActiveLocations.find((location) => location.locationId === createPoolLocationSelection)?.formattedAddress}
+                {:else}
+                  Using saved location for this account.
+                {/if}
+              </div>
+            {/if}
           </div>
         </div>
         {#if createPoolError}

@@ -1,6 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { locationsService, LocationTransferTargetError } from '../services/locations.js';
+import {
+  locationsService,
+  LocationTransferTargetError,
+  DuplicateLocationError,
+} from '../services/locations.js';
 import {
   weatherService,
   WeatherProviderRateLimitError,
@@ -133,6 +137,13 @@ export async function locationsRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+      }
+      if (err instanceof DuplicateLocationError) {
+        return reply.code(409).send({
+          error: 'DuplicateLocation',
+          message: 'A matching location already exists.',
+          locationId: err.existingLocationId,
+        });
       }
       throw err;
     }

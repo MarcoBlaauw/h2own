@@ -276,31 +276,6 @@ export async function authRoutes(app: FastifyInstance) {
     });
   };
 
-  const buildRequestBaseUrl = (req: FastifyRequest) => {
-    const forwardedProtoRaw = req.headers["x-forwarded-proto"];
-    const forwardedHostRaw = req.headers["x-forwarded-host"];
-    const hostRaw = req.headers.host;
-
-    const forwardedProto = Array.isArray(forwardedProtoRaw)
-      ? forwardedProtoRaw[0]
-      : forwardedProtoRaw;
-    const forwardedHost = Array.isArray(forwardedHostRaw)
-      ? forwardedHostRaw[0]
-      : forwardedHostRaw;
-    const host = Array.isArray(hostRaw) ? hostRaw[0] : hostRaw;
-
-    if (typeof forwardedProto === "string" && typeof forwardedHost === "string") {
-      return `${forwardedProto}://${forwardedHost}`;
-    }
-
-    if (typeof host === "string") {
-      const protocol = req.protocol || "http";
-      return `${protocol}://${host}`;
-    }
-
-    return env.APP_BASE_URL;
-  };
-
   const normalizeResetToken = (rawToken: string) => {
     const tokenCandidate = rawToken.trim();
 
@@ -662,8 +637,8 @@ export async function authRoutes(app: FastifyInstance) {
           env.PASSWORD_RESET_TOKEN_TTL_SECONDS,
         );
 
-        const base = buildRequestBaseUrl(req).replace(/\/$/, "");
-        const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+        const appBaseUrl = env.APP_BASE_URL.replace(/\/$/, "");
+        const resetUrl = `${appBaseUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
         sendEmailInBackground(
           req,

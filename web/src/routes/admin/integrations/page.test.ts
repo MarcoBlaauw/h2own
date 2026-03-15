@@ -38,6 +38,35 @@ describe('admin integrations page', () => {
       createdAt: new Date('2026-02-20T09:00:00.000Z').toISOString(),
       updatedAt: new Date('2026-02-20T10:00:00.000Z').toISOString(),
     },
+    {
+      integrationId: 'integ-llm',
+      provider: 'llm',
+      displayName: 'LLM Provider',
+      enabled: true,
+      cacheTtlSeconds: null,
+      rateLimitCooldownSeconds: null,
+      config: {
+        provider: 'openai',
+        modelFamily: 'balanced',
+        modelId: 'gpt-4o-mini',
+        temperature: 0.2,
+        maxTokens: 1200,
+        timeoutMs: 12000,
+        maxRetries: 2,
+        circuitBreakerThreshold: 3,
+        circuitBreakerCooldownMs: 30000,
+        fallbackBehavior: 'computed_preview',
+      },
+      credentials: { hasApiKey: true, apiKeyPreview: 'OPEN****AI' },
+      lastResponseCode: 200,
+      lastResponseText: 'openai:gpt-4o-mini',
+      lastResponseAt: new Date('2026-02-20T10:00:00.000Z').toISOString(),
+      lastSuccessAt: new Date('2026-02-20T10:00:00.000Z').toISOString(),
+      nextAllowedRequestAt: null,
+      updatedBy: null,
+      createdAt: new Date('2026-02-20T09:00:00.000Z').toISOString(),
+      updatedAt: new Date('2026-02-20T10:00:00.000Z').toISOString(),
+    },
   ];
 
   beforeEach(() => {
@@ -50,13 +79,13 @@ describe('admin integrations page', () => {
   });
 
   it('renders integration cards', () => {
-    const { getByText } = render(Page, {
+    const { getByText, getAllByText } = render(Page, {
       props: { data: { session, integrations, loadError: null } },
     });
 
     expect(getByText('Tomorrow.io')).toBeInTheDocument();
     expect(getByText('tomorrow_io')).toBeInTheDocument();
-    expect(getByText(/Last code:/i)).toBeInTheDocument();
+    expect(getAllByText(/Last code:/i).length).toBeGreaterThan(0);
   });
 
   it('saves integration settings', async () => {
@@ -75,18 +104,18 @@ describe('admin integrations page', () => {
       })
     );
 
-    const { getByText, getByLabelText, getByPlaceholderText, findByRole } = render(Page, {
+    const { getAllByText, getAllByLabelText, getAllByPlaceholderText, findByRole } = render(Page, {
       props: { data: { session, integrations, loadError: null } },
     });
 
-    await fireEvent.input(getByLabelText('Cache TTL (seconds)'), { target: { value: '3600' } });
-    await fireEvent.input(getByLabelText('Rate-limit cooldown (seconds)'), {
+    await fireEvent.input(getAllByLabelText('Cache TTL (seconds)')[0], { target: { value: '3600' } });
+    await fireEvent.input(getAllByLabelText('Rate-limit cooldown (seconds)')[0], {
       target: { value: '600' },
     });
-    await fireEvent.input(getByPlaceholderText('Leave blank to keep current key'), {
+    await fireEvent.input(getAllByPlaceholderText('Leave blank to keep current key')[0], {
       target: { value: 'new-api-key' },
     });
-    await fireEvent.click(getByText('Save'));
+    await fireEvent.click(getAllByText('Save')[0]);
 
     expect(updateMock).toHaveBeenCalledWith(
       'tomorrow_io',
@@ -118,5 +147,48 @@ describe('admin integrations page', () => {
     await waitFor(() => {
       expect(listMock).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('saves llm integration settings', async () => {
+    const llmIntegration = integrations[1];
+    const updated = {
+      ...llmIntegration,
+      config: {
+        ...llmIntegration.config,
+        modelFamily: 'quality',
+        modelId: 'gpt-4o',
+      },
+    };
+
+    updateMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(updated), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    const { getAllByText, getByDisplayValue, getByPlaceholderText } = render(Page, {
+      props: { data: { session, integrations, loadError: null } },
+    });
+
+    await fireEvent.change(getByDisplayValue('balanced'), { target: { value: 'quality' } });
+    await fireEvent.input(
+      getByPlaceholderText('Leave blank to use the default model for the selected provider/family'),
+      { target: { value: 'gpt-4o' } }
+    );
+    await fireEvent.click(getAllByText('Save')[1]);
+
+    expect(updateMock).toHaveBeenCalledWith(
+      'llm',
+      expect.objectContaining({
+        enabled: true,
+        config: expect.objectContaining({
+          provider: 'openai',
+          modelFamily: 'quality',
+          modelId: 'gpt-4o',
+          fallbackBehavior: 'computed_preview',
+        }),
+      })
+    );
   });
 });

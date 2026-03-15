@@ -135,4 +135,30 @@ describe('CostsCard', () => {
     expect(alert.textContent).toContain('Description is required');
     expect(createMock).not.toHaveBeenCalled();
   });
+
+  it('prefills description and vendor from a selected catalog item', async () => {
+    const { getByLabelText } = render(CostsCard, {
+      props: {
+        costs: [],
+        summary: null,
+        poolId: '2a1e4c1f-7c39-4e01-9aaf-32047eb1f0e3',
+        productCategories: [{ categoryId: 'cat-1', name: 'Balancers' }],
+        products: [
+          {
+            productId: 'prod-1',
+            categoryId: 'cat-1',
+            name: 'Champion Muriatic Acid',
+            brand: 'Champion',
+            primaryVendor: { name: 'Home Depot' },
+          },
+        ],
+      },
+    });
+
+    await fireEvent.change(getByLabelText('Catalog category'), { target: { value: 'cat-1' } });
+    await fireEvent.change(getByLabelText('Catalog item'), { target: { value: 'prod-1' } });
+
+    expect((getByLabelText('Description') as HTMLInputElement).value).toBe('Champion Muriatic Acid');
+    expect((getByLabelText('Vendor') as HTMLInputElement).value).toBe('Home Depot');
+  });
 });

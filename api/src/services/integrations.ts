@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db as dbClient } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { env } from '../env.js';
+import { resolveLlmModelId } from './llm/catalog.js';
 
 export const INTEGRATION_PROVIDERS = [
   'tomorrow_io',
@@ -10,6 +11,7 @@ export const INTEGRATION_PROVIDERS = [
   'billing',
   'sms',
   'push',
+  'llm',
 ] as const;
 
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
@@ -61,6 +63,7 @@ const DEFAULT_DISPLAY_NAMES: Record<IntegrationProvider, string> = {
   billing: 'Billing Provider',
   sms: 'SMS Provider',
   push: 'Push Provider',
+  llm: 'LLM Provider',
 };
 
 type IntegrationSeed = {
@@ -124,6 +127,31 @@ const getProviderSeedFromEnv = (provider: IntegrationProvider): IntegrationSeed 
       enabled: true,
       config: env.PUSH_PROVIDER_BASE_URL ? { baseUrl: env.PUSH_PROVIDER_BASE_URL } : undefined,
       credentials: env.PUSH_PROVIDER_API_KEY ? { apiKey: env.PUSH_PROVIDER_API_KEY } : undefined,
+    };
+  }
+
+  if (provider === 'llm') {
+    const modelId = resolveLlmModelId(
+      env.LLM_PROVIDER,
+      env.LLM_MODEL_FAMILY,
+      env.LLM_MODEL_ID,
+    );
+
+    return {
+      enabled: env.LLM_PROVIDER !== 'none',
+      config: {
+        provider: env.LLM_PROVIDER,
+        modelFamily: env.LLM_MODEL_FAMILY,
+        modelId,
+        maxTokens: env.LLM_MAX_TOKENS,
+        temperature: env.LLM_TEMPERATURE,
+        timeoutMs: env.LLM_TIMEOUT_MS,
+        maxRetries: env.LLM_MAX_RETRIES,
+        circuitBreakerThreshold: env.LLM_CIRCUIT_BREAKER_THRESHOLD,
+        circuitBreakerCooldownMs: env.LLM_CIRCUIT_BREAKER_COOLDOWN_MS,
+        fallbackBehavior: env.LLM_FALLBACK_BEHAVIOR,
+      },
+      credentials: env.LLM_API_KEY ? { apiKey: env.LLM_API_KEY } : undefined,
     };
   }
 

@@ -3,6 +3,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import dotenv from "dotenv";
+import {
+  LLM_FALLBACK_BEHAVIORS,
+  LLM_MODEL_FAMILY_OPTIONS,
+  LLM_PROVIDER_OPTIONS,
+} from "./services/llm/catalog.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..", "..");
@@ -139,6 +144,29 @@ const envSchema = z.object({
     .transform((value) => Number(value))
     .pipe(z.number().int().positive())
     .default('60'),
+  VENDOR_PRICE_SYNC_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => (value ?? 'false').toLowerCase() === 'true'),
+  VENDOR_PRICE_SYNC_TICK_SECONDS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default('3600'),
+  VENDOR_PRICE_SYNC_BATCH_SIZE: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive().max(100))
+    .default('10'),
+  VENDOR_PRICE_STALE_DAYS: z
+    .string()
+    .transform((value) => Number(value))
+    .pipe(z.number().int().positive())
+    .default('14'),
+  VENDOR_PRICE_HOME_DEPOT_PROVIDER: z.enum(['auto', 'direct', 'serpapi']).default('auto'),
+  VENDOR_PRICE_SERPAPI_API_KEY: emptyToUndefined(z.string().optional()),
+  VENDOR_PRICE_HOME_DEPOT_DELIVERY_ZIP: emptyToUndefined(z.string().regex(/^\d{5}$/).optional()),
+  VENDOR_PRICE_HOME_DEPOT_STORE_ID: emptyToUndefined(z.string().regex(/^\d{1,8}$/).optional()),
   BILLING_PROVIDER_BASE_URL: emptyToUndefined(z.string().url().optional()),
   BILLING_PROVIDER_API_KEY: emptyToUndefined(z.string().optional()),
   BILLING_WEBHOOK_SECRET: emptyToUndefined(z.string().optional()),
@@ -188,8 +216,9 @@ const envSchema = z.object({
   PUSH_PROVIDER_BASE_URL: emptyToUndefined(z.string().url().optional()),
   SUPPORT_CONTACT_EMAILS: emptyToUndefined(z.string().optional()),
 
-  LLM_PROVIDER: z.enum(['openai', 'anthropic', 'none']).default('none'),
-  LLM_MODEL_ID: z.string().default('gpt-4o-mini'),
+  LLM_PROVIDER: z.enum(LLM_PROVIDER_OPTIONS).default('none'),
+  LLM_MODEL_FAMILY: z.enum(LLM_MODEL_FAMILY_OPTIONS).default('balanced'),
+  LLM_MODEL_ID: emptyToUndefined(z.string().optional()),
   LLM_API_KEY: emptyToUndefined(z.string().optional()),
   LLM_MAX_TOKENS: z.string().transform((value) => Number(value)).pipe(z.number().int().min(128).max(8192)).default('1200'),
   LLM_TEMPERATURE: z.string().transform((value) => Number(value)).pipe(z.number().min(0).max(1)).default('0.2'),
@@ -197,7 +226,7 @@ const envSchema = z.object({
   LLM_MAX_RETRIES: z.string().transform((value) => Number(value)).pipe(z.number().int().min(0).max(5)).default('2'),
   LLM_CIRCUIT_BREAKER_THRESHOLD: z.string().transform((value) => Number(value)).pipe(z.number().int().min(1).max(20)).default('3'),
   LLM_CIRCUIT_BREAKER_COOLDOWN_MS: z.string().transform((value) => Number(value)).pipe(z.number().int().min(1000).max(300000)).default('30000'),
-  LLM_FALLBACK_BEHAVIOR: z.enum(['computed_preview', 'refuse']).default('computed_preview'),
+  LLM_FALLBACK_BEHAVIOR: z.enum(LLM_FALLBACK_BEHAVIORS).default('computed_preview'),
 });
 
 function parseEnv() {

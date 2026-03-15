@@ -175,8 +175,45 @@ export class LocationTransferTargetError extends Error {
   }
 }
 
+export class DuplicateLocationError extends Error {
+  constructor(public readonly existingLocationId: string) {
+    super(`Location already exists: ${existingLocationId}`);
+    this.name = 'DuplicateLocationError';
+  }
+}
+
+function normalizeAddress(value: string | null | undefined) {
+  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 export class LocationsService {
   constructor(private readonly db = dbClient) {}
+
+  private isDuplicateLocation(existing: LocationDetail, incoming: CreateLocationData) {
+    if (existing.isActive === false) return false;
+
+    const existingPlaceId = existing.googlePlaceId?.trim();
+    const incomingPlaceId = incoming.googlePlaceId?.trim();
+    if (existingPlaceId && incomingPlaceId && existingPlaceId === incomingPlaceId) {
+      return true;
+    }
+
+    const existingAddress = normalizeAddress(existing.formattedAddress);
+    const incomingAddress = normalizeAddress(incoming.formattedAddress);
+    const existingLat = existing.latitude;
+    const existingLng = existing.longitude;
+    const incomingLat = incoming.latitude ?? null;
+    const incomingLng = incoming.longitude ?? null;
+
+    if (existingAddress && incomingAddress && existingAddress === incomingAddress) {
+      if (existingLat === null || incomingLat === null || existingLng === null || incomingLng === null) {
+        return true;
+      }
+      return existingLat === incomingLat && existingLng === incomingLng;
+    }
+
+    return false;
+  }
 
   private mapLocation(row: LocationRow, pools: PoolRow[]): LocationDetail {
     return {
@@ -338,6 +375,12 @@ export class LocationsService {
   }
 
   async createLocation(data: CreateLocationData) {
+    const existingLocations = await this.listLocationsForUser(data.userId);
+    const duplicate = existingLocations.find((location) => this.isDuplicateLocation(location, data));
+    if (duplicate) {
+      throw new DuplicateLocationError(duplicate.locationId);
+    }
+
     const [inserted] = await this.db
       .insert(schema.userLocations)
       .values(mapCreateLocationData(data))

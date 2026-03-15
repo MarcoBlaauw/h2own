@@ -45,7 +45,7 @@ describe('DosingHistoryCard', () => {
               chemicalId: '6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15',
               chemicalName: 'Liquid Chlorine',
               amount: '12',
-              unit: 'oz',
+              unit: 'g',
               addedAt: '2024-01-02T18:00:00.000Z',
             },
           ],
@@ -58,28 +58,34 @@ describe('DosingHistoryCard', () => {
       props: {
         dosingHistory: [],
         poolId: '2a1e4c1f-7c39-4e01-9aaf-32047eb1f0e3',
+        availableChemicals: [
+          {
+            productId: '6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15',
+            productName: 'Liquid Chlorine',
+            productBrand: 'Generic',
+            unit: 'gal',
+            quantityOnHand: '64',
+          },
+        ],
       },
     });
 
-    await fireEvent.input(getByLabelText('Chemical ID'), {
+    await fireEvent.change(getByLabelText('Chemical'), {
       target: { value: '6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15' },
     });
     await fireEvent.input(getByLabelText('Amount'), { target: { value: '12' } });
-    await fireEvent.input(getByLabelText('Unit'), { target: { value: 'oz' } });
+    await fireEvent.change(getByLabelText('Unit'), { target: { value: 'fl_oz' } });
     await fireEvent.input(getByLabelText('Added at'), { target: { value: '2024-01-02T10:00' } });
 
     await fireEvent.click(getByRole('button', { name: /log dosing/i }));
 
     await waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        '2a1e4c1f-7c39-4e01-9aaf-32047eb1f0e3',
-        expect.objectContaining({
-          chemicalId: '6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15',
-          amount: 12,
-          unit: 'oz',
-          addedAt: expect.any(String),
-        })
-      );
+      expect(createMock).toHaveBeenCalled();
+      const [, payload] = createMock.mock.calls[0];
+      expect(payload.chemicalId).toBe('6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15');
+      expect(payload.unit).toBe('fl_oz');
+      expect(payload.amount).toBe(12);
+      expect(typeof payload.addedAt).toBe('string');
     });
 
     const status = await findByRole('status');
@@ -99,14 +105,22 @@ describe('DosingHistoryCard', () => {
       props: {
         dosingHistory: [],
         poolId: '2a1e4c1f-7c39-4e01-9aaf-32047eb1f0e3',
+        availableChemicals: [
+          {
+            productId: '6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15',
+            productName: 'Liquid Chlorine',
+            productBrand: 'Generic',
+            unit: 'gal',
+          },
+        ],
       },
     });
 
-    await fireEvent.input(getByLabelText('Chemical ID'), {
+    await fireEvent.change(getByLabelText('Chemical'), {
       target: { value: '6f4f5c62-8b5f-41a8-b6a5-6c5f4a2b8e15' },
     });
     await fireEvent.input(getByLabelText('Amount'), { target: { value: '12' } });
-    await fireEvent.input(getByLabelText('Unit'), { target: { value: 'oz' } });
+    await fireEvent.change(getByLabelText('Unit'), { target: { value: 'fl_oz' } });
 
     await fireEvent.click(getByRole('button', { name: /log dosing/i }));
 

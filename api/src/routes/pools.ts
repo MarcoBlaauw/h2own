@@ -17,15 +17,24 @@ import {
 import { photosService } from '../services/photos.js';
 import { recommenderService } from '../services/recommender.js';
 import { accountIntegrationsService } from '../services/account-integrations.js';
-import { treatmentPlannerService } from '../services/treatment-planner.js';
+import {
+  reportAudienceSchema,
+  treatmentPlannerService,
+  TreatmentPlanRequirementError,
+} from '../services/treatment-planner.js';
 import { scheduleEventsService, ScheduleEventConflictError } from '../services/schedule-events.js';
 import { messagesService } from '../services/messages.js';
 import { internalEventBus } from '../services/internal-events.js';
 import { wrapPoolRoute } from './route-utils.js';
 import { writeAuditLog } from './audit.js';
 import { inventoryService } from '../services/inventory.js';
+import {
+  MeasurementUnitValidationError,
+  normalizeMeasurementValue,
+} from '../services/measurement-units.js';
 import { hasAccountCapability } from '../services/authorization.js';
 import { predictionOutcomesService } from '../services/prediction-outcomes.js';
+import { mailerService } from '../services/mailer.js';
 
 const createPoolSchema = z.object({
   ownerId: z.string().uuid().optional(),
@@ -268,6 +277,15 @@ const scheduleTreatmentPlanBody = z.object({
 const shareTreatmentPlanBody = z.object({
   threadId: z.string().uuid().optional(),
   autoCreatePoolThread: z.coerce.boolean().optional().default(true),
+});
+
+const treatmentPlanReportQuery = z.object({
+  audience: reportAudienceSchema.default('owner'),
+});
+
+const emailTreatmentPlanReportBody = z.object({
+  audience: reportAudienceSchema,
+  to: z.string().email().optional(),
 });
 
 const updatePredictionOutcomeBody = z.object({
@@ -538,11 +556,20 @@ export async function poolsRoutes(app: FastifyInstance) {
         const { poolId } = poolIdParams.parse(req.params);
         const userId = req.user!.id;
         const data = createDosingSchema.parse(req.body);
-        const dosingEvent = await poolTestingService.createDosingEvent(poolId, userId, data);
+        const normalizedAmount = normalizeMeasurementValue(data.amount, data.unit);
+        const dosingEvent = await poolTestingService.createDosingEvent(poolId, userId, {
+          ...data,
+          amount: normalizedAmount.value,
+          unit: normalizedAmount.unit,
+        });
         return reply.code(201).send(dosingEvent);
       },
       {
         onError: (err, _req, reply) => {
+          if (err instanceof MeasurementUnitValidationError) {
+            reply.code(400).send({ error: 'ValidationError', message: err.message });
+            return true;
+          }
           if (
             err instanceof Error &&
             (err.message === 'Chemical not found' || err.message === 'Test does not belong to this pool')
@@ -579,7 +606,7 @@ export async function poolsRoutes(app: FastifyInstance) {
       const { poolId } = poolIdParams.parse(req.params);
       const userId = req.user!.id;
       await poolCoreService.ensurePoolAccess(poolId, userId);
-      const inventory = await inventoryService.listPoolInventory(poolId);
+      const inventory = await inventoryService.listPoolInventory(poolId, userId);
       return reply.send(inventory);
     })
   );
@@ -911,18 +938,32 @@ export async function poolsRoutes(app: FastifyInstance) {
   // POST /pools/:poolId/treatment-plans/generate
   app.post(
     '/:poolId/treatment-plans/generate',
-    wrapPoolRoute(async (req, reply) => {
-      const { poolId } = poolIdParams.parse(req.params);
-      const userId = req.user!.id;
-      const plan = await treatmentPlannerService.generate(poolId, userId);
-      internalEventBus.emit('treatment_plan.generated', {
-        planId: plan.planId,
-        poolId,
-        generatedBy: userId,
-        version: plan.version,
-      });
-      return reply.code(201).send(plan);
-    })
+    wrapPoolRoute(
+      async (req, reply) => {
+        const { poolId } = poolIdParams.parse(req.params);
+        const userId = req.user!.id;
+        const plan = await treatmentPlannerService.generate(poolId, userId);
+        internalEventBus.emit('treatment_plan.generated', {
+          planId: plan.planId,
+          poolId,
+          generatedBy: userId,
+          version: plan.version,
+        });
+        return reply.code(201).send(plan);
+      },
+      {
+        onError: (err, _req, reply) => {
+          if (err instanceof TreatmentPlanRequirementError) {
+            reply.code(400).send({
+              error: err.code,
+              message: err.message,
+            });
+            return true;
+          }
+          return false;
+        },
+      },
+    )
   );
 
   // GET /pools/:poolId/treatment-plans
@@ -1000,6 +1041,82 @@ export async function poolsRoutes(app: FastifyInstance) {
         threadId: thread.threadId,
         deepLink: shareData.deepLink,
         messageId: sent.message.messageId,
+      });
+    })
+  );
+
+  // GET /pools/:poolId/treatment-plans/:planId/report
+  app.get(
+    '/:poolId/treatment-plans/:planId/report',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, planId } = poolTreatmentPlanParams.parse(req.params);
+      const { audience } = treatmentPlanReportQuery.parse(req.query);
+      const userId = req.user!.id;
+
+      const report = await treatmentPlannerService.buildTreatmentReport(poolId, planId, userId, audience);
+      if (!report) {
+        return reply.code(404).send({ error: 'Treatment plan not found' });
+      }
+
+      reply
+        .header('content-type', 'application/pdf')
+        .header('content-disposition', `attachment; filename="${report.filename}"`);
+      return reply.send(report.pdfBuffer);
+    })
+  );
+
+  // POST /pools/:poolId/treatment-plans/:planId/report/email
+  app.post(
+    '/:poolId/treatment-plans/:planId/report/email',
+    wrapPoolRoute(async (req, reply) => {
+      const { poolId, planId } = poolTreatmentPlanParams.parse(req.params);
+      const { audience, to } = emailTreatmentPlanReportBody.parse(req.body ?? {});
+      const userId = req.user!.id;
+
+      const report = await treatmentPlannerService.buildTreatmentReport(poolId, planId, userId, audience);
+      if (!report) {
+        return reply.code(404).send({ error: 'Treatment plan not found' });
+      }
+
+      const recipient = to ?? (audience === 'owner' ? report.pool.ownerEmail : null);
+      if (!recipient) {
+        return reply.code(400).send({
+          error: 'RecipientRequired',
+          message: 'An email recipient is required for this report audience.',
+        });
+      }
+
+      const sendResult = await mailerService.send({
+        to: recipient,
+        subject: report.emailSubject,
+        text: report.emailText,
+        attachments: [{
+          filename: report.filename,
+          content: report.pdfBuffer,
+          contentType: 'application/pdf',
+        }],
+      });
+
+      await writeAuditLog(app, req, {
+        action: 'treatment_plan.report_emailed',
+        entity: 'treatment_plan',
+        entityId: planId,
+        userId,
+        poolId,
+        data: {
+          audience,
+          recipient,
+          sent: sendResult.sent,
+          skipped: sendResult.skipped,
+        },
+      });
+
+      return reply.code(201).send({
+        planId,
+        audience,
+        recipient,
+        sent: sendResult.sent,
+        skipped: sendResult.skipped,
       });
     })
   );

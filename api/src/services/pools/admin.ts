@@ -178,11 +178,15 @@ export class PoolAdminService {
     });
 
     const updatePayload = buildPoolUpdate(data);
+    const sanitizerTargetMinPpm =
+      chemistry.sanitizerTargetMinPpm === null ? null : chemistry.sanitizerTargetMinPpm.toString();
+    const sanitizerTargetMaxPpm =
+      chemistry.sanitizerTargetMaxPpm === null ? null : chemistry.sanitizerTargetMaxPpm.toString();
     updatePayload.sanitizerType = chemistry.sanitizerType;
     updatePayload.chlorineSource = chemistry.chlorineSource;
     updatePayload.saltLevelPpm = chemistry.saltLevelPpm;
-    updatePayload.sanitizerTargetMinPpm = chemistry.sanitizerTargetMinPpm.toString();
-    updatePayload.sanitizerTargetMaxPpm = chemistry.sanitizerTargetMaxPpm.toString();
+    updatePayload.sanitizerTargetMinPpm = sanitizerTargetMinPpm;
+    updatePayload.sanitizerTargetMaxPpm = sanitizerTargetMaxPpm;
 
     const [pool] = await this.db
       .update(schema.pools)

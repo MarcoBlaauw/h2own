@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   locationsService,
   LocationTransferTargetError,
+  DuplicateLocationError,
   type LocationDetail,
 } from '../services/locations.js';
 
@@ -137,6 +138,13 @@ export async function adminLocationsRoutes(app: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({ error: 'ValidationError', details: error.errors });
+      }
+      if (error instanceof DuplicateLocationError) {
+        return reply.code(409).send({
+          error: 'DuplicateLocation',
+          message: 'A matching location already exists.',
+          locationId: error.existingLocationId,
+        });
       }
       throw error;
     }

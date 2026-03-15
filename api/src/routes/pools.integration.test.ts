@@ -12,8 +12,12 @@ import {
   PoolValidationError,
 } from '../services/pools/index.js';
 import { accountIntegrationsService } from '../services/account-integrations.js';
-import { treatmentPlannerService } from '../services/treatment-planner.js';
+import {
+  treatmentPlannerService,
+  TreatmentPlanRequirementError,
+} from '../services/treatment-planner.js';
 import { scheduleEventsService, ScheduleEventConflictError } from '../services/schedule-events.js';
+import { mailerService } from '../services/mailer.js';
 
 describe('GET /pools/:poolId integration', () => {
   let app: ReturnType<typeof Fastify>;
@@ -545,6 +549,120 @@ describe('POST /pools/:poolId/treatment-plans/:planId/schedule integration', () 
       conflicts: expect.objectContaining({
         overlappingEventIds: ['b2d2df43-1f13-4fe9-a92e-9fcb35b2452f'],
       }),
+    }));
+  });
+});
+
+describe('POST /pools/:poolId/treatment-plans/generate integration', () => {
+  let app: ReturnType<typeof Fastify>;
+  const currentUserId = '2b5c4d1a-6e12-4d2a-b9f3-0a6f3a29e1f2';
+  const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+
+  beforeEach(async () => {
+    app = Fastify();
+    app.decorate('auth', {
+      verifySession: vi.fn(async (req: any) => {
+        req.user = { id: currentUserId, role: 'member' };
+      }),
+      requireRole: () => async () => {},
+    } as any);
+    app.decorate('audit', { log: vi.fn() } as any);
+
+    await app.register(poolsRoutes, { prefix: '/pools' });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  it('returns a friendly prerequisite error when treatment plan requirements are unmet', async () => {
+    vi.spyOn(treatmentPlannerService, 'generate').mockRejectedValue(
+      new TreatmentPlanRequirementError(
+        'Add at least one water test for this pool before generating an AI treatment plan.',
+      ),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/pools/${poolId}/treatment-plans/generate`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'TreatmentPlanRequirementError',
+      message: 'Add at least one water test for this pool before generating an AI treatment plan.',
+    });
+  });
+});
+
+describe('treatment plan report routes', () => {
+  let app: ReturnType<typeof Fastify>;
+  const currentUserId = '2b5c4d1a-6e12-4d2a-b9f3-0a6f3a29e1f2';
+  const poolId = '0b75c93b-7ae5-4a08-9a69-8191355f2175';
+  const planId = '9f7f7dd4-9442-45a2-9fd4-c23d46ddf6db';
+
+  beforeEach(async () => {
+    app = Fastify();
+    app.decorate('auth', {
+      verifySession: vi.fn(async (req: any) => {
+        req.user = { id: currentUserId, role: 'member' };
+      }),
+      requireRole: () => async () => {},
+    } as any);
+    app.decorate('audit', { log: vi.fn() } as any);
+
+    await app.register(poolsRoutes, { prefix: '/pools' });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  it('downloads a treatment plan report as pdf', async () => {
+    vi.spyOn(treatmentPlannerService, 'buildTreatmentReport').mockResolvedValue({
+      filename: 'treatment-report-v2-owner.pdf',
+      pdfBuffer: Buffer.from('%PDF-test'),
+    } as any);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/pools/${poolId}/treatment-plans/${planId}/report?audience=owner`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('application/pdf');
+    expect(response.headers['content-disposition']).toContain('treatment-report-v2-owner.pdf');
+    expect(treatmentPlannerService.buildTreatmentReport).toHaveBeenCalledWith(poolId, planId, currentUserId, 'owner');
+  });
+
+  it('emails a treatment plan report with pdf attachment', async () => {
+    vi.spyOn(treatmentPlannerService, 'buildTreatmentReport').mockResolvedValue({
+      filename: 'treatment-report-v2-audit.pdf',
+      pdfBuffer: Buffer.from('%PDF-test'),
+      emailSubject: 'subject',
+      emailText: 'body',
+      pool: { ownerEmail: 'owner@example.com' },
+    } as any);
+    const sendSpy = vi.spyOn(mailerService, 'send').mockResolvedValue({ sent: true, skipped: false });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/pools/${poolId}/treatment-plans/${planId}/report/email`,
+      payload: {
+        audience: 'audit',
+        to: 'audit@example.com',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'audit@example.com',
+      subject: 'subject',
+      attachments: [expect.objectContaining({ filename: 'treatment-report-v2-audit.pdf' })],
     }));
   });
 });

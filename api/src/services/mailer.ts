@@ -5,6 +5,11 @@ interface SendEmailInput {
   to: string;
   subject: string;
   text: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
 }
 
 class MailerService {
@@ -44,6 +49,7 @@ class MailerService {
       to: input.to,
       subject: input.subject,
       text: input.text,
+      attachments: input.attachments,
     });
 
     return { sent: true, skipped: false };

@@ -4,6 +4,7 @@ import * as schema from '../db/schema/index.js';
 import { env } from '../env.js';
 import { count, desc, inArray } from 'drizzle-orm';
 import { notificationDispatcherService } from '../services/notification-dispatcher.js';
+import { integrationService } from '../services/integrations.js';
 
 export async function adminReadinessRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.auth.verifySession);
@@ -27,6 +28,46 @@ export async function adminReadinessRoutes(app: FastifyInstance) {
     const smtpConfigured = Boolean(env.SMTP_HOST && env.SMTP_PORT && env.SMTP_FROM_EMAIL);
     const channelHealth = notificationDispatcherService.getChannelHealth();
     const counters = notificationDispatcherService.getCounters();
+    const llmIntegration = await integrationService.getIntegration('llm').catch(() => null);
+    const llmConfig =
+      llmIntegration?.config && typeof llmIntegration.config === 'object' && !Array.isArray(llmIntegration.config)
+        ? (llmIntegration.config as Record<string, unknown>)
+        : {};
+    const llmProvider =
+      typeof llmConfig.provider === 'string' && llmConfig.provider.trim()
+        ? llmConfig.provider.trim()
+        : 'none';
+    const llmModelFamily =
+      typeof llmConfig.modelFamily === 'string' && llmConfig.modelFamily.trim()
+        ? llmConfig.modelFamily.trim()
+        : 'balanced';
+    const llmModelId =
+      typeof llmConfig.modelId === 'string' && llmConfig.modelId.trim()
+        ? llmConfig.modelId.trim()
+        : null;
+    const llmHasApiKey =
+      Boolean(llmIntegration?.credentials) &&
+      typeof llmIntegration?.credentials?.apiKey === 'string' &&
+      llmIntegration.credentials.apiKey.trim().length > 0;
+    const llmStatus = (() => {
+      if (!llmIntegration?.enabled || llmProvider === 'none' || !llmHasApiKey) return 'not_configured';
+      if ((llmIntegration.lastResponseCode ?? 0) >= 400) return 'degraded';
+      if (llmIntegration.lastSuccessAt) return 'healthy';
+      return 'configured';
+    })();
+    const llmDetails = (() => {
+      if (llmStatus === 'not_configured') {
+        return 'LLM provider not configured or disabled. Treatment plans will fall back to computed preview.';
+      }
+      const modelSummary = llmModelId ? `${llmProvider}/${llmModelId}` : `${llmProvider}/${llmModelFamily}`;
+      if (llmStatus === 'degraded') {
+        return `Configured for ${modelSummary}, but recent provider calls failed.`;
+      }
+      if (llmStatus === 'healthy') {
+        return `Configured for ${modelSummary}. Last success ${llmIntegration?.lastSuccessAt?.toISOString() ?? 'unknown'}.`;
+      }
+      return `Configured for ${modelSummary}. No successful calls recorded yet.`;
+    })();
 
     let failedCount: number;
     try {
@@ -41,6 +82,13 @@ export async function adminReadinessRoutes(app: FastifyInstance) {
 
     return reply.send({
       modules: [
+        {
+          key: 'llm',
+          label: 'LLM',
+          wired: true,
+          providerStatus: llmStatus,
+          details: llmDetails,
+        },
         {
           key: 'messages',
           label: 'Messages',

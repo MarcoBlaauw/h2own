@@ -49,6 +49,9 @@ vi.mock('$lib/api', () => ({
     me: {
       updatePreferences: vi.fn(),
     },
+    treatmentPlans: {
+      generate: vi.fn(),
+    },
     userLocations: {
       create: vi.fn(),
     },
@@ -63,10 +66,27 @@ const baseData = {
     { poolId: 'pool-1', name: 'Backyard Pool' },
     { poolId: 'pool-2', name: 'Lap Pool' },
   ],
+  locations: [],
   highlightedPool: {
     id: 'pool-1',
     name: 'Backyard Pool',
     locationId: 'loc-1',
+    chlorineSource: 'swg',
+    saltLevelPpm: 3600,
+    sanitizerTargetMinPpm: 2,
+    sanitizerTargetMaxPpm: 4,
+    tests: [
+      {
+        id: 'test-1',
+        testedAt: '2026-03-13T10:00:00.000Z',
+        freeChlorine: 3.2,
+        ph: 7.5,
+        totalAlkalinity: 90,
+        cyanuricAcid: 40,
+        calciumHardness: 250,
+        salt: 3100,
+      },
+    ],
   },
   defaultPoolId: 'pool-1',
   latestTest: {
@@ -79,6 +99,18 @@ const baseData = {
     calciumHardnessPpm: 250,
     saltPpm: 3100,
   },
+  recentTests: [
+    {
+      id: 'test-1',
+      testedAt: '2026-03-13T10:00:00.000Z',
+      freeChlorine: 3.2,
+      ph: 7.5,
+      totalAlkalinity: 90,
+      cyanuricAcid: 40,
+      calciumHardness: 250,
+      salt: 3100,
+    },
+  ],
   recommendations: {
     primary: {
       chemicalId: 'chem-1',
@@ -92,6 +124,16 @@ const baseData = {
   },
   recommendationHistory: [],
   dosingHistory: [],
+  inventoryItems: [
+    {
+      productId: 'chem-1',
+      itemClass: 'chemical',
+      productName: 'Liquid Chlorine',
+      productBrand: 'Generic',
+      unit: 'oz',
+      quantityOnHand: '64',
+    },
+  ],
   costs: [],
   costSummary: null,
   weatherDaily: [],
@@ -102,13 +144,21 @@ const baseData = {
 
 describe('overview page', () => {
   const updatePreferencesMock = api.me.updatePreferences as unknown as Mock;
+  const generateTreatmentPlanMock = api.treatmentPlans.generate as unknown as Mock;
 
   beforeEach(() => {
     gotoMock.mockReset();
     updatePreferencesMock.mockReset();
+    generateTreatmentPlanMock.mockReset();
     updatePreferencesMock.mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), {
         status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    generateTreatmentPlanMock.mockResolvedValue(
+      new Response(JSON.stringify({ planId: 'plan-1', status: 'generated' }), {
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
@@ -151,5 +201,62 @@ describe('overview page', () => {
     expect(getByText('Upcoming Maintenance')).toBeInTheDocument();
     expect(getByText(/Dose Liquid Chlorine/i)).toBeInTheDocument();
     expect(getByText(/Re-test and verify chemistry/i)).toBeInTheDocument();
+  });
+
+  it('shows the latest non-empty metric values and pool-derived targets', () => {
+    const { getByText } = render(Page, {
+      props: {
+        data: {
+          ...baseData,
+          latestTest: {
+            sessionId: 'test-2',
+            testedAt: '2026-03-15T10:00:00.000Z',
+            freeChlorinePpm: '3.4',
+            phLevel: '7.6',
+            totalAlkalinityPpm: 95,
+            cyanuricAcidPpm: null,
+            calciumHardnessPpm: null,
+            saltPpm: null,
+          },
+          recentTests: [
+            {
+              id: 'test-2',
+              testedAt: '2026-03-15T10:00:00.000Z',
+              freeChlorine: 3.4,
+              ph: 7.6,
+              totalAlkalinity: 95,
+              cyanuricAcid: null,
+              calciumHardness: null,
+              salt: null,
+            },
+            {
+              id: 'test-1',
+              testedAt: '2026-03-14T10:00:00.000Z',
+              freeChlorine: null,
+              ph: null,
+              totalAlkalinity: null,
+              cyanuricAcid: 40,
+              calciumHardness: 250,
+              salt: 3600,
+            },
+          ],
+        },
+      },
+    });
+
+    expect(getByText('3600 ppm')).toBeInTheDocument();
+    expect(getByText('target 3,600 ppm')).toBeInTheDocument();
+    expect(getByText('target 2–4')).toBeInTheDocument();
+  });
+
+  it('triggers treatment plan generation from overview', async () => {
+    const { getByRole, findByRole } = render(Page, { props: { data: baseData } });
+
+    await fireEvent.click(getByRole('button', { name: /generate ai treatment plan/i }));
+
+    await waitFor(() => {
+      expect(generateTreatmentPlanMock).toHaveBeenCalledWith('pool-1');
+    });
+    expect(await findByRole('status')).toHaveTextContent(/treatment plan generated/i);
   });
 });

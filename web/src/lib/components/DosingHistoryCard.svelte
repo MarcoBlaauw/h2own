@@ -1,5 +1,11 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import {
+    formatMeasurementValue,
+    getMeasurementUnitOptions,
+    getPreferredDisplayUnit,
+    type MeasurementSystem,
+  } from '$lib/constants/measurement-units';
   import Card from '$lib/components/ui/Card.svelte';
 
   type DosingEvent = {
@@ -15,13 +21,22 @@
 
   export let dosingHistory: DosingEvent[] = [];
   export let poolId: string | null = null;
+  export let availableChemicals: Array<{
+    productId: string;
+    productName?: string | null;
+    productBrand?: string | null;
+    unit?: string | null;
+    quantityOnHand?: string | number | null;
+  }> = [];
+  export let measurementSystem: MeasurementSystem = 'imperial';
 
   const listLimit = 5;
   let historyItems = dosingHistory;
   let lastDosingHistory = dosingHistory;
+  let lastAvailableChemicals = availableChemicals;
   let chemicalId = '';
   let amount = '';
-  let unit = 'oz';
+  let unit = measurementSystem === 'metric' ? 'l' : 'fl_oz';
   let addedAt = '';
   let error = '';
   let success = '';
@@ -32,14 +47,12 @@
     lastDosingHistory = dosingHistory;
   }
 
-  const formatAmount = (amount: string | number | null | undefined, unit?: string | null) => {
-    if (amount === null || amount === undefined) return '—';
-    const numeric = typeof amount === 'number' ? amount : Number.parseFloat(amount);
-    const value = Number.isNaN(numeric) ? String(amount) : numeric.toLocaleString(undefined, {
-      maximumFractionDigits: 2,
-    });
-    return `${value}${unit ? ` ${unit}` : ''}`;
-  };
+  $: if (availableChemicals !== lastAvailableChemicals) {
+    lastAvailableChemicals = availableChemicals;
+    if (chemicalId && !availableChemicals.some((chemical) => chemical.productId === chemicalId)) {
+      chemicalId = '';
+    }
+  }
 
   const formatDate = (value?: string | Date | null) => {
     if (!value) return '—';
@@ -63,6 +76,29 @@
     return fallback;
   };
 
+  const formatChemicalLabel = (chemical: (typeof availableChemicals)[number]) => {
+    const brandPrefix = chemical.productBrand ? `${chemical.productBrand} ` : '';
+    const quantity =
+      chemical.quantityOnHand === null || chemical.quantityOnHand === undefined || chemical.quantityOnHand === ''
+        ? null
+        : Number(chemical.quantityOnHand);
+    const quantityLabel =
+      quantity !== null && !Number.isNaN(quantity)
+        ? ` (${formatMeasurementValue(quantity, chemical.unit, measurementSystem, 'inventory')} on hand)`
+        : '';
+    return `${brandPrefix}${chemical.productName ?? 'Unnamed chemical'}${quantityLabel}`;
+  };
+
+  $: selectedChemical = availableChemicals.find((chemical) => chemical.productId === chemicalId) ?? null;
+  $: unitOptions = getMeasurementUnitOptions(selectedChemical?.unit ?? 'item', measurementSystem, 'dosing');
+
+  function handleChemicalSelectionChange() {
+    const preferredUnit = getPreferredDisplayUnit(selectedChemical?.unit ?? null, measurementSystem, 'dosing');
+    if (preferredUnit) {
+      unit = preferredUnit;
+    }
+  }
+
   async function handleSubmit() {
     success = '';
     error = '';
@@ -74,7 +110,7 @@
 
     const trimmedChemicalId = chemicalId.trim();
     if (!trimmedChemicalId) {
-      error = 'Chemical ID is required.';
+      error = 'Chemical selection is required.';
       return;
     }
 
@@ -84,8 +120,7 @@
       return;
     }
 
-    const trimmedUnit = unit.trim();
-    if (!trimmedUnit) {
+    if (!unit) {
       error = 'Unit is required.';
       return;
     }
@@ -105,7 +140,7 @@
       const res = await api.dosing.create(poolId, {
         chemicalId: trimmedChemicalId,
         amount: parsedAmount,
-        unit: trimmedUnit,
+        unit,
         ...(addedAtIso ? { addedAt: addedAtIso } : {}),
       });
 
@@ -150,15 +185,21 @@
     on:submit|preventDefault={handleSubmit}
   >
     <div class="form-field">
-      <label class="form-label" data-variant="caps" for="dosing-chemical">Chemical ID</label>
-      <input
+      <label class="form-label" data-variant="caps" for="dosing-chemical">Chemical</label>
+      <select
         id="dosing-chemical"
-        type="text"
         bind:value={chemicalId}
         class="form-control"
         disabled={isSubmitting}
-        placeholder="UUID"
+        on:change={handleChemicalSelectionChange}
       >
+        <option value="" disabled selected={!chemicalId}>
+          {availableChemicals.length > 0 ? 'Select an inventory chemical' : 'No inventory chemicals available'}
+        </option>
+        {#each availableChemicals as chemical}
+          <option value={chemical.productId}>{formatChemicalLabel(chemical)}</option>
+        {/each}
+      </select>
     </div>
     <div class="form-field">
       <label class="form-label" data-variant="caps" for="dosing-amount">Amount</label>
@@ -174,14 +215,16 @@
     </div>
     <div class="form-field">
       <label class="form-label" data-variant="caps" for="dosing-unit">Unit</label>
-      <input
+      <select
         id="dosing-unit"
-        type="text"
         bind:value={unit}
         class="form-control"
         disabled={isSubmitting}
-        placeholder="oz"
       >
+        {#each unitOptions as option}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
     </div>
     <div class="form-field">
       <label class="form-label" data-variant="caps" for="dosing-added-at">Added at</label>
@@ -233,7 +276,7 @@
           </div>
           <div class="text-right">
             <div class="text-sm font-semibold text-content-primary">
-              {formatAmount(item.amount, item.unit ?? undefined)}
+              {formatMeasurementValue(item.amount, item.unit ?? undefined, measurementSystem, 'dosing')}
             </div>
             <div class="mt-1 text-xs text-content-secondary/80">
               {formatDate(item.addedAt)}

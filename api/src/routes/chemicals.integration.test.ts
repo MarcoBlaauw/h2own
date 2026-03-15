@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chemicalsRoutes } from './chemicals.js';
 import { chemicalsService } from '../services/chemicals.js';
+import { DuplicateChemicalError, InvalidChemicalTypeForCategoryError } from '../services/chemicals.js';
 
 describe('chemicals routes integration', () => {
   let app: ReturnType<typeof Fastify>;
@@ -131,6 +132,27 @@ describe('chemicals routes integration', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
+    it('rejects product types that are not allowed for the selected category', async () => {
+      vi.spyOn(chemicalsService, 'createChemical').mockRejectedValue(
+        new InvalidChemicalTypeForCategoryError('balancers', 'liquid_chlorine') as never
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/chemicals',
+        payload: {
+          categoryId: 'a6d9e562-3d8a-4b1c-9f5b-6d97a933fb3f',
+          name: 'Bad Match',
+          productType: 'liquid_chlorine',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error).toBe('ValidationError');
+      expect(body.details?.[0]?.path).toEqual(['productType']);
+    });
+
     it('rejects callers without the admin role', async () => {
       const spy = vi.spyOn(chemicalsService, 'createChemical');
       currentRole = 'member';
@@ -147,6 +169,29 @@ describe('chemicals routes integration', () => {
       expect(response.statusCode).toBe(403);
       expect(response.json()).toEqual({ error: 'Forbidden' });
       expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 for duplicate chemicals', async () => {
+      vi.spyOn(chemicalsService, 'createChemical').mockRejectedValue(
+        new DuplicateChemicalError('existing-chemical-id') as never
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/chemicals',
+        payload: {
+          categoryId: 'a6d9e562-3d8a-4b1c-9f5b-6d97a933fb3f',
+          name: 'Muriatic Acid 31.45%',
+          brand: 'Generic',
+          productType: 'muriatic_acid',
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        error: 'DuplicateChemical',
+        existingChemicalId: 'existing-chemical-id',
+      });
     });
   });
 
@@ -230,6 +275,24 @@ describe('chemicals routes integration', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
+    it('returns 409 when an update would create a duplicate', async () => {
+      vi.spyOn(chemicalsService, 'updateChemical').mockRejectedValue(
+        new DuplicateChemicalError('existing-chemical-id') as never
+      );
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/chemicals/${productId}`,
+        payload: { name: 'Muriatic Acid 31.45%', brand: 'Generic', productType: 'muriatic_acid' },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        error: 'DuplicateChemical',
+        existingChemicalId: 'existing-chemical-id',
+      });
+    });
+
     it('rejects callers without the admin role', async () => {
       const spy = vi.spyOn(chemicalsService, 'updateChemical');
       currentRole = 'member';
@@ -243,6 +306,39 @@ describe('chemicals routes integration', () => {
       expect(response.statusCode).toBe(403);
       expect(response.json()).toEqual({ error: 'Forbidden' });
       expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('allows admins to create non-chemical supply catalog items', async () => {
+      const payload = {
+        categoryId: 'a6d9e562-3d8a-4b1c-9f5b-6d97a933fb3f',
+        itemClass: 'supply',
+        name: 'Pleatco Filter Cartridge',
+        brand: 'Pleatco',
+        sku: 'PLT-125',
+        productType: 'filter_cartridge',
+        form: 'cartridge',
+        replacementIntervalDays: 180,
+        compatibleEquipmentType: 'cartridge_filter',
+        notes: 'Replacement cartridge for routine maintenance',
+        isActive: true,
+      } as const;
+
+      vi.spyOn(chemicalsService, 'createChemical').mockResolvedValue({
+        productId: '11111111-2222-3333-4444-555555555555',
+        ...payload,
+      } as any);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/chemicals',
+        payload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toEqual({
+        productId: '11111111-2222-3333-4444-555555555555',
+        ...payload,
+      });
     });
   });
 

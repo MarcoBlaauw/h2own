@@ -22,6 +22,13 @@ vi.mock('$lib/api', () => ({
 }));
 
 const baseData = {
+  session: {
+    user: {
+      id: 'user-1',
+      email: 'admin@example.com',
+      role: 'admin',
+    },
+  },
   pools: [
     { poolId: 'pool-1', name: 'Backyard Pool' },
     { poolId: 'pool-2', name: 'Lap Pool' },

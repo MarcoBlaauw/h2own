@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LocationsService, LocationTransferTargetError } from './locations.js';
+import {
+  LocationsService,
+  LocationTransferTargetError,
+  DuplicateLocationError,
+} from './locations.js';
 import * as schema from '../db/schema/index.js';
 
 describe('LocationsService', () => {
@@ -94,6 +98,24 @@ describe('LocationsService', () => {
   it('creates locations and returns hydrated detail', async () => {
     const createdAt = new Date('2024-03-05T00:00:00.000Z');
     let capturedInsert: any;
+
+    selectSpy
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.userLocations);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: (condition: unknown) => {
+                  expect(condition).toBeDefined();
+                  return Promise.resolve([]);
+                },
+              };
+            },
+          };
+        },
+      }));
 
     insertSpy.mockImplementation((table: unknown) => {
       expect(table).toBe(schema.userLocations);
@@ -191,6 +213,65 @@ describe('LocationsService', () => {
       },
       pools: [],
     });
+  });
+
+  it('rejects duplicate locations for the same user', async () => {
+    selectSpy
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.userLocations);
+          return {
+            leftJoin: (joinTable: unknown) => {
+              expect(joinTable).toBe(schema.users);
+              return {
+                where: (condition: unknown) => {
+                  expect(condition).toBeDefined();
+                  return Promise.resolve([
+                    {
+                      locationId: 'loc-existing',
+                      userId: 'user-42',
+                      name: 'Home',
+                      formattedAddress: '123 Main St, Austin, TX',
+                      googlePlaceId: 'place-123',
+                      googlePlusCode: null,
+                      latitude: '30.26720000',
+                      longitude: '-97.74310000',
+                      timezone: 'America/Chicago',
+                      isPrimary: true,
+                      isActive: true,
+                      createdAt: new Date('2024-03-01T00:00:00.000Z'),
+                      userEmail: 'owner@example.com',
+                      userName: 'Owner',
+                    },
+                  ]);
+                },
+              };
+            },
+          };
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        from: (table: unknown) => {
+          expect(table).toBe(schema.pools);
+          return {
+            where: (condition: unknown) => {
+              expect(condition).toBeDefined();
+              return Promise.resolve([]);
+            },
+          };
+        },
+      }));
+
+    await expect(
+      service.createLocation({
+        userId: 'user-42',
+        name: 'Home again',
+        formattedAddress: '123 Main St, Austin, TX',
+        googlePlaceId: 'place-123',
+        latitude: 30.2672,
+        longitude: -97.7431,
+      })
+    ).rejects.toBeInstanceOf(DuplicateLocationError);
   });
 
   it('updates metadata and pool assignments', async () => {

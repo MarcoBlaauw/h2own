@@ -252,12 +252,30 @@ describe('PoolCoreService', () => {
     });
   });
 
-  it('requires sanitizer residual range when creating bromine pools', async () => {
+  it('allows pools to omit sanitizer residual range', async () => {
+    const pool = await service.createPool(userId, {
+      name: 'Bromine Pool',
+      volumeGallons: 18000,
+      sanitizerType: 'bromine',
+      surfaceType: 'plaster',
+    });
+
+    expect(pool.poolId).toBe('pool-123');
+    expect(capturedPoolInsert).toMatchObject({
+      sanitizerType: 'bromine',
+      chlorineSource: null,
+      sanitizerTargetMinPpm: null,
+      sanitizerTargetMaxPpm: null,
+    });
+  });
+
+  it('rejects partial sanitizer residual range values', async () => {
     await expect(
       service.createPool(userId, {
-        name: 'Bromine Pool',
+        name: 'Partial Range Pool',
         volumeGallons: 18000,
         sanitizerType: 'bromine',
+        sanitizerTargetMinPpm: 3,
         surfaceType: 'plaster',
       })
     ).rejects.toBeInstanceOf(PoolValidationError);

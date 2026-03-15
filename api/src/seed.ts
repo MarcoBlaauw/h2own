@@ -1,6 +1,6 @@
 // api/src/seed.ts
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and } from 'drizzle-orm';
 import postgres from 'postgres';
 import argon2 from 'argon2';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,67 @@ async function ensureUser(email: string, password: string, name: string, role: s
   return { userId: user?.userId, created: false };
 }
 
+async function ensureChemical(values: typeof schema.products.$inferInsert) {
+  const normalizedName = values.name.trim();
+  const normalizedBrand = values.brand?.trim() ?? '';
+  const normalizedProductType = values.productType?.trim() ?? '';
+
+  const existing = await db
+    .select()
+    .from(schema.products)
+    .where(
+      and(
+        eq(schema.products.categoryId, values.categoryId),
+        sql`lower(trim(${schema.products.name})) = lower(trim(${normalizedName}))`,
+        sql`lower(trim(coalesce(${schema.products.brand}, ''))) = lower(trim(${normalizedBrand}))`,
+        sql`lower(trim(coalesce(${schema.products.productType}, ''))) = lower(trim(${normalizedProductType}))`
+      )
+    )
+    .limit(1);
+
+  if (existing[0]) {
+    return { product: existing[0], created: false };
+  }
+
+  const [created] = await db.insert(schema.products).values(values).returning();
+  return { product: created, created: true };
+}
+
+async function ensureVendor(values: typeof schema.vendors.$inferInsert) {
+  const [existing] = await db
+    .select()
+    .from(schema.vendors)
+    .where(eq(schema.vendors.slug, values.slug))
+    .limit(1);
+
+  if (existing) {
+    return existing;
+  }
+
+  const [created] = await db.insert(schema.vendors).values(values).returning();
+  return created;
+}
+
+async function ensureVendorPrice(values: typeof schema.productVendorPrices.$inferInsert) {
+  const [existing] = await db
+    .select()
+    .from(schema.productVendorPrices)
+    .where(
+      and(
+        eq(schema.productVendorPrices.productId, values.productId),
+        eq(schema.productVendorPrices.vendorId, values.vendorId),
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    return existing;
+  }
+
+  const [created] = await db.insert(schema.productVendorPrices).values(values).returning();
+  return created;
+}
+
 async function seed() {
   console.log('🌱 Seeding database...');
 
@@ -74,6 +135,10 @@ async function seed() {
         { name: 'sanitizers', description: 'Primary disinfection chemicals' },
         { name: 'balancers', description: 'pH and alkalinity adjustments' },
         { name: 'shock', description: 'High-dose sanitizing treatments' },
+        { name: 'filter_media', description: 'Filters, cartridges, grids, and related supplies' },
+        { name: 'cleaning_tools', description: 'Nets, brushes, poles, hoses, and cleaning tools' },
+        { name: 'testing_supplies', description: 'Test strips, reagents, and test consumables' },
+        { name: 'replacement_parts', description: 'Baskets, seals, and cleaner replacement parts' },
       ])
       .onConflictDoNothing()
       .returning();
@@ -87,14 +152,20 @@ async function seed() {
       .select()
       .from(schema.productCategories)
       .where(sql`name = 'balancers'`);
+    const [filterMedia] = await db
+      .select()
+      .from(schema.productCategories)
+      .where(sql`name = 'filter_media'`);
+    const [cleaningTools] = await db
+      .select()
+      .from(schema.productCategories)
+      .where(sql`name = 'cleaning_tools'`);
 
     // --- Products ------------------------------------------------------------
     const products: Array<any> = [];
 
     if (sanitizers) {
-      const chlorine = await db
-        .insert(schema.products)
-        .values({
+      const chlorine = await ensureChemical({
           categoryId: sanitizers.categoryId,
           brand: 'Generic',
           name: 'Liquid Chlorine 12.5%',
@@ -117,16 +188,12 @@ async function seed() {
           packageSizes: ['1 gal', '2.5 gal'],
           isActive: true,
           averageCostPerUnit: '4.50',
-        } as any)
-        .onConflictDoNothing()
-        .returning();
-      products.push(...chlorine);
+        } as any);
+      products.push(chlorine.product);
     }
 
     if (balancers) {
-      const acid = await db
-        .insert(schema.products)
-        .values({
+      const acid = await ensureChemical({
           categoryId: balancers.categoryId,
           brand: 'Generic',
           name: 'Muriatic Acid 31.45%',
@@ -149,13 +216,165 @@ async function seed() {
           packageSizes: ['1 gal'],
           isActive: true,
           averageCostPerUnit: '8.50',
-        } as any)
-        .onConflictDoNothing()
-        .returning();
-      products.push(...acid);
+        } as any);
+      products.push(acid.product);
+
+      const championAcid = await ensureChemical({
+        categoryId: balancers.categoryId,
+        brand: 'Champion',
+        name: 'Champion Muriatic Acid',
+        productType: 'muriatic_acid',
+        activeIngredients: { hydrochloric_acid: 31.45, water: 68.55 },
+        concentrationPercent: '31.45',
+        phEffect: '-0.80',
+        strengthFactor: '1.00',
+        dosePer10kGallons: '8.00',
+        doseUnit: 'oz_fl',
+        affectsFc: false,
+        affectsPh: true,
+        affectsTa: true,
+        affectsCya: false,
+        fcChangePerDose: '0',
+        phChangePerDose: '-0.40',
+        taChangePerDose: -10,
+        cyaChangePerDose: 0,
+        form: 'liquid',
+        packageSizes: ['1 gal'],
+        isActive: true,
+        averageCostPerUnit: '8.50',
+      } as any);
+      products.push(championAcid.product);
     }
 
-    console.log(`✅ Inserted ${products.length} products (0 if already present)`);
+    if (filterMedia) {
+      const cartridge = await ensureChemical({
+        itemClass: 'supply',
+        categoryId: filterMedia.categoryId,
+        brand: 'Pleatco',
+        name: 'Pleatco Filter Cartridge',
+        sku: 'PLT-125',
+        productType: 'filter_cartridge',
+        form: 'cartridge',
+        packageSizes: ['1 cartridge'],
+        replacementIntervalDays: 180,
+        compatibleEquipmentType: 'cartridge_filter',
+        notes: 'Generic seeded supply example for filter replacement tracking.',
+        isActive: true,
+        averageCostPerUnit: '79.00',
+      } as any);
+      products.push(cartridge.product);
+    }
+
+    if (cleaningTools) {
+      const brush = await ensureChemical({
+        itemClass: 'supply',
+        categoryId: cleaningTools.categoryId,
+        brand: 'Generic',
+        name: '18" Wall Brush',
+        sku: 'BRSH-18',
+        productType: 'wall_brush',
+        form: 'specialty_other',
+        packageSizes: ['1 brush'],
+        compatibleEquipmentType: 'manual_cleaning',
+        notes: 'Generic seeded supply example for non-chemical maintenance inventory.',
+        isActive: true,
+        averageCostPerUnit: '24.00',
+      } as any);
+      products.push(brush.product);
+    }
+
+    const homeDepot = await ensureVendor({
+      name: 'Home Depot',
+      slug: 'home-depot',
+      websiteUrl: 'https://www.homedepot.com',
+      provider: 'manual',
+      isActive: true,
+    });
+    const amazon = await ensureVendor({
+      name: 'Amazon',
+      slug: 'amazon',
+      websiteUrl: 'https://www.amazon.com',
+      provider: 'manual',
+      isActive: true,
+    });
+    const leslies = await ensureVendor({
+      name: "Leslie's",
+      slug: 'leslies',
+      websiteUrl: 'https://lesliespool.com',
+      provider: 'manual',
+      isActive: true,
+    });
+    const poolSupply = await ensureVendor({
+      name: 'Pool Supply',
+      slug: 'pool-supply',
+      provider: 'manual',
+      isActive: true,
+    });
+
+    for (const product of products) {
+      if (product.name === 'Liquid Chlorine 12.5%') {
+        await ensureVendorPrice({
+          productId: product.productId,
+          vendorId: poolSupply.vendorId,
+          unitPrice: '4.50',
+          currency: 'USD',
+          packageSize: '1 gal',
+          unitLabel: 'jug',
+          source: 'manual',
+          isPrimary: true,
+        });
+      }
+
+      if (product.name === 'Muriatic Acid 31.45%') {
+        await ensureVendorPrice({
+          productId: product.productId,
+          vendorId: homeDepot.vendorId,
+          unitPrice: '8.50',
+          currency: 'USD',
+          packageSize: '1 gal',
+          unitLabel: 'jug',
+          source: 'manual',
+          isPrimary: true,
+        });
+      }
+
+      if (product.name === 'Champion Muriatic Acid') {
+        await ensureVendorPrice({
+          productId: product.productId,
+          vendorId: homeDepot.vendorId,
+          unitPrice: '19.98',
+          currency: 'USD',
+          packageSize: '2 x 1 gal',
+          unitLabel: '2-pack',
+          vendorSku: 'CH518',
+          productUrl: 'https://www.homedepot.com/p/Champion-1-Gallon-Muriatic-Acid-2-Pack-CH518/334625012',
+          source: 'external',
+          isPrimary: false,
+        });
+        await ensureVendorPrice({
+          productId: product.productId,
+          vendorId: amazon.vendorId,
+          unitPrice: '9.99',
+          currency: 'USD',
+          packageSize: '1 gal',
+          unitLabel: 'jug',
+          source: 'manual',
+          isPrimary: false,
+        });
+        await ensureVendorPrice({
+          productId: product.productId,
+          vendorId: leslies.vendorId,
+          unitPrice: '10.49',
+          currency: 'USD',
+          packageSize: '1 gal',
+          unitLabel: 'jug',
+          source: 'manual',
+          isPrimary: true,
+        });
+      }
+    }
+
+    console.log(`✅ Ensured ${products.length} products`);
     console.log('✅ Database seeded successfully!');
   } catch (error) {
     console.error('❌ Error seeding database:', error);

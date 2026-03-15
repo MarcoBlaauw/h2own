@@ -1,11 +1,13 @@
-import { pgTable, uuid, varchar, jsonb, decimal, boolean, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, jsonb, decimal, boolean, timestamp, integer } from 'drizzle-orm/pg-core';
 import { productCategories } from './product_categories';
 
 export const products = pgTable('products', {
   productId: uuid('product_id').primaryKey().defaultRandom(),
   categoryId: uuid('category_id').notNull().references(() => productCategories.categoryId, { onDelete: 'cascade' }),
+  itemClass: varchar('item_class', { length: 20 }).notNull().default('chemical'),
   brand: varchar('brand', { length: 80 }),
   name: varchar('name', { length: 120 }).notNull(),
+  sku: varchar('sku', { length: 80 }),
   productType: varchar('product_type', { length: 50 }),
   activeIngredients: jsonb('active_ingredients'),
   concentrationPercent: decimal('concentration_percent', { precision: 5, scale: 2 }),
@@ -23,6 +25,9 @@ export const products = pgTable('products', {
   cyaChangePerDose: integer('cya_change_per_dose').default(0),
   form: varchar('form', { length: 20 }),
   packageSizes: jsonb('package_sizes'),
+  replacementIntervalDays: integer('replacement_interval_days'),
+  compatibleEquipmentType: varchar('compatible_equipment_type', { length: 80 }),
+  notes: text('notes'),
   isActive: boolean('is_active').default(true),
   averageCostPerUnit: decimal('average_cost_per_unit', { precision: 8, scale: 2 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

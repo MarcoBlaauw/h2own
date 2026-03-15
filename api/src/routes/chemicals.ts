@@ -1,6 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { chemicalsService } from '../services/chemicals.js';
+import {
+  chemicalsService,
+  DuplicateChemicalError,
+  InvalidChemicalTypeForCategoryError,
+} from '../services/chemicals.js';
+import { CHEMICAL_FORMS, CATALOG_PRODUCT_TYPES, PRODUCT_ITEM_CLASSES } from '../services/chemical-catalog.js';
 
 const getChemicalsQuery = z.object({
   q: z.string().optional(),
@@ -20,12 +25,26 @@ const numericInput = z
 
 const optionalNumber = numericInput.optional();
 const optionalInteger = numericInput.pipe(z.number().int()).optional();
+const vendorPriceBody = z.object({
+  vendorId: z.string().uuid(),
+  vendorSku: z.string().max(120).optional(),
+  productUrl: z.string().url().optional(),
+  unitPrice: numericInput.pipe(z.number().positive()),
+  currency: z.string().trim().length(3).optional(),
+  packageSize: z.string().max(80).optional(),
+  unitLabel: z.string().max(30).optional(),
+  source: z.enum(['manual', 'external']).optional(),
+  fetchedAt: z.string().datetime().optional(),
+  isPrimary: z.boolean().optional(),
+});
 
 const createChemicalBody = z.object({
   categoryId: z.string().uuid(),
+  itemClass: z.enum(PRODUCT_ITEM_CLASSES).optional(),
   name: z.string().min(1).max(120),
   brand: z.string().max(80).optional(),
-  productType: z.string().max(50).optional(),
+  sku: z.string().max(80).optional(),
+  productType: z.enum(CATALOG_PRODUCT_TYPES).optional(),
   activeIngredients: z.record(numericInput).optional(),
   concentrationPercent: optionalNumber,
   phEffect: optionalNumber,
@@ -40,10 +59,14 @@ const createChemicalBody = z.object({
   phChangePerDose: optionalNumber,
   taChangePerDose: optionalInteger,
   cyaChangePerDose: optionalInteger,
-  form: z.string().max(20).optional(),
+  form: z.enum(CHEMICAL_FORMS).optional(),
   packageSizes: z.array(z.string().min(1)).optional(),
+  replacementIntervalDays: optionalInteger,
+  compatibleEquipmentType: z.string().max(80).optional(),
+  notes: z.string().max(4000).optional(),
   isActive: z.boolean().optional(),
   averageCostPerUnit: optionalNumber,
+  vendorPrices: z.array(vendorPriceBody).optional(),
 });
 
 const updateChemicalBody = createChemicalBody.partial().refine(
@@ -83,6 +106,20 @@ export async function chemicalsRoutes(app: FastifyInstance) {
         if (err instanceof z.ZodError) {
           return reply.code(400).send({ error: 'ValidationError', details: err.errors });
         }
+        if (err instanceof DuplicateChemicalError) {
+          return reply.code(409).send({ error: 'DuplicateChemical', existingChemicalId: err.existingChemicalId });
+        }
+        if (err instanceof InvalidChemicalTypeForCategoryError) {
+          return reply.code(400).send({
+            error: 'ValidationError',
+            details: [
+              {
+                message: `Product type "${err.productType}" is not allowed for category "${err.categoryName}".`,
+                path: ['productType'],
+              },
+            ],
+          });
+        }
         throw err;
       }
     }
@@ -107,6 +144,20 @@ export async function chemicalsRoutes(app: FastifyInstance) {
       } catch (err) {
         if (err instanceof z.ZodError) {
           return reply.code(400).send({ error: 'ValidationError', details: err.errors });
+        }
+        if (err instanceof DuplicateChemicalError) {
+          return reply.code(409).send({ error: 'DuplicateChemical', existingChemicalId: err.existingChemicalId });
+        }
+        if (err instanceof InvalidChemicalTypeForCategoryError) {
+          return reply.code(400).send({
+            error: 'ValidationError',
+            details: [
+              {
+                message: `Product type "${err.productType}" is not allowed for category "${err.categoryName}".`,
+                path: ['productType'],
+              },
+            ],
+          });
         }
         throw err;
       }

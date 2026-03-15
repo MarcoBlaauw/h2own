@@ -199,6 +199,9 @@
   let showAllPools = false;
   let showAllLocations = false;
   let showCreateModal = false;
+  let showCreateAdvanced = false;
+  let showEditAdvanced = false;
+  let createLocationSelection = '__new__';
   let initializedCreateModalFromQuery = false;
   let locationSearch = '';
   let locationCityFilter = '';
@@ -266,11 +269,15 @@
   $: if (!initializedCreateModalFromQuery) {
     initializedCreateModalFromQuery = true;
     showCreateModal = pools.length > 0 && $page?.url?.searchParams?.get('createPool') === '1';
+    if (showCreateModal) {
+      createLocationSelection = activeLocations[0]?.locationId ?? newLocationOptionValue;
+    }
   }
 
   const sanitizerOptions = ['chlorine', 'bromine'];
   const chlorineSourceOptions = ['manual', 'swg'];
   const surfaceOptions = ['plaster', 'vinyl', 'fiberglass', 'tile', 'concrete', 'other'];
+  const newLocationOptionValue = '__new__';
   const equipmentTypeOptions: Array<{ value: EquipmentType; label: string }> = [
     { value: 'none', label: 'None' },
     { value: 'heater', label: 'Heater only' },
@@ -290,6 +297,9 @@
     return typeof value === 'string' ? value : String(value);
   };
 
+  const normalizeAddress = (value: string | null | undefined) =>
+    (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
   const isChlorineSanitizer = (value: string) => value.trim().toLowerCase() === 'chlorine';
   const isBromineSanitizer = (value: string) => value.trim().toLowerCase() === 'bromine';
   const isSwgChlorinePool = (sanitizerType: string, chlorineSource: string) =>
@@ -298,7 +308,7 @@
     ['chlorine', 'bromine'].includes(value.trim().toLowerCase());
   const sanitizerResidualMaxPpm = 20;
 
-  const validateForm = (form: FormState) => {
+  const validateForm = (form: FormState, options: { requireLocationSelection?: boolean } = {}) => {
     const errors: string[] = [];
     if (!normalizeText(form.name).trim()) errors.push('Name is required.');
     if (!normalizeText(form.volumeGallons).trim()) errors.push('Volume is required.');
@@ -318,17 +328,22 @@
     if (showsSanitizerTargetRange(form.sanitizerType)) {
       const sanitizerMin = parseOptionalNumber(form.sanitizerTargetMinPpm);
       const sanitizerMax = parseOptionalNumber(form.sanitizerTargetMaxPpm);
-      if (sanitizerMin === null || sanitizerMax === null) {
-        errors.push('Sanitizer target range requires both minimum and maximum ppm values.');
-      } else if (sanitizerMin <= 0 || sanitizerMax <= 0 || sanitizerMin > sanitizerMax) {
-        errors.push('Sanitizer target range must be positive and min must be less than or equal to max.');
-      } else if (sanitizerMin > sanitizerResidualMaxPpm || sanitizerMax > sanitizerResidualMaxPpm) {
-        errors.push(
-          'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.'
-        );
+      if (sanitizerMin !== null || sanitizerMax !== null) {
+        if (sanitizerMin === null || sanitizerMax === null) {
+          errors.push('Sanitizer target range requires both minimum and maximum ppm values.');
+        } else if (sanitizerMin <= 0 || sanitizerMax <= 0 || sanitizerMin > sanitizerMax) {
+          errors.push('Sanitizer target range must be positive and min must be less than or equal to max.');
+        } else if (sanitizerMin > sanitizerResidualMaxPpm || sanitizerMax > sanitizerResidualMaxPpm) {
+          errors.push(
+            'Sanitizer target range must be 20 ppm or less. Enter sanitizer residual ppm, not the salt level.'
+          );
+        }
       }
     }
     if (!normalizeText(form.surfaceType).trim()) errors.push('Surface type is required.');
+    if (options.requireLocationSelection && !form.locationId?.trim()) {
+      errors.push('Select an existing location or add a new one.');
+    }
     return errors;
   };
 
@@ -413,12 +428,14 @@
     saltLevelPpm: isSwgChlorinePool(form.sanitizerType, form.chlorineSource)
       ? parseOptionalNumber(form.saltTargetPpm)
       : null,
-    sanitizerTargetMinPpm: showsSanitizerTargetRange(form.sanitizerType)
-      ? parseOptionalNumber(form.sanitizerTargetMinPpm)
-      : null,
-    sanitizerTargetMaxPpm: showsSanitizerTargetRange(form.sanitizerType)
-      ? parseOptionalNumber(form.sanitizerTargetMaxPpm)
-      : null,
+    sanitizerTargetMinPpm:
+      showsSanitizerTargetRange(form.sanitizerType) && showCreateAdvanced
+        ? parseOptionalNumber(form.sanitizerTargetMinPpm)
+        : null,
+    sanitizerTargetMaxPpm:
+      showsSanitizerTargetRange(form.sanitizerType) && showCreateAdvanced
+        ? parseOptionalNumber(form.sanitizerTargetMaxPpm)
+        : null,
     surfaceType: form.surfaceType.trim(),
     locationId: form.locationId?.trim() || undefined,
   });
@@ -427,6 +444,8 @@
     createForm = { ...defaultForm };
     createThermalForm = { ...defaultThermalForm };
     createErrors = [];
+    showCreateAdvanced = false;
+    createLocationSelection = activeLocations[0]?.locationId ?? newLocationOptionValue;
   };
 
   const resetLocationForm = () => {
@@ -550,6 +569,7 @@
     };
     editErrors = [];
     editMessage = null;
+    showEditAdvanced = Boolean(pool.sanitizerTargetMinPpm ?? pool.sanitizerTargetMaxPpm);
     editThermalForm = { ...defaultThermalForm };
     void loadPoolThermalSettings(pool.poolId);
   };
@@ -559,6 +579,95 @@
     editThermalForm = { ...defaultThermalForm };
     editErrors = [];
     editMessage = null;
+    showEditAdvanced = false;
+  };
+
+  const findLocationMatch = (draft: {
+    googlePlaceId: string;
+    formattedAddress: string;
+    latitude: string;
+    longitude: string;
+  }) =>
+    activeLocations.find((location) => {
+      const placeId = draft.googlePlaceId.trim();
+      if (placeId && location.googlePlaceId?.trim() === placeId) {
+        return true;
+      }
+
+      const address = normalizeAddress(draft.formattedAddress);
+      if (!address || normalizeAddress(location.formattedAddress) !== address) {
+        return false;
+      }
+
+      const latitude = draft.latitude.trim() ? Number(draft.latitude.trim()) : null;
+      const longitude = draft.longitude.trim() ? Number(draft.longitude.trim()) : null;
+      if (latitude === null || longitude === null || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+        return true;
+      }
+
+      return location.latitude === latitude && location.longitude === longitude;
+    }) ?? null;
+
+  const resolveLocationId = async (input: {
+    selectedLocationId?: string | null;
+    poolName: string;
+    formattedAddress: string;
+    googlePlaceId: string;
+    googlePlusCode: string;
+    latitude: string;
+    longitude: string;
+    timezone: string;
+  }) => {
+    const selectedLocationId = input.selectedLocationId?.trim() || '';
+    if (selectedLocationId && selectedLocationId !== newLocationOptionValue) {
+      return { locationId: selectedLocationId, error: null as string | null };
+    }
+
+    const latitude = input.latitude.trim() ? Number(input.latitude.trim()) : undefined;
+    const longitude = input.longitude.trim() ? Number(input.longitude.trim()) : undefined;
+    if (latitude === undefined || Number.isNaN(latitude)) {
+      return { locationId: null, error: 'Select a valid location pin to set latitude.' };
+    }
+    if (longitude === undefined || Number.isNaN(longitude)) {
+      return { locationId: null, error: 'Select a valid location pin to set longitude.' };
+    }
+
+    const existingLocation = findLocationMatch(input);
+    if (existingLocation) {
+      return { locationId: existingLocation.locationId, error: null };
+    }
+
+    const fallbackName = `${input.poolName.trim()} location`;
+    const autoName = input.formattedAddress.trim().split(',')[0]?.trim() || fallbackName;
+    const locationRes = await api.userLocations.create({
+      name: autoName,
+      formattedAddress: input.formattedAddress.trim() || undefined,
+      googlePlaceId: input.googlePlaceId.trim() || undefined,
+      googlePlusCode: input.googlePlusCode.trim() || undefined,
+      latitude,
+      longitude,
+      timezone: input.timezone.trim() || undefined,
+    });
+
+    if (!locationRes.ok) {
+      const body = await locationRes.json().catch(() => ({}));
+      if (locationRes.status === 409 && typeof body.locationId === 'string') {
+        return { locationId: body.locationId, error: null };
+      }
+      return {
+        locationId: null,
+        error: body.error ?? body.message ?? `Create location failed (${locationRes.status}).`,
+      };
+    }
+
+    const createdLocation = (await locationRes.json().catch(() => null)) as { locationId?: string } | null;
+    return {
+      locationId: typeof createdLocation?.locationId === 'string' ? createdLocation.locationId : null,
+      error:
+        typeof createdLocation?.locationId === 'string'
+          ? null
+          : 'Location was created but no location ID was returned.',
+    };
   };
 
   const loadPoolThermalSettings = async (poolId: string) => {
@@ -606,71 +715,32 @@
 
   const handleCreate = async () => {
     createMessage = null;
+    createForm.locationId = createLocationSelection === newLocationOptionValue ? undefined : createLocationSelection;
     createErrors = validateForm(createForm);
     validateThermalForm(createThermalForm, createErrors);
-    const latitude = locationForm.latitude.trim()
-      ? Number(locationForm.latitude.trim())
-      : undefined;
-    const longitude = locationForm.longitude.trim()
-      ? Number(locationForm.longitude.trim())
-      : undefined;
-    if (latitude === undefined || Number.isNaN(latitude)) {
-      createErrors.push('Select a valid location pin to set latitude.');
-    }
-    if (longitude === undefined || Number.isNaN(longitude)) {
-      createErrors.push('Select a valid location pin to set longitude.');
-    }
     if (createErrors.length) return;
 
     creating = true;
-    let createdLocationId: string | null = null;
     try {
-      const fallbackName = `${createForm.name.trim()} location`;
-      const autoName =
-        locationForm.formattedAddress.trim().split(',')[0]?.trim() || fallbackName;
-      const locationRes = await api.userLocations.create({
-        name: autoName,
-        formattedAddress: locationForm.formattedAddress.trim() || undefined,
-        googlePlaceId: locationForm.googlePlaceId.trim() || undefined,
-        googlePlusCode: locationForm.googlePlusCode.trim() || undefined,
-        latitude,
-        longitude,
-        timezone: locationForm.timezone.trim() || undefined,
+      const locationResult = await resolveLocationId({
+        selectedLocationId: createLocationSelection,
+        poolName: createForm.name,
+        ...locationForm,
       });
-      if (!locationRes.ok) {
-        const body = await locationRes.json().catch(() => ({}));
+      if (!locationResult.locationId) {
         createMessage = {
           type: 'error',
-          text: body.error ?? body.message ?? `Create location failed (${locationRes.status}).`,
-        };
-        return;
-      }
-      const createdLocation = (await locationRes.json().catch(() => null)) as
-        | { locationId?: string }
-        | null;
-      createdLocationId =
-        createdLocation && typeof createdLocation.locationId === 'string'
-          ? createdLocation.locationId
-          : null;
-      if (!createdLocationId) {
-        createMessage = {
-          type: 'error',
-          text: 'Location was created but no location ID was returned.',
+          text: locationResult.error ?? 'Location could not be resolved.',
         };
         return;
       }
 
       const res = await api.pools.create({
         ...toPayload(createForm),
-        locationId: createdLocationId,
+        locationId: locationResult.locationId,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        if (createdLocationId) {
-          await api.userLocations.deactivate(createdLocationId, { transferPoolsTo: null }).catch(
-            () => null
-          );
-        }
         createMessage = {
           type: 'error',
           text: body.error ?? body.message ?? `Create failed (${res.status}).`,
@@ -828,53 +898,44 @@
     editMessage = null;
     editErrors = validateForm(editForm);
     validateThermalForm(editThermalForm, editErrors);
-    const latitude = poolEditLocationForm.latitude.trim()
-      ? Number(poolEditLocationForm.latitude.trim())
-      : undefined;
-    const longitude = poolEditLocationForm.longitude.trim()
-      ? Number(poolEditLocationForm.longitude.trim())
-      : undefined;
-    if (latitude === undefined || Number.isNaN(latitude)) {
-      editErrors.push('Select a valid location pin to set latitude.');
-    }
-    if (longitude === undefined || Number.isNaN(longitude)) {
-      editErrors.push('Select a valid location pin to set longitude.');
-    }
     if (editErrors.length) return;
 
     updating = true;
     try {
-      const locationRes = await api.userLocations.create({
-        name: poolEditLocationForm.formattedAddress.trim().split(',')[0]?.trim() || `${editForm.name.trim()} location`,
-        formattedAddress: poolEditLocationForm.formattedAddress.trim() || undefined,
-        googlePlaceId: poolEditLocationForm.googlePlaceId.trim() || undefined,
-        googlePlusCode: poolEditLocationForm.googlePlusCode.trim() || undefined,
-        latitude,
-        longitude,
-        timezone: poolEditLocationForm.timezone.trim() || undefined,
+      const currentLocation = editForm.locationId
+        ? activeLocations.find((location) => location.locationId === editForm.locationId) ?? null
+        : null;
+      const selectedLocationId =
+        currentLocation &&
+        currentLocation.googlePlaceId?.trim() === poolEditLocationForm.googlePlaceId.trim() &&
+        normalizeAddress(currentLocation.formattedAddress) === normalizeAddress(poolEditLocationForm.formattedAddress) &&
+        currentLocation.latitude === (poolEditLocationForm.latitude.trim() ? Number(poolEditLocationForm.latitude.trim()) : null) &&
+        currentLocation.longitude === (poolEditLocationForm.longitude.trim() ? Number(poolEditLocationForm.longitude.trim()) : null)
+          ? currentLocation.locationId
+          : newLocationOptionValue;
+      const locationResult = await resolveLocationId({
+        selectedLocationId,
+        poolName: editForm.name,
+        ...poolEditLocationForm,
       });
-      if (!locationRes.ok) {
-        const body = await locationRes.json().catch(() => ({}));
-        editMessage = {
-          type: 'error',
-          text: body.error ?? body.message ?? `Create location failed (${locationRes.status}).`,
-        };
-        return;
-      }
-      const createdLocation = (await locationRes.json().catch(() => null)) as
-        | { locationId?: string }
-        | null;
-      const locationId =
-        createdLocation && typeof createdLocation.locationId === 'string'
-          ? createdLocation.locationId
-          : null;
+      const locationId = locationResult.locationId;
       if (!locationId) {
-        editMessage = { type: 'error', text: 'Location created without location ID.' };
+        editMessage = { type: 'error', text: locationResult.error ?? 'Location could not be resolved.' };
         return;
       }
 
       const res = await api.pools.patch(editingPoolId, {
-        ...toPayload(editForm),
+        ...{
+          ...toPayload(editForm),
+          sanitizerTargetMinPpm:
+            showsSanitizerTargetRange(editForm.sanitizerType) && showEditAdvanced
+              ? parseOptionalNumber(editForm.sanitizerTargetMinPpm)
+              : null,
+          sanitizerTargetMaxPpm:
+            showsSanitizerTargetRange(editForm.sanitizerType) && showEditAdvanced
+              ? parseOptionalNumber(editForm.sanitizerTargetMaxPpm)
+              : null,
+        },
         locationId,
       });
       if (!res.ok) {
@@ -938,12 +999,15 @@
 
   const openCreateModal = () => {
     showCreateModal = true;
+    createLocationSelection = activeLocations[0]?.locationId ?? newLocationOptionValue;
+    showCreateAdvanced = false;
   };
 
   const closeCreateModal = () => {
     showCreateModal = false;
     createMessage = null;
-    createErrors = [];
+    resetCreateForm();
+    resetLocationForm();
   };
 </script>
 
@@ -1075,6 +1139,15 @@
             </label>
           {/if}
           {#if showsSanitizerTargetRange(createForm.sanitizerType)}
+            <label class="flex items-center gap-3 text-sm font-medium text-content-secondary sm:col-span-2">
+              <span>Advanced settings</span>
+              <input type="checkbox" class="sr-only peer" bind:checked={showCreateAdvanced} />
+              <span class="relative inline-flex h-6 w-11 items-center rounded-full bg-border transition peer-checked:bg-accent">
+                <span class={`inline-block h-5 w-5 transform rounded-full bg-white transition ${showCreateAdvanced ? 'translate-x-5' : 'translate-x-1'}`}></span>
+              </span>
+            </label>
+          {/if}
+          {#if showsSanitizerTargetRange(createForm.sanitizerType) && showCreateAdvanced}
             <label class="text-sm font-medium text-content-secondary">
               Sanitizer target min (ppm)
               <input
@@ -1173,9 +1246,23 @@
         </div>
       </div>
 
-      <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
+        <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-content-secondary">Location</p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
+          {#if activeLocations.length > 0}
+            <label class="text-sm font-medium text-content-secondary sm:col-span-2">
+              Existing location
+              <select class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={createLocationSelection}>
+                {#each activeLocations as location}
+                  <option value={location.locationId}>
+                    {location.name}{location.formattedAddress ? ` • ${location.formattedAddress}` : ''}
+                  </option>
+                {/each}
+                <option value={newLocationOptionValue}>Add a new location</option>
+              </select>
+            </label>
+          {/if}
+          {#if createLocationSelection === newLocationOptionValue}
           <div class="sm:col-span-2">
             <GoogleMapPicker
               idPrefix="pool-create-location"
@@ -1191,6 +1278,15 @@
             Selected address
             <input class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" bind:value={locationForm.formattedAddress} />
           </label>
+          {:else}
+            <div class="sm:col-span-2 rounded-lg border border-border/60 bg-surface px-3 py-3 text-sm text-content-secondary">
+              {#if activeLocations.find((location) => location.locationId === createLocationSelection)?.formattedAddress}
+                {activeLocations.find((location) => location.locationId === createLocationSelection)?.formattedAddress}
+              {:else}
+                Using saved location for this authenticated account.
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -1297,6 +1393,15 @@
                       </label>
                     {/if}
                     {#if showsSanitizerTargetRange(editForm.sanitizerType)}
+                      <label class="flex items-center gap-3 text-sm font-medium text-content-secondary sm:col-span-2">
+                        <span>Advanced settings</span>
+                        <input type="checkbox" class="sr-only peer" bind:checked={showEditAdvanced} />
+                        <span class="relative inline-flex h-6 w-11 items-center rounded-full bg-border transition peer-checked:bg-accent">
+                          <span class={`inline-block h-5 w-5 transform rounded-full bg-white transition ${showEditAdvanced ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                        </span>
+                      </label>
+                    {/if}
+                    {#if showsSanitizerTargetRange(editForm.sanitizerType) && showEditAdvanced}
                       <label class="text-sm font-medium text-content-secondary">
                         Sanitizer target min (ppm)
                           <input

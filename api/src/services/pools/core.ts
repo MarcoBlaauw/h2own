@@ -101,17 +101,26 @@ export function resolvePoolChemistryConfig(input: ResolvePoolChemistryInput) {
 
   const nextTargetMin = input.nextTargetMinPpm ?? toNumber(input.currentTargetMinPpm);
   const nextTargetMax = input.nextTargetMaxPpm ?? toNumber(input.currentTargetMaxPpm);
+  const hasNoSanitizerTargetRange = nextTargetMin === null && nextTargetMax === null;
+  const hasPartialSanitizerTargetRange =
+    (nextTargetMin === null && nextTargetMax !== null) ||
+    (nextTargetMin !== null && nextTargetMax === null);
+  const hasInvalidSanitizerTargetRange =
+    nextTargetMin !== null &&
+    nextTargetMax !== null &&
+    (
+      Number.isNaN(nextTargetMin) ||
+      Number.isNaN(nextTargetMax) ||
+      nextTargetMin <= 0 ||
+      nextTargetMax <= 0 ||
+      nextTargetMin > nextTargetMax
+    );
   if (
-    nextTargetMin === null ||
-    nextTargetMax === null ||
-    Number.isNaN(nextTargetMin) ||
-    Number.isNaN(nextTargetMax) ||
-    nextTargetMin <= 0 ||
-    nextTargetMax <= 0 ||
-    nextTargetMin > nextTargetMax
+    hasPartialSanitizerTargetRange ||
+    (!hasNoSanitizerTargetRange && hasInvalidSanitizerTargetRange)
   ) {
     throw new PoolValidationError(
-      'Sanitizer target range (min/max ppm) is required and must be positive with min less than or equal to max.'
+      'Sanitizer target range must either be omitted or include positive min/max ppm values with min less than or equal to max.'
     );
   }
 
@@ -740,8 +749,10 @@ export class PoolCoreService {
     updatePayload.sanitizerType = chemistry.sanitizerType;
     updatePayload.chlorineSource = chemistry.chlorineSource;
     updatePayload.saltLevelPpm = chemistry.saltLevelPpm;
-    updatePayload.sanitizerTargetMinPpm = chemistry.sanitizerTargetMinPpm.toString();
-    updatePayload.sanitizerTargetMaxPpm = chemistry.sanitizerTargetMaxPpm.toString();
+    updatePayload.sanitizerTargetMinPpm =
+      chemistry.sanitizerTargetMinPpm === null ? null : chemistry.sanitizerTargetMinPpm.toString();
+    updatePayload.sanitizerTargetMaxPpm =
+      chemistry.sanitizerTargetMaxPpm === null ? null : chemistry.sanitizerTargetMaxPpm.toString();
 
     const [pool] = await this.db
       .update(schema.pools)

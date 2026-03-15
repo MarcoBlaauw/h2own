@@ -162,17 +162,6 @@ describe('pools page', () => {
       locationId: null,
     };
 
-    createLocationMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40d00',
-        }),
-        {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
-    );
     createMock.mockResolvedValueOnce(
       new Response(JSON.stringify(created), {
         status: 201,
@@ -191,6 +180,7 @@ describe('pools page', () => {
     await fireEvent.input(getByLabelText(/salt target \(ppm\)/i), {
       target: { value: created.saltLevelPpm },
     });
+    await fireEvent.click(getByLabelText(/advanced settings/i));
     await fireEvent.input(getByLabelText(/sanitizer target min \(ppm\)/i), {
       target: { value: created.sanitizerTargetMinPpm },
     });
@@ -202,14 +192,8 @@ describe('pools page', () => {
     await fireEvent.click(submit);
 
     await waitFor(() => {
-      expect(createLocationMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          latitude: 30.0279,
-          longitude: -90.4614,
-          timezone: 'America/Chicago',
-        })
-      );
-        expect(createMock).toHaveBeenCalledWith(
+      expect(createLocationMock).not.toHaveBeenCalled();
+      expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
           name: created.name,
           sanitizerType: created.sanitizerType,
@@ -218,6 +202,7 @@ describe('pools page', () => {
           sanitizerTargetMinPpm: created.sanitizerTargetMinPpm,
           sanitizerTargetMaxPpm: created.sanitizerTargetMaxPpm,
           surfaceType: created.surfaceType,
+          locationId: locations[0].locationId,
         })
       );
     });
@@ -237,6 +222,7 @@ describe('pools page', () => {
     await fireEvent.change(getByLabelText('Sanitizer type'), { target: { value: 'chlorine' } });
     await fireEvent.change(getByLabelText('Chlorine source'), { target: { value: 'swg' } });
     await fireEvent.input(getByLabelText(/salt target \(ppm\)/i), { target: { value: 3600 } });
+    await fireEvent.click(getByLabelText(/advanced settings/i));
     await fireEvent.input(getByLabelText(/sanitizer target min \(ppm\)/i), { target: { value: 3200 } });
     await fireEvent.input(getByLabelText(/sanitizer target max \(ppm\)/i), { target: { value: 4000 } });
     await fireEvent.change(getByLabelText('Surface type'), { target: { value: 'plaster' } });
@@ -252,17 +238,6 @@ describe('pools page', () => {
 
   it('updates a pool', async () => {
     const updated = { ...pools[0], name: 'Updated Pool' };
-    createLocationMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          locationId: 'd1f0f4a7-0d9f-4c36-9a3a-5b08e4b40d01',
-        }),
-        {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
-    );
     patchMock.mockResolvedValueOnce(
       new Response(JSON.stringify(updated), {
         status: 200,
@@ -286,7 +261,7 @@ describe('pools page', () => {
     await fireEvent.click(getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
-      expect(createLocationMock).toHaveBeenCalled();
+      expect(createLocationMock).not.toHaveBeenCalled();
       expect(patchMock).toHaveBeenCalledWith(
         updated.poolId,
         expect.objectContaining({ name: updated.name })

@@ -13,6 +13,10 @@
   let tc = '';
   let ph = '';
   let selectedPlanSteps: Record<string, Record<number, boolean>> = {};
+  let reportAudienceByPlanId: Record<string, 'owner' | 'service_tech' | 'audit'> = {};
+  let reportEmailByPlanId: Record<string, string> = {};
+  let reportBusyKey: string | null = null;
+  let reportFeedback = '';
   let schedulingPlanId: string | null = null;
   let scheduleError = '';
 
@@ -68,6 +72,89 @@
     leadMinutes?: number | null;
     recurrence?: 'once' | 'daily' | 'weekly' | 'monthly' | null;
   }>;
+
+  const getPlanMetadata = (plan: any) => plan?.responsePayload?.planMetadata ?? null;
+  const getProvenanceLabels = (plan: any) => getPlanMetadata(plan)?.provenance?.labels ?? [];
+  const getPolicyIssues = (plan: any) => getPlanMetadata(plan)?.policyChecks?.issues ?? [];
+  const getBlockedAlternatives = (plan: any) =>
+    getPlanMetadata(plan)?.blockedUnsafeAlternativesConsidered ?? [];
+  const getReportAudience = (planId: string) => reportAudienceByPlanId[planId] ?? 'owner';
+  const getReportEmail = (planId: string) => reportEmailByPlanId[planId] ?? '';
+
+  const setReportAudience = (planId: string, audience: 'owner' | 'service_tech' | 'audit') => {
+    reportAudienceByPlanId = {
+      ...reportAudienceByPlanId,
+      [planId]: audience,
+    };
+  };
+
+  const setReportEmail = (planId: string, value: string) => {
+    reportEmailByPlanId = {
+      ...reportEmailByPlanId,
+      [planId]: value,
+    };
+  };
+
+  async function downloadPlanReport(plan: any) {
+    const poolId = $page.params.id;
+    if (!poolId) return;
+
+    reportBusyKey = `download:${plan.planId}`;
+    reportFeedback = '';
+
+    try {
+      const res = await api.treatmentPlans.report(poolId, plan.planId, {
+        audience: getReportAudience(plan.planId),
+      });
+      if (!res.ok) {
+        reportFeedback = `Failed to download report (${res.status})`;
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `treatment-report-v${plan.version}-${getReportAudience(plan.planId)}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      reportFeedback = 'Failed to download report.';
+    } finally {
+      reportBusyKey = null;
+    }
+  }
+
+  async function emailPlanReport(plan: any) {
+    const poolId = $page.params.id;
+    if (!poolId) return;
+
+    reportBusyKey = `email:${plan.planId}`;
+    reportFeedback = '';
+
+    try {
+      const body: { audience: 'owner' | 'service_tech' | 'audit'; to?: string } = {
+        audience: getReportAudience(plan.planId),
+      };
+      const recipient = getReportEmail(plan.planId).trim();
+      if (recipient) body.to = recipient;
+
+      const res = await api.treatmentPlans.emailReport(poolId, plan.planId, body);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        reportFeedback = payload?.message ?? `Failed to email report (${res.status})`;
+        return;
+      }
+
+      reportFeedback = 'Report email queued.';
+    } catch {
+      reportFeedback = 'Failed to email report.';
+    } finally {
+      reportBusyKey = null;
+    }
+  }
 
   const hasSelectedStep = (planId: string, index: number) => Boolean(selectedPlanSteps[planId]?.[index]);
 
@@ -258,12 +345,41 @@
           {#if scheduleError}
             <p class="text-sm text-danger">{scheduleError}</p>
           {/if}
+          {#if reportFeedback}
+            <p class="text-sm text-content-secondary">{reportFeedback}</p>
+          {/if}
           {#if data.plans?.length > 0}
             <ul class="space-y-3 text-sm">
               {#each data.plans as plan}
                 <li class="surface-panel space-y-3">
                   <p class="font-medium text-content-primary">v{plan.version} · {plan.status}</p>
                   <p class="text-content-secondary">{plan.responsePayload?.interpretationSummary ?? data.recommendationPreview?.primary?.reason ?? 'No summary available.'}</p>
+                  {#if getProvenanceLabels(plan).length > 0}
+                    <div class="flex flex-wrap gap-2">
+                      {#each getProvenanceLabels(plan) as label}
+                        <span class="rounded-full border border-border/60 px-2 py-1 text-[11px] text-content-secondary">{label}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                  {#if getPolicyIssues(plan).length > 0}
+                    <div class="space-y-1 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-content-secondary">
+                      <p class="font-semibold text-content-primary">Policy checks</p>
+                      {#each getPolicyIssues(plan) as issue}
+                        <p>
+                          <strong class="text-content-primary">{issue.severity}:</strong>
+                          {issue.message}
+                        </p>
+                      {/each}
+                    </div>
+                  {/if}
+                  {#if getBlockedAlternatives(plan).length > 0}
+                    <div class="space-y-1 text-xs text-content-secondary">
+                      <p class="font-semibold text-content-primary">Blocked or unsafe alternatives considered</p>
+                      {#each getBlockedAlternatives(plan) as item}
+                        <p>{item.alternative}: {item.reason}</p>
+                      {/each}
+                    </div>
+                  {/if}
                   {#if getPlanSteps(plan).length > 0}
                     <div class="space-y-2">
                       {#each getPlanSteps(plan) as step, index}
@@ -302,6 +418,44 @@
                       </button>
                     </div>
                   {/if}
+                  <div class="grid gap-2 rounded-lg border border-border/50 p-3 md:grid-cols-[180px_minmax(0,1fr)_auto_auto]">
+                    <label class="text-xs text-content-secondary">
+                      Report audience
+                      <select
+                        class="form-control form-select mt-1"
+                        value={getReportAudience(plan.planId)}
+                        on:change={(event) => setReportAudience(plan.planId, (event.currentTarget as HTMLSelectElement).value as 'owner' | 'service_tech' | 'audit')}
+                      >
+                        <option value="owner">Owner</option>
+                        <option value="service_tech">Service tech</option>
+                        <option value="audit">Audit</option>
+                      </select>
+                    </label>
+                    <label class="text-xs text-content-secondary">
+                      Email recipient
+                      <input
+                        class="form-control mt-1"
+                        type="email"
+                        placeholder="Required for service tech/audit"
+                        value={getReportEmail(plan.planId)}
+                        on:input={(event) => setReportEmail(plan.planId, (event.currentTarget as HTMLInputElement).value)}
+                      >
+                    </label>
+                    <button
+                      class="btn btn-sm btn-outline self-end"
+                      on:click={() => downloadPlanReport(plan)}
+                      disabled={reportBusyKey === `download:${plan.planId}`}
+                    >
+                      Download PDF
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline self-end"
+                      on:click={() => emailPlanReport(plan)}
+                      disabled={reportBusyKey === `email:${plan.planId}`}
+                    >
+                      Email report
+                    </button>
+                  </div>
                 </li>
               {/each}
             </ul>

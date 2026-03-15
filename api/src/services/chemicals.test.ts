@@ -1,14 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { ChemicalsService, CreateChemicalData, UpdateChemicalData } from './chemicals.js';
+import { ChemicalsService, CreateChemicalData, DuplicateChemicalError, UpdateChemicalData } from './chemicals.js';
 import * as schema from '../db/schema/index.js';
 
 describe('ChemicalsService', () => {
   describe('createChemical', () => {
     it('inserts mapped values and returns the persisted record', async () => {
+      const selectMock = vi.fn();
+      const selectFromMock = vi.fn();
+      const selectWhereMock = vi.fn();
+      const selectLimitMock = vi.fn();
       const insertMock = vi.fn();
       const valuesMock = vi.fn();
       const returningMock = vi.fn();
+
+      selectMock.mockReturnValue({ from: selectFromMock });
+      selectFromMock.mockReturnValue({ where: selectWhereMock });
+      selectWhereMock.mockReturnValue({ limit: selectLimitMock });
+      selectLimitMock.mockResolvedValue([]);
 
       insertMock.mockReturnValue({ values: valuesMock });
       valuesMock.mockReturnValue({ returning: returningMock });
@@ -42,7 +51,7 @@ describe('ChemicalsService', () => {
 
       returningMock.mockResolvedValue([persisted]);
 
-      const service = new ChemicalsService({ insert: insertMock } as any);
+      const service = new ChemicalsService({ select: selectMock, insert: insertMock } as any);
 
       const data: CreateChemicalData = {
         categoryId: persisted.categoryId,
@@ -74,6 +83,7 @@ describe('ChemicalsService', () => {
       expect(insertMock).toHaveBeenCalledWith(schema.products);
       expect(valuesMock).toHaveBeenCalledWith({
         categoryId: data.categoryId,
+        itemClass: 'chemical',
         name: data.name,
         brand: data.brand,
         productType: data.productType,
@@ -97,16 +107,63 @@ describe('ChemicalsService', () => {
         averageCostPerUnit: '28.5',
       });
       expect(returningMock).toHaveBeenCalled();
-      expect(result).toEqual(persisted);
+      expect(result).toEqual({
+        ...persisted,
+        primaryVendor: null,
+        primaryPrice: null,
+        vendorPrices: [],
+      });
+    });
+
+    it('rejects duplicate chemicals by canonical identity', async () => {
+      const selectMock = vi.fn();
+      const fromMock = vi.fn();
+      const whereMock = vi.fn();
+      const limitMock = vi.fn();
+
+      selectMock.mockReturnValue({ from: fromMock });
+      fromMock.mockReturnValue({ where: whereMock });
+      whereMock.mockReturnValue({ limit: limitMock });
+      limitMock.mockResolvedValue([{ productId: 'existing-chemical-id' }]);
+
+      const service = new ChemicalsService({ select: selectMock } as any);
+
+      await expect(
+        service.createChemical({
+          categoryId: '55b24041-49df-4f4f-b3e1-59d30e97e4c8',
+          name: 'Muriatic Acid 31.45%',
+          brand: 'Generic',
+          productType: 'muriatic_acid',
+        }),
+      ).rejects.toEqual(new DuplicateChemicalError('existing-chemical-id'));
     });
   });
 
   describe('updateChemical', () => {
     it('updates with mapped values and returns the updated record', async () => {
+      const selectMock = vi.fn();
+      const selectFromMock = vi.fn();
+      const selectWhereMock = vi.fn();
+      const selectLimitMock = vi.fn();
       const updateMock = vi.fn();
       const setMock = vi.fn();
       const whereMock = vi.fn();
       const returningMock = vi.fn();
+
+      selectMock.mockReturnValue({ from: selectFromMock });
+      selectFromMock.mockReturnValue({ where: selectWhereMock });
+      selectWhereMock.mockReturnValue({ limit: selectLimitMock });
+      selectLimitMock
+        .mockResolvedValueOnce([{
+          categoryId: '55b24041-49df-4f4f-b3e1-59d30e97e4c8',
+          itemClass: 'chemical',
+          name: 'Original Chemical',
+          brand: 'PoolCo',
+          sku: null,
+          productType: 'muriatic_acid',
+        }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ name: 'balancers' }]);
 
       updateMock.mockReturnValue({ set: setMock });
       setMock.mockReturnValue({ where: whereMock });
@@ -123,7 +180,7 @@ describe('ChemicalsService', () => {
 
       returningMock.mockResolvedValue([persisted]);
 
-      const service = new ChemicalsService({ update: updateMock } as any);
+      const service = new ChemicalsService({ select: selectMock, update: updateMock } as any);
 
       const data: UpdateChemicalData = {
         name: persisted.name,
@@ -143,7 +200,46 @@ describe('ChemicalsService', () => {
       });
       expect(whereMock).toHaveBeenCalledWith(eq(schema.products.productId, persisted.productId));
       expect(returningMock).toHaveBeenCalled();
-      expect(result).toEqual(persisted);
+      expect(result).toEqual({
+        ...persisted,
+        primaryVendor: null,
+        primaryPrice: null,
+        vendorPrices: [],
+      });
+    });
+
+    it('rejects updates that would collide with another chemical', async () => {
+      const selectMock = vi.fn();
+      const fromMock = vi.fn();
+      const whereMock = vi.fn();
+      const limitMock = vi.fn();
+      const updateMock = vi.fn();
+
+      selectMock
+        .mockReturnValueOnce({ from: fromMock })
+        .mockReturnValueOnce({ from: fromMock });
+      fromMock.mockReturnValue({ where: whereMock });
+      whereMock.mockReturnValue({ limit: limitMock });
+      limitMock
+        .mockResolvedValueOnce([{
+          categoryId: '55b24041-49df-4f4f-b3e1-59d30e97e4c8',
+          itemClass: 'chemical',
+          name: 'Existing Product',
+          brand: 'Champion',
+          productType: 'muriatic_acid',
+        }])
+        .mockResolvedValueOnce([{ productId: 'duplicate-id' }]);
+
+      const service = new ChemicalsService({ select: selectMock, update: updateMock } as any);
+
+      await expect(
+        service.updateChemical('current-id', {
+          name: 'Existing Product',
+          brand: 'Champion',
+          productType: 'muriatic_acid',
+        }),
+      ).rejects.toEqual(new DuplicateChemicalError('duplicate-id'));
+      expect(updateMock).not.toHaveBeenCalled();
     });
   });
 

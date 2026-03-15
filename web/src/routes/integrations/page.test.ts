@@ -21,6 +21,7 @@ describe('integrations page', () => {
   const linkPoolMock = api.integrations.linkPool as unknown as Mock;
 
   const baseData = {
+    session: null,
     integrations: [
       {
         integrationId: 'integration-1',
@@ -39,8 +40,22 @@ describe('integrations page', () => {
       },
     ],
     pools: [
-      { poolId: 'pool-1', name: 'Backyard Pool' },
-      { poolId: 'pool-2', name: 'Lap Pool' },
+      {
+        poolId: 'pool-1',
+        name: 'Backyard Pool',
+        volumeGallons: 15000,
+        sanitizerType: 'chlorine',
+        surfaceType: 'plaster',
+        locationId: 'location-1',
+      },
+      {
+        poolId: 'pool-2',
+        name: 'Lap Pool',
+        volumeGallons: 20000,
+        sanitizerType: 'chlorine',
+        surfaceType: 'plaster',
+        locationId: 'location-2',
+      },
     ],
     loadError: null,
   };

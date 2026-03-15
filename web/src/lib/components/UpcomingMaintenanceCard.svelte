@@ -1,7 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
 
-  export type UpcomingEvent = {
+  type UpcomingEvent = {
     id: string;
     title: string;
     dueLabel: string;
