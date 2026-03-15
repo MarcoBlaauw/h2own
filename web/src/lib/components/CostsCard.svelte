@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import Card from '$lib/components/ui/Card.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   type CostItem = {
     costId: string;
@@ -258,7 +259,7 @@
 <Card status={error ? 'danger' : success ? 'success' : 'default'}>
   <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
     <div>
-      <h2 class="text-lg font-semibold text-content-primary">Costs</h2>
+      <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="costs" size={20} tone="muted" /> Costs</h2>
       <p class="text-xs text-content-secondary">{getWindowLabel(currentSummary?.window)}</p>
     </div>
     <div class="flex items-end gap-4">

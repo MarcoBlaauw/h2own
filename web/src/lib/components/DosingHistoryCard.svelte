@@ -7,6 +7,7 @@
     type MeasurementSystem,
   } from '$lib/constants/measurement-units';
   import Card from '$lib/components/ui/Card.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   type DosingEvent = {
     actionId: string;
@@ -177,7 +178,7 @@
 </script>
 
 <Card status={error ? 'danger' : success ? 'success' : 'default'}>
-  <h2 class="text-lg font-semibold text-content-primary">Dosing history</h2>
+  <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="dosingHistory" size={20} tone="muted" /> Dosing history</h2>
   <form
     class="mt-4 form-grid"
     aria-describedby={error ? 'dosing-form-error' : success ? 'dosing-form-success' : undefined}

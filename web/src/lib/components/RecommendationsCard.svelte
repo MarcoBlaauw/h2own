@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import Card from '$lib/components/ui/Card.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   type Recommendation = {
     chemicalId: string;
@@ -130,7 +131,10 @@
 </script>
 
 <Card>
-  <h2 class="text-lg font-semibold text-content-primary">Recommendations</h2>
+  <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2">
+    <Icon name="recommendations" size={20} tone="muted" />
+    Recommendations
+  </h2>
   <div class="mt-4 space-y-3">
   {#if recommendations?.primary || (recommendations?.alternatives?.length ?? 0) > 0}
     {#if recommendations?.primary}
