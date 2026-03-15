@@ -1,5 +1,21 @@
 <script lang="ts">
+  import {
+    IconCloud,
+    IconCloudDown,
+    IconCloudUp,
+    IconDroplet,
+    IconEye,
+    IconNavigation,
+    IconSun,
+    IconSunrise,
+    IconSunset2,
+    IconTemperature,
+    IconTemperatureSun,
+    IconUvIndex,
+    IconWind,
+  } from '@tabler/icons-svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   type WeatherDay = {
     recordedAt: string | Date;
@@ -103,19 +119,6 @@
     return directions[index];
   };
 
-  const windDirectionIconClass = (value?: number | null) => {
-    if (value === null || value === undefined) return 'wi-strong-wind';
-    const normalized = ((value % 360) + 360) % 360;
-    if (normalized >= 337.5 || normalized < 22.5) return 'wi-wind-north';
-    if (normalized < 67.5) return 'wi-wind-north-east';
-    if (normalized < 112.5) return 'wi-wind-east';
-    if (normalized < 157.5) return 'wi-wind-south-east';
-    if (normalized < 202.5) return 'wi-wind-south';
-    if (normalized < 247.5) return 'wi-wind-south-west';
-    if (normalized < 292.5) return 'wi-wind-west';
-    return 'wi-wind-north-west';
-  };
-
   const beaufortFromMph = (value?: number | null) => {
     if (value === null || value === undefined) return null;
     if (value < 1) return 0;
@@ -131,11 +134,6 @@
     if (value < 64) return 10;
     if (value < 73) return 11;
     return 12;
-  };
-
-  const beaufortIconClass = (value?: number | null) => {
-    const beaufort = beaufortFromMph(value);
-    return beaufort === null ? 'wi-strong-wind' : `wi-beafort-${beaufort}`;
   };
 
   const computeQuality = (day?: WeatherDay) => {
@@ -186,12 +184,14 @@
 
   const today = sorted[0];
   const quality = computeQuality(today);
-  const windDirectionIcon = windDirectionIconClass(today?.windDirectionDeg);
+  const normalizedWindDirection =
+    today?.windDirectionDeg === null || today?.windDirectionDeg === undefined
+      ? null
+      : ((today.windDirectionDeg % 360) + 360) % 360;
   const windDirectionText =
     today?.windDirectionDeg === null || today?.windDirectionDeg === undefined
       ? '—'
       : `${windDirectionLabel(today.windDirectionDeg)} (${formatDegrees(today.windDirectionDeg)})`;
-  const beaufortIcon = beaufortIconClass(today?.windSpeedMph);
   const beaufortValue = beaufortFromMph(today?.windSpeedMph);
   const lastRefreshedAt = dailyWeather.reduce<Date | null>((latest, day) => {
     if (!day.createdAt) return latest;
@@ -252,14 +252,14 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">Solar</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-sunrise text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconSunrise} size={16} className="text-content-primary" />
             <span>
               Sunrise:
               <span class="font-medium text-content-primary">{formatTime(today.sunriseTime)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-sunset text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconSunset2} size={16} className="text-content-primary" />
             <span>
               Sunset:
               <span class="font-medium text-content-primary">{formatTime(today.sunsetTime)}</span>
@@ -272,28 +272,28 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">Sky</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-day-haze text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconEye} size={16} className="text-content-primary" />
             <span>
               Visibility:
               <span class="font-medium text-content-primary">{formatMiles(today.visibilityMi)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-cloudy text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconCloud} size={16} className="text-content-primary" />
             <span>
               Cloud cover:
               <span class="font-medium text-content-primary">{formatPercent(today.cloudCoverPercent)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-cloud-down text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconCloudDown} size={16} className="text-content-primary" />
             <span>
               Cloud base:
               <span class="font-medium text-content-primary">{formatKm(today.cloudBaseKm)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-cloud-up text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconCloudUp} size={16} className="text-content-primary" />
             <span>
               Cloud ceiling:
               <span class="font-medium text-content-primary">{formatKm(today.cloudCeilingKm)}</span>
@@ -306,28 +306,28 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">UV And Heat</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-day-sunny text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconUvIndex} size={16} className="text-content-primary" />
             <span>
               UV index:
               <span class="font-medium text-content-primary">{today.uvIndex ?? '—'}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-hot text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconSun} size={16} className="text-content-primary" />
             <span>
               UV concern:
               <span class="font-medium text-content-primary">{today.uvHealthConcern ?? '—'}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-thermometer text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconTemperature} size={16} className="text-content-primary" />
             <span>
               Apparent temp:
               <span class="font-medium text-content-primary">{formatTemp(today.temperatureApparentF)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-thermometer-exterior text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconTemperatureSun} size={16} className="text-content-primary" />
             <span>
               Heat stress:
               <span class="font-medium text-content-primary">{today.ezHeatStressIndex ?? '—'}</span>
@@ -340,35 +340,40 @@
         <div class="text-xs uppercase tracking-wide text-content-secondary">Wind And Air</div>
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div class="text-content-secondary flex items-center gap-2">
-            <i class={`wi ${beaufortIcon} text-content-primary text-base`} aria-hidden="true"></i>
+            <Icon icon={IconWind} size={16} className="text-content-primary" />
             <span>
               Wind speed:
               <span class="font-medium text-content-primary">{formatMph(today.windSpeedMph)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class={`wi ${windDirectionIcon} text-content-primary text-base`} aria-hidden="true"></i>
+            <Icon
+              icon={IconNavigation}
+              size={16}
+              className="text-content-primary"
+              style={`transform: rotate(${normalizedWindDirection ?? 0}deg);`}
+            />
             <span>
               Wind direction:
               <span class="font-medium text-content-primary">{windDirectionText}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-strong-wind text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconWind} size={16} className="text-content-primary" />
             <span>
               Wind gust:
               <span class="font-medium text-content-primary">{formatMph(today.windGustMph)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class="wi wi-umbrella text-content-primary text-base" aria-hidden="true"></i>
+            <Icon icon={IconDroplet} size={16} className="text-content-primary" />
             <span>
               Humidity:
               <span class="font-medium text-content-primary">{formatPercent(today.humidityPercent)}</span>
             </span>
           </div>
           <div class="text-content-secondary flex items-center gap-2">
-            <i class={`wi ${beaufortIcon} text-content-primary text-base`} aria-hidden="true"></i>
+            <Icon icon={IconWind} size={16} className="text-content-primary" />
             <span>
               Wind force:
               <span class="font-medium text-content-primary">{beaufortValue ?? '—'}</span>

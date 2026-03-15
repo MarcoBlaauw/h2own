@@ -3,9 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync:weather-icons-assets": "mkdir -p static/font src/lib/styles && cp -f node_modules/weather-icons/font/weathericons-regular-webfont.* static/font/ && sed \"s#\\.\\./font/#/font/#g\" node_modules/weather-icons/css/weather-icons.css > src/lib/styles/weather-icons.css",
-    "predev": "pnpm run sync:weather-icons-assets",
-    "prebuild": "pnpm run sync:weather-icons-assets",
     "dev": "vite --host --port 3000",
     "build": "vite build",
     "preview": "vite preview",
@@ -69,7 +66,7 @@
   },
   "packageManager": "pnpm@10.32.1",
   "dependencies": {
-    "tz-lookup": "^6.1.25",
-    "weather-icons": "^1.3.2"
+    "@tabler/icons-svelte": "^3.40.0",
+    "tz-lookup": "^6.1.25"
   }
 }
