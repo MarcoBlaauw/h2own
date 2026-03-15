@@ -187,25 +187,31 @@
   }, null);
 </script>
 
-<Card>
-  <div class="flex items-start justify-between gap-4">
-    <div>
-      <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="weatherQuality" size={20} tone="muted" /> Pool weather quality</h2>
-      <p class="text-xs text-content-secondary">{quality.detail}</p>
-      <p class="text-xs text-content-secondary mt-1">
-        Last refreshed: {formatDateTime(lastRefreshedAt)}
-      </p>
+<Card status={quality.label === 'Poor' ? 'warning' : quality.label === 'Unavailable' ? 'danger' : 'default'}>
+  <svelte:fragment slot="header">
+    <div class="card-heading">
+      <span class="card-icon-badge" data-shape="squircle">
+        <Icon name="weatherQuality" size={20} tone="muted" />
+      </span>
+      <div class="card-title-group">
+        <h2 class="card-title">Pool weather quality</h2>
+        <p class="card-subtitle">{quality.detail}</p>
+        <p class="text-xs text-content-secondary">Last refreshed: {formatDateTime(lastRefreshedAt)}</p>
+      </div>
     </div>
+  </svelte:fragment>
+
+  <svelte:fragment slot="actions">
     <div class="text-right">
       <div class="text-2xl font-semibold text-content-primary">
         {quality.score !== null ? quality.score : '—'}
       </div>
       <div class="text-xs uppercase tracking-wide text-content-secondary">{quality.label}</div>
     </div>
-  </div>
+  </svelte:fragment>
 
   {#if today}
-    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+    <div class="grid gap-3 sm:grid-cols-2">
       <div class="rounded-xl border border-border/60 bg-surface-subtle p-4">
         <div class="text-xs uppercase tracking-wide text-content-secondary">Today</div>
         <div class="mt-1 text-lg font-semibold text-content-primary">{formatDate(today.recordedAt)}</div>

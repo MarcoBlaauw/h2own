@@ -27,8 +27,19 @@
 </script>
 
 <Card>
-  <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2"><Icon name="poolSummary" size={20} tone="muted" /> Pool Summary</h2>
-  <dl class="mt-4 grid gap-3 text-sm">
+  <svelte:fragment slot="header">
+    <div class="card-heading">
+      <span class="card-icon-badge" data-shape="circle">
+        <Icon name="poolSummary" size={20} tone="muted" />
+      </span>
+      <div class="card-title-group">
+        <h2 class="card-title">Pool Summary</h2>
+        <p class="card-subtitle">Key setup details for this pool profile.</p>
+      </div>
+    </div>
+  </svelte:fragment>
+
+  <dl class="grid gap-3 text-sm">
     <div class="flex items-center justify-between gap-3">
       <dt class="text-xs font-semibold uppercase tracking-wide text-content-secondary/80 flex items-center gap-1.5"><Icon name="poolOwner" size={16} tone="muted" /> Owner</dt>
       <dd class="text-right font-medium text-content-primary">{displayOwner(pool?.owner)}</dd>

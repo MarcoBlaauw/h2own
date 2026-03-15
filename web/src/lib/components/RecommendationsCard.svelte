@@ -130,12 +130,20 @@
   };
 </script>
 
-<Card>
-  <h2 class="text-lg font-semibold text-content-primary flex items-center gap-2">
-    <Icon name="recommendations" size={20} tone="muted" />
-    Recommendations
-  </h2>
-  <div class="mt-4 space-y-3">
+<Card variant="actionable" density="compact">
+  <svelte:fragment slot="header">
+    <div class="card-heading">
+      <span class="card-icon-badge" data-shape="squircle">
+        <Icon name="recommendations" size={20} tone="muted" />
+      </span>
+      <div class="card-title-group">
+        <h2 class="card-title">Recommendations</h2>
+        <p class="card-subtitle">Next-best chemical actions based on your latest readings.</p>
+      </div>
+    </div>
+  </svelte:fragment>
+
+  <div class="space-y-3">
   {#if recommendations?.primary || (recommendations?.alternatives?.length ?? 0) > 0}
     {#if recommendations?.primary}
       {@const primary = recommendations.primary}

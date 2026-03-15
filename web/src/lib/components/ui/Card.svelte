@@ -1,13 +1,50 @@
 <script lang="ts">
   export let className = '';
   export let status: 'default' | 'success' | 'warning' | 'danger' | 'info' = 'default';
+  export let variant: 'default' | 'elevated' | 'subtle' | 'actionable' = 'default';
+  export let density: 'comfortable' | 'compact' = 'comfortable';
+
+  const statusLabel = (value: typeof status) => value.charAt(0).toUpperCase() + value.slice(1);
+
+  $: hasHeader = Boolean($$slots.header || $$slots.actions);
+  $: hasFooter = Boolean($$slots.footer);
 </script>
 
 <section
-  class={`surface-card status-success:ring-1 status-success:ring-success status-success:ring-opacity-25 status-success:border-success status-success:border-opacity-60 status-success:bg-success status-success:bg-opacity-10 status-warning:ring-1 status-warning:ring-warning status-warning:ring-opacity-25 status-warning:border-warning status-warning:border-opacity-60 status-warning:bg-warning status-warning:bg-opacity-10 status-danger:ring-1 status-danger:ring-danger status-danger:ring-opacity-25 status-danger:border-danger status-danger:border-opacity-70 status-danger:bg-danger status-danger:bg-opacity-10 status-info:ring-1 status-info:ring-info status-info:ring-opacity-25 status-info:border-info status-info:border-opacity-60 status-info:bg-info status-info:bg-opacity-10 ${className}`}
+  class={`surface-card ${className}`}
   data-status={status === 'default' ? undefined : status}
+  data-variant={variant}
+  data-density={density}
 >
-  <div class="card-body">
+  {#if hasHeader}
+    <header class="card-header">
+      {#if $$slots.header}
+        <div class="card-header__main">
+          <slot name="header" />
+        </div>
+      {/if}
+      {#if status !== 'default'}
+        <span class="card-status-badge" data-status={status}>{statusLabel(status)}</span>
+      {/if}
+      {#if $$slots.actions}
+        <div class="card-header__actions">
+          <slot name="actions" />
+        </div>
+      {/if}
+    </header>
+  {/if}
+
+  <div class={`card-body ${hasHeader ? 'card-body--with-header' : ''} ${hasFooter ? 'card-body--with-footer' : ''}`}>
     <slot />
   </div>
+
+  {#if hasFooter}
+    <footer class="card-footer">
+      <slot name="footer" />
+    </footer>
+  {/if}
+
+  {#if status !== 'default'}
+    <span class="card-status-accent" data-status={status} aria-hidden="true"></span>
+  {/if}
 </section>
