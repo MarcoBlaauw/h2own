@@ -2,7 +2,7 @@
   import { iconLabelMap, iconMap, type IconName } from '$lib/components/ui/icon-map';
 
   type IconSize = 16 | 20 | 24;
-  type IconTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger';
+  type IconTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
 
   const toneClassMap: Record<IconTone, string> = {
     default: 'text-content-primary',
@@ -11,6 +11,7 @@
     success: 'text-success',
     warning: 'text-warning',
     danger: 'text-danger',
+    info: 'text-info',
   };
 
   export let name: IconName;

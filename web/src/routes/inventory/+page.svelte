@@ -294,7 +294,7 @@
 
 <Container>
   <section class="mx-auto w-full max-w-6xl space-y-6 py-8">
-    <div class="flex flex-col gap-4 rounded-3xl border border-border bg-surface p-6 shadow-card lg:flex-row lg:items-end lg:justify-between">
+    <div class="surface-frame flex flex-col gap-4 rounded-3xl p-6 lg:flex-row lg:items-end lg:justify-between">
       <div class="space-y-2">
         <h1 class="text-3xl font-semibold text-content-primary">Inventory</h1>
         <p class="text-sm text-content-secondary">
@@ -313,17 +313,17 @@
     </div>
 
     <div class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-2xl border border-border bg-surface p-4 shadow-card">
+      <div class="surface-frame rounded-2xl p-4">
         <div class="text-xs uppercase tracking-[0.18em] text-content-secondary">Tracked products</div>
         <div class="mt-2 text-3xl font-semibold text-content-primary">{inventoryItems.length}</div>
       </div>
-      <div class="rounded-2xl border border-border bg-surface p-4 shadow-card">
+      <div class="surface-frame rounded-2xl p-4">
         <div class="text-xs uppercase tracking-[0.18em] text-content-secondary">Low stock</div>
         <div class="mt-2 text-3xl font-semibold text-content-primary">
           {inventoryItems.filter((item) => item.lowStock).length}
         </div>
       </div>
-      <div class="rounded-2xl border border-border bg-surface p-4 shadow-card">
+      <div class="surface-frame rounded-2xl p-4">
         <div class="text-xs uppercase tracking-[0.18em] text-content-secondary">30-day spend</div>
         <div class="mt-2 text-3xl font-semibold text-content-primary">
           {costSummary ? formatAmount(costSummary.total, costSummary.currency ?? 'USD') : '—'}
@@ -332,7 +332,7 @@
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-      <section class="rounded-3xl border border-border bg-surface p-6 shadow-card">
+      <section class="surface-frame rounded-3xl p-6">
         <div class="flex items-center justify-between gap-4">
           <div>
             <h2 class="text-xl font-semibold text-content-primary">Stock health</h2>
@@ -346,7 +346,7 @@
         {#if inventoryItems.length}
           <div class="mt-4 space-y-4">
             {#each inventoryItems as item}
-              <div class="rounded-2xl border border-border/80 bg-surface-raised p-4">
+              <div class="surface-frame rounded-2xl p-4">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div class="space-y-1">
                     <div class="text-lg font-semibold text-content-primary">{item.productName}</div>
@@ -415,7 +415,7 @@
       </section>
 
       <div class="space-y-6">
-        <section class="rounded-3xl border border-border bg-surface p-6 shadow-card">
+        <section class="surface-frame rounded-3xl p-6">
           <h2 class="text-xl font-semibold text-content-primary">Record inventory activity</h2>
           <p class="mt-1 text-sm text-content-secondary">
             Restocks and adjustments create tracked inventory items. Start by choosing a catalog category and product.
@@ -521,7 +521,7 @@
           </div>
         </section>
 
-        <section class="rounded-3xl border border-border bg-surface p-6 shadow-card">
+        <section class="surface-frame rounded-3xl p-6">
           <h2 class="text-xl font-semibold text-content-primary">Recent inventory activity</h2>
           {#if transactions.length}
             <div class="mt-4 space-y-3">

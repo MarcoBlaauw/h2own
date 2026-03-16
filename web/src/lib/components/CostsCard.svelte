@@ -359,8 +359,17 @@
     {#if success}
       <p class="form-message sm:col-span-2" data-state="success" role="status" aria-live="polite" id="cost-form-success">{success}</p>
     {/if}
-    <button type="submit" class="sm:col-span-2 btn btn-base btn-primary" disabled={isSubmitting}>
-      {#if isSubmitting}Saving...{:else}Add cost{/if}
+    <button
+      type="submit"
+      class="sm:col-span-2 btn btn-base btn-primary"
+      disabled={isSubmitting}
+      data-loading={isSubmitting ? 'true' : undefined}
+      aria-busy={isSubmitting}
+    >
+      <span class="btn__spinner" aria-hidden="true"></span>
+      <span class="btn__content">
+        <span class="btn__label">{isSubmitting ? 'Saving cost...' : 'Add cost'}</span>
+      </span>
     </button>
   </form>
 

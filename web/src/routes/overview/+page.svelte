@@ -691,7 +691,7 @@
       </select>
     </div>
     <div class="flex flex-wrap gap-2">
-      <button class="btn btn-sm btn-tonal" on:click={openCreatePoolModal}>
+      <button class="btn btn-sm btn-ghost" on:click={openCreatePoolModal}>
         Create new pool
       </button>
       <button class="btn btn-sm btn-primary" on:click={() => (showQuickModal = true)} disabled={!data.highlightedPool}>
@@ -750,12 +750,12 @@
       />
     </div>
     <div class="lg:col-span-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <section class="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <section class="surface-frame rounded-xl p-4">
         <h3 class="text-base font-semibold text-content-primary">Recommendation effectiveness by treatment type</h3>
         <div class="mt-3 space-y-2">
           {#if data.effectiveness?.byTreatmentType?.length}
             {#each data.effectiveness.byTreatmentType as row}
-              <div class="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-sm">
+              <div class="surface-panel flex items-center justify-between text-sm">
                 <span class="text-content-primary">{row.treatmentType ?? 'unspecified'}</span>
                 <span class="text-content-secondary">{row.loggedOutcomes}/{row.outcomes} logged • quality {row.averageQuality === null ? 'n/a' : Number(row.averageQuality).toFixed(2)}</span>
               </div>
@@ -765,17 +765,17 @@
           {/if}
         </div>
       </section>
-      <section class="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <section class="surface-frame rounded-xl p-4">
         <h3 class="text-base font-semibold text-content-primary">Outcome follow-ups due (24h / 72h)</h3>
         <div class="mt-3 space-y-2 text-sm text-content-secondary">
           {#if data.dueOutcomePrompts?.length}
             {#each data.dueOutcomePrompts as due}
-              <p class="rounded-lg border border-border/70 px-3 py-2">
+              <p class="surface-panel">
                 {new Date(due.dueAt).toLocaleString()} • {due.checkpointHours}h checkpoint. Log new test values and observed issues.
               </p>
             {/each}
           {:else}
-            <p class="rounded-lg border border-border/70 px-3 py-2">No due follow-ups right now.</p>
+            <p class="surface-panel">No due follow-ups right now.</p>
           {/if}
         </div>
       </section>
@@ -785,7 +785,7 @@
     </div>
     <div class="lg:col-span-3">
       <section class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 shadow-card">
+        <div class="surface-frame flex flex-wrap items-center justify-between gap-3 rounded-xl p-4">
           <div>
             <h3 class="text-base font-semibold text-content-primary">AI Treatment Plan</h3>
             <p class="text-sm text-content-secondary">
@@ -804,8 +804,15 @@
             class="btn btn-sm btn-primary"
             on:click={handleGenerateTreatmentPlan}
             disabled={!data.highlightedPool || generatingTreatmentPlan || !data.latestTest}
+            data-loading={generatingTreatmentPlan ? 'true' : undefined}
+            aria-busy={generatingTreatmentPlan}
           >
-            {generatingTreatmentPlan ? 'Generating AI plan...' : 'Generate AI treatment plan'}
+            <span class="btn__spinner" aria-hidden="true"></span>
+            <span class="btn__content">
+              <span class="btn__label">
+                {generatingTreatmentPlan ? 'Generating AI plan...' : 'Generate AI treatment plan'}
+              </span>
+            </span>
           </button>
         </div>
         {#if treatmentPlanMessage}
@@ -835,12 +842,12 @@
 {#if showQuickModal && data.highlightedPool}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-label="Quick test dialog">
     <div
-      class="w-full max-w-2xl rounded-xl border border-border p-4 shadow-card"
+      class="surface-frame w-full max-w-2xl rounded-xl p-4"
       style="background-color: rgb(var(--color-bg-raised)); opacity: 1;"
     >
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-content-primary">Quick Test</h2>
-        <button class="btn btn-sm btn-tonal" on:click={closeModals}>Close</button>
+        <button class="btn btn-sm btn-ghost" on:click={closeModals}>Close</button>
       </div>
       <QuickTestForm poolId={data.highlightedPool.id} />
     </div>
@@ -850,12 +857,12 @@
 {#if showGuidedModal && data.highlightedPool}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-label="Guided full test dialog">
     <div
-      class="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-border p-4 shadow-card"
+      class="surface-frame max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl p-4"
       style="background-color: rgb(var(--color-bg-raised)); opacity: 1;"
     >
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-content-primary">Guided Full Test</h2>
-        <button class="btn btn-sm btn-tonal" on:click={closeModals}>Close</button>
+        <button class="btn btn-sm btn-ghost" on:click={closeModals}>Close</button>
       </div>
       <GuidedTestForm poolId={data.highlightedPool.id} compact={true} />
     </div>
@@ -865,12 +872,12 @@
 {#if showCreatePoolModal}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-label="Create pool dialog">
     <div
-      class="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-border p-4 shadow-card"
+      class="surface-frame max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl p-4"
       style="background-color: rgb(var(--color-bg-raised)); opacity: 1;"
     >
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-content-primary">Create new pool</h2>
-        <button class="btn btn-sm btn-tonal" on:click={closeModals}>Close</button>
+        <button class="btn btn-sm btn-ghost" on:click={closeModals}>Close</button>
       </div>
       <div class="space-y-4">
         <div class="rounded-lg border border-border/70 bg-surface/30 p-4">
@@ -1005,8 +1012,17 @@
         {#if createPoolSuccess}
           <p class="text-sm text-success" role="status">{createPoolSuccess}</p>
         {/if}
-        <button class="btn btn-base btn-primary w-full" on:click={handleCreatePoolSubmit} disabled={creatingPool}>
-          {creatingPool ? 'Creating...' : 'Create pool'}
+        <button
+          class="btn btn-base btn-primary w-full"
+          on:click={handleCreatePoolSubmit}
+          disabled={creatingPool}
+          data-loading={creatingPool ? 'true' : undefined}
+          aria-busy={creatingPool}
+        >
+          <span class="btn__spinner" aria-hidden="true"></span>
+          <span class="btn__content">
+            <span class="btn__label">{creatingPool ? 'Creating pool...' : 'Create pool'}</span>
+          </span>
         </button>
       </div>
     </div>

@@ -1,7 +1,10 @@
 # Vendor Price Import And Upgrade Guide
 
 ## Current Phase
-Phase 1 is a manual admin import workflow for vendor prices.
+The current implementation now spans:
+- Phase 1 manual admin import workflow
+- Phase 2 background sync run infrastructure
+- first real external adapter coverage through Home Depot
 
 Implemented:
 - Admin vendor registry CRUD
@@ -12,6 +15,7 @@ Implemented:
 - Dry-run preview mode
 - Admin-side sample template helpers for CSV and JSON
 - Persistent import history with summary results
+- Persistent sync-run history with summary results
 - Upsert into `product_vendor_prices`
 - Optional primary-price updates for `products.average_cost_per_unit`
 
@@ -69,11 +73,16 @@ Preferred JSON shape:
 ]
 ```
 
-## Phase 2: Automated Imports
+## Automated Sync Status
+Implemented:
+- scheduled/background vendor sync runs
+- sync-run result logging
+- stale-price visibility in the UI
+
 Best next upgrade:
 - keep the current import result contract
-- add background jobs that produce the same normalized row shape
-- pass those rows through the same upsert pipeline used by manual import
+- expand more adapters to produce the same normalized row shape
+- pass all adapter output through the same upsert pipeline used by manual import
 
 Current live adapter note:
 - `VENDOR_PRICE_HOME_DEPOT_PROVIDER=auto` is the default.
@@ -94,7 +103,7 @@ Suggested architecture:
 - `VendorPriceSyncService.importVendorPrices()` remains the shared write path
 - adapters only fetch/normalize; they do not write directly
 
-## Phase 3: API-Based Adapters
+## Next Adapter Direction
 Preferred direction:
 1. shopping search API adapter
 2. retailer API adapter if available

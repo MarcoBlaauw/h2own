@@ -30,6 +30,38 @@ Following these steps will centralize color and component styling inside Tailwin
 3. **Codify reusable component classes.** When multiple features need the same pattern (buttons, surfaces, inputs), add an entry inside the `@layer components` block of [`src/app.css`](../web/src/app.css) that composes Tailwind utilities with the new tokens. Avoid duplicating literal color codes in Svelte components; instead, reference the shared class.
 4. **Validate both themes.** Run `pnpm --filter web lint` followed by `pnpm --filter web test:visual` (with `--update-snapshots` if intentionally changing the UI) so the lint rule coverage and Playwright baseline screenshots reflect the new styles.
 
+## Button usage guideline
+
+The shared button API in [`web/src/app.css`](../web/src/app.css) now treats button styling as two decisions: size (`btn-sm`, `btn-base`, `btn-icon-base`) and intent (`btn-primary`, `btn-secondary`, `btn-ghost`, `btn-danger`). Use one primary action at most within a single card header, card body form, modal footer, or dashboard action cluster.
+
+### Intent rules
+
+| Intent | Use it for | Avoid it for |
+| --- | --- | --- |
+| `btn-primary` | The single highest-priority next step on the current surface. | Secondary navigation, dismiss, or competing sibling actions. |
+| `btn-secondary` | Important but non-dominant actions that support the primary flow. | Destructive actions or “just close this” controls. |
+| `btn-ghost` | Low-emphasis actions such as close, cancel, filter launch, or create/setup actions adjacent to an existing primary CTA. | The main submit action on a form. |
+| `btn-danger` | Confirmed destructive actions such as delete, remove, or irreversible reset. | Neutral warnings or routine form submits. |
+
+### Loading and icon pattern
+
+- For asynchronous actions, add `data-loading="true"` and include a leading `.btn__spinner` element before `.btn__content`.
+- Wrap labels in `.btn__label`. If the button has a leading icon, place it in `.btn__icon` inside `.btn__content` so the spacing stays consistent with and without the spinner.
+- Do not replace a primary button with a second button during loading; keep the same control and update its label.
+
+### Surface hierarchy in current dashboard views
+
+- [`web/src/routes/overview/+page.svelte`](../web/src/routes/overview/+page.svelte): header cluster uses `Quick test` as the only primary action, `Guided full test` as secondary, and `Create new pool` as ghost. Modal `Close` actions stay ghost. The AI treatment-plan section has a single primary action: `Generate AI treatment plan`.
+- [`web/src/lib/components/QuickTestForm.svelte`](../web/src/lib/components/QuickTestForm.svelte): `Save test results` is the only primary action in the card body.
+- [`web/src/lib/components/CostsCard.svelte`](../web/src/lib/components/CostsCard.svelte): filtering/select inputs stay neutral controls; `Add cost` is the only primary action in the form section.
+- [`web/src/lib/components/DosingHistoryCard.svelte`](../web/src/lib/components/DosingHistoryCard.svelte): `Log dosing` is the only primary action in the form section.
+
+### Accessibility checks
+
+- Keep `focus-visible` rings enabled on every intent. The shared `btn` class already applies ring offset tokens for both light and dark themes; do not remove them locally.
+- Disabled buttons should remain readable but clearly inactive. Use the shared disabled state instead of lowering opacity further in component markup.
+- If a button sits on a tinted or dark surface, prefer the shared intents over one-off utility colors so text and focus contrast remain aligned with the theme tokens.
+
 ## Token reference
 
 The new design tokens live in `web/src/lib/styles/tokens.css` and are consumed globally via `src/app.css` and Tailwind utility extensions. Each color is expressed as an RGB tuple for Tailwind’s opacity helpers but is documented here in hex for readability.

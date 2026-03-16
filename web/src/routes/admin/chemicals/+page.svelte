@@ -25,6 +25,7 @@
   let vendorSyncingId: string | null = null;
   let vendorMode: 'create' | 'edit' = 'create';
   let editingVendorId: string | null = null;
+  let showVendorModal = false;
   let vendorForm = {
     name: '',
     slug: '',
@@ -144,6 +145,7 @@
   let form: FormState = { ...defaultFormState };
   let formMode: 'create' | 'edit' = 'create';
   let editingChemicalId: string | null = null;
+  let showCatalogModal = false;
   let submitting = false;
   let successMessage = '';
   let formErrors: string[] = [];
@@ -270,6 +272,7 @@
   function startCreateMode() {
     formMode = 'create';
     editingChemicalId = null;
+    showCatalogModal = true;
     successMessage = '';
     resetForm();
   }
@@ -277,9 +280,18 @@
   function beginEdit(chemical: Chemical) {
     formMode = 'edit';
     editingChemicalId = chemical.productId;
+    showCatalogModal = true;
     form = chemicalToFormState(chemical);
     successMessage = '';
     formErrors = [];
+  }
+
+  function closeCatalogModal() {
+    showCatalogModal = false;
+    formMode = 'create';
+    editingChemicalId = null;
+    formErrors = [];
+    resetForm();
   }
 
   function setToggleBusy(id: string, busy: boolean) {
@@ -396,6 +408,7 @@
   function startCreateVendorMode() {
     vendorMode = 'create';
     editingVendorId = null;
+    showVendorModal = true;
     vendorSuccessMessage = '';
     resetVendorForm();
   }
@@ -403,6 +416,7 @@
   function beginVendorEdit(vendor: typeof vendors[number]) {
     vendorMode = 'edit';
     editingVendorId = vendor.vendorId;
+    showVendorModal = true;
     vendorSuccessMessage = '';
     vendorFormErrors = [];
     vendorForm = {
@@ -454,12 +468,16 @@
         vendors = [...vendors, vendor].sort((a, b) => a.name.localeCompare(b.name));
         vendorSuccessMessage = 'Vendor created successfully.';
         resetVendorForm();
+        showVendorModal = false;
       } else {
         vendors = vendors
           .map((entry) => (entry.vendorId === vendor.vendorId ? vendor : entry))
           .sort((a, b) => a.name.localeCompare(b.name));
         vendorSuccessMessage = 'Vendor updated successfully.';
-        startCreateVendorMode();
+        vendorMode = 'create';
+        editingVendorId = null;
+        resetVendorForm();
+        showVendorModal = false;
       }
     } catch (error) {
       console.error(error);
@@ -487,6 +505,14 @@
     } finally {
       vendorSyncingId = null;
     }
+  }
+
+  function closeVendorModal() {
+    showVendorModal = false;
+    vendorMode = 'create';
+    editingVendorId = null;
+    vendorFormErrors = [];
+    resetVendorForm();
   }
 
   async function handleVendorImport() {
@@ -753,10 +779,14 @@
         addChemical(chemical);
         successMessage = 'Chemical created successfully.';
         resetForm();
+        showCatalogModal = false;
       } else {
         replaceChemical(chemical);
         successMessage = 'Chemical updated successfully.';
-        startCreateMode();
+        formMode = 'create';
+        editingChemicalId = null;
+        resetForm();
+        showCatalogModal = false;
       }
     } catch (error) {
       formErrors = [
@@ -865,111 +895,68 @@
             Manage normalized vendor records used by chemical pricing and future price sync adapters.
           </p>
         </div>
-        {#if vendorMode === 'edit'}
-          <button class="btn btn-sm btn-outline" type="button" on:click={startCreateVendorMode}>
-            Cancel editing
-          </button>
-        {/if}
+        <button class="btn btn-sm btn-primary" type="button" on:click={startCreateVendorMode}>
+          Add vendor
+        </button>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-left text-sm text-content-secondary">
-            <thead class="border-b border-border/60 text-xs font-semibold uppercase tracking-wide text-content-secondary/80 dark:border-border-strong/60">
-              <tr>
-                <th class="px-3 py-2">Name</th>
-                <th class="px-3 py-2">Slug</th>
-                <th class="px-3 py-2">Provider</th>
-                <th class="px-3 py-2">Status</th>
-                <th class="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border/40">
-              {#if vendors.length > 0}
-                {#each vendors as vendor}
-                  <tr>
-                    <td class="px-3 py-3 text-content-primary">
-                      <div>{vendor.name}</div>
-                      <div class="text-xs text-content-secondary/70">{vendor.websiteUrl ?? '—'}</div>
-                    </td>
-                    <td class="px-3 py-3">{vendor.slug}</td>
-                    <td class="px-3 py-3">{vendor.provider ?? '—'}</td>
-                    <td class="px-3 py-3">{vendor.isActive ? 'Active' : 'Inactive'}</td>
-                    <td class="px-3 py-3 text-right">
-                      <div class="flex items-center justify-end gap-2">
-                        <button class="btn btn-xs btn-outline" type="button" on:click={() => beginVendorEdit(vendor)}>
-                          Edit
-                        </button>
-                        <button
-                          class="btn btn-xs btn-outline"
-                          type="button"
-                          disabled={vendorSyncingId === vendor.vendorId}
-                          on:click={() => handleVendorSync(vendor.vendorId)}
-                        >
-                          {vendorSyncingId === vendor.vendorId ? 'Syncing…' : 'Sync prices'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                {/each}
-              {:else}
-                <tr>
-                  <td colspan="5" class="px-3 py-6 text-center text-content-secondary/80">No vendors found.</td>
-                </tr>
-              {/if}
-            </tbody>
-          </table>
-        </div>
+      {#if vendorSuccessMessage}
+        <p class="rounded-lg bg-success/10 px-3 py-2 text-sm font-medium text-success" role="status">
+          {vendorSuccessMessage}
+        </p>
+      {/if}
+      {#if vendorFormErrors.length > 0 && !showVendorModal}
+        <p class="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger" role="alert">
+          {vendorFormErrors.join(' ')}
+        </p>
+      {/if}
 
-        <form class="space-y-4" on:submit|preventDefault={handleVendorSubmit}>
-          <div class="space-y-1">
-            <h3 class="text-lg font-semibold text-content-primary">
-              {vendorMode === 'create' ? 'Add vendor' : 'Edit vendor'}
-            </h3>
-            <p class="text-sm text-content-secondary">
-              Keep vendor names and slugs normalized so catalog pricing stays deduplicated.
-            </p>
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="vendor-name">Name</label>
-            <input id="vendor-name" class="form-control" type="text" bind:value={vendorForm.name} />
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="vendor-slug">Slug</label>
-            <input id="vendor-slug" class="form-control" type="text" bind:value={vendorForm.slug} placeholder="auto from name" />
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="vendor-website">Website URL</label>
-            <input id="vendor-website" class="form-control" type="url" bind:value={vendorForm.websiteUrl} />
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="vendor-provider">Provider tag</label>
-            <input id="vendor-provider" class="form-control" type="text" bind:value={vendorForm.provider} />
-          </div>
-          <label class="inline-flex items-center gap-2 text-sm text-content-secondary">
-            <input type="checkbox" bind:checked={vendorForm.isActive} />
-            Active vendor
-          </label>
-          {#if vendorFormErrors.length > 0}
-            <p class="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger" role="alert">
-              {vendorFormErrors.join(' ')}
-            </p>
-          {/if}
-          {#if vendorSuccessMessage}
-            <p class="rounded-lg bg-success/10 px-3 py-2 text-sm font-medium text-success" role="status">
-              {vendorSuccessMessage}
-            </p>
-          {/if}
-          <button class="btn btn-base btn-primary" type="submit" disabled={vendorSubmitting}>
-            {#if vendorSubmitting}
-              Saving...
-            {:else if vendorMode === 'create'}
-              Create vendor
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm text-content-secondary">
+          <thead class="border-b border-border/60 text-xs font-semibold uppercase tracking-wide text-content-secondary/80 dark:border-border-strong/60">
+            <tr>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2">Slug</th>
+              <th class="px-3 py-2">Provider</th>
+              <th class="px-3 py-2">Status</th>
+              <th class="px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border/40">
+            {#if vendors.length > 0}
+              {#each vendors as vendor}
+                <tr>
+                  <td class="px-3 py-3 text-content-primary">
+                    <div>{vendor.name}</div>
+                    <div class="text-xs text-content-secondary/70">{vendor.websiteUrl ?? '—'}</div>
+                  </td>
+                  <td class="px-3 py-3">{vendor.slug}</td>
+                  <td class="px-3 py-3">{vendor.provider ?? '—'}</td>
+                  <td class="px-3 py-3">{vendor.isActive ? 'Active' : 'Inactive'}</td>
+                  <td class="px-3 py-3 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button class="btn btn-xs btn-outline" type="button" on:click={() => beginVendorEdit(vendor)}>
+                        Edit
+                      </button>
+                      <button
+                        class="btn btn-xs btn-outline"
+                        type="button"
+                        disabled={vendorSyncingId === vendor.vendorId}
+                        on:click={() => handleVendorSync(vendor.vendorId)}
+                      >
+                        {vendorSyncingId === vendor.vendorId ? 'Syncing…' : 'Sync prices'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {/each}
             {:else}
-              Save vendor
+              <tr>
+                <td colspan="5" class="px-3 py-6 text-center text-content-secondary/80">No vendors found.</td>
+              </tr>
             {/if}
-          </button>
-        </form>
+          </tbody>
+        </table>
       </div>
 
       <div class="rounded-2xl border border-border/60 p-4">
@@ -1126,11 +1113,9 @@
     <div class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-xl font-semibold text-content-primary">Catalog</h2>
-        {#if formMode === 'edit'}
-          <button class="btn btn-sm btn-outline" type="button" on:click={startCreateMode}>
-            Cancel editing
-          </button>
-        {/if}
+        <button class="btn btn-sm btn-primary" type="button" on:click={startCreateMode}>
+          Add catalog item
+        </button>
       </div>
       {#if tableMessage}
         <p
@@ -1229,378 +1214,442 @@
     </div>
   </Card>
 
-  <Card className="shadow-card" status={formErrors.length ? 'danger' : successMessage ? 'success' : 'default'}>
-    <form class="space-y-6" novalidate on:submit|preventDefault={handleSubmit}>
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 class="text-xl font-semibold text-content-primary">
-          {formMode === 'create' ? 'Add catalog item' : 'Edit catalog item'}
-        </h2>
-        {#if formMode === 'edit'}
-          <span class="text-sm text-content-secondary">Editing existing record</span>
-        {/if}
-      </div>
-      <div class="form-grid md:grid-cols-2 md:gap-6">
-        <div class="form-field">
-          <label for="itemClass" class="form-label">Item class</label>
-          <select id="itemClass" name="itemClass" bind:value={form.itemClass} class="form-control form-select">
-            {#each PRODUCT_ITEM_CLASSES as itemClass}
-              <option value={itemClass}>{itemClass}</option>
-            {/each}
-          </select>
-        </div>
+  {#if successMessage}
+    <p class="rounded-lg bg-success/10 px-3 py-2 text-sm font-medium text-success" role="status">
+      {successMessage}
+    </p>
+  {/if}
+</section>
 
-        <div class="form-field">
-          <label for="category" class="form-label">Category</label>
-          <select
-            id="category"
-            name="category"
-            bind:value={form.categoryId}
-            class="form-control form-select"
-            required
-          >
-            <option value="" disabled>Select a category</option>
-            {#each categories as category}
-              <option value={category.categoryId}>{category.name}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="form-field">
-          <label for="name" class="form-label">Name</label>
-          <input
-            id="name"
-            name="name"
-            class="form-control"
-            type="text"
-            placeholder="Liquid Chlorine 12.5%"
-            bind:value={form.name}
-            required
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="brand" class="form-label">Brand</label>
-          <input id="brand" name="brand" class="form-control" type="text" bind:value={form.brand} />
-        </div>
-
-        <div class="form-field">
-          <label for="sku" class="form-label">SKU</label>
-          <input id="sku" name="sku" class="form-control" type="text" bind:value={form.sku} />
-        </div>
-
-        <div class="form-field">
-          <label for="productType" class="form-label">Product type</label>
-          <select
-            id="productType"
-            name="productType"
-            class="form-control form-select"
-            bind:value={form.productType}
-          >
-            <option value="">Select a product type</option>
-            {#each productTypeOptionsForValue(form.productType) as option}
-              <option value={option.value}>{option.label}</option>
-            {/each}
-          </select>
-          <p class="form-helper">Controlled list to keep catalog types normalized.</p>
-        </div>
-
-        <div class="form-field md:col-span-2">
-          <label for="activeIngredients" class="form-label">
-            Active ingredients
-          </label>
-          <textarea
-            id="activeIngredients"
-            name="activeIngredients"
-            class="form-control form-textarea"
-            rows="3"
-            placeholder="sodium_hypochlorite: 12.5"
-            bind:value={form.activeIngredients}
-          ></textarea>
-          <p class="form-helper">One per line using "ingredient: percentage".</p>
-        </div>
-
-        <div class="form-field">
-          <label for="replacementIntervalDays" class="form-label">Replacement interval days</label>
-          <input
-            id="replacementIntervalDays"
-            name="replacementIntervalDays"
-            class="form-control"
-            type="text"
-            bind:value={form.replacementIntervalDays}
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="compatibleEquipmentType" class="form-label">Compatible equipment type</label>
-          <input
-            id="compatibleEquipmentType"
-            name="compatibleEquipmentType"
-            class="form-control"
-            type="text"
-            bind:value={form.compatibleEquipmentType}
-          />
-        </div>
-
-        <div class="form-field md:col-span-2">
-          <label for="notes" class="form-label">Notes</label>
-          <textarea
-            id="notes"
-            name="notes"
-            class="form-control form-textarea"
-            rows="3"
-            bind:value={form.notes}
-          ></textarea>
-        </div>
-
-        <div class="form-field">
-          <label for="concentrationPercent" class="form-label">Concentration (%)</label>
-          <input
-            id="concentrationPercent"
-            name="concentrationPercent"
-            class="form-control"
-            type="text"
-            bind:value={form.concentrationPercent}
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="phEffect" class="form-label">pH effect</label>
-          <input id="phEffect" name="phEffect" class="form-control" type="text" bind:value={form.phEffect} />
-        </div>
-
-        <div class="form-field">
-          <label for="strengthFactor" class="form-label">Strength factor</label>
-          <input
-            id="strengthFactor"
-            name="strengthFactor"
-            class="form-control"
-            type="text"
-            bind:value={form.strengthFactor}
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="dosePer10kGallons" class="form-label">Dose per 10k gallons</label>
-          <input
-            id="dosePer10kGallons"
-            name="dosePer10kGallons"
-            class="form-control"
-            type="text"
-            bind:value={form.dosePer10kGallons}
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="doseUnit" class="form-label">Dose unit</label>
-          <input id="doseUnit" name="doseUnit" class="form-control" type="text" bind:value={form.doseUnit} />
-        </div>
-
-        <div class="form-field">
-          <label for="averageCostPerUnit" class="form-label">
-            Average cost per unit
-          </label>
-          <input
-            id="averageCostPerUnit"
-            name="averageCostPerUnit"
-            class="form-control"
-            type="text"
-            bind:value={form.averageCostPerUnit}
-          />
-        </div>
-
-        <div class="form-field md:col-span-2">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <div class="form-label">Vendor pricing</div>
-              <p class="form-helper">Attach one or more vendor prices and mark a primary listing.</p>
-            </div>
-            <button class="btn btn-sm btn-outline" type="button" on:click={addVendorPriceRow}>
-              Add vendor price
-            </button>
+{#if showVendorModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <Card className="max-h-[90vh] w-full max-w-xl overflow-y-auto shadow-card" status={vendorFormErrors.length ? 'danger' : 'default'}>
+      <form class="space-y-4" on:submit|preventDefault={handleVendorSubmit}>
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-1">
+            <h3 class="text-lg font-semibold text-content-primary">
+              {vendorMode === 'create' ? 'Add vendor' : 'Edit vendor'}
+            </h3>
+            <p class="text-sm text-content-secondary">
+              Keep vendor names and slugs normalized so catalog pricing stays deduplicated.
+            </p>
           </div>
-
-          {#if form.vendorPrices.length > 0}
-            <div class="mt-3 space-y-3">
-              {#each form.vendorPrices as vendorPrice, index}
-                <div class="rounded-xl border border-border/60 p-4">
-                  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <div class="form-field">
-                      <label class="form-label" for={`vendorPrice-vendor-${index}`}>Vendor</label>
-                      <select id={`vendorPrice-vendor-${index}`} class="form-control form-select" bind:value={vendorPrice.vendorId}>
-                        <option value="">Select vendor</option>
-                        {#each vendors as vendorOption}
-                          <option value={vendorOption.vendorId}>{vendorOption.name}</option>
-                        {/each}
-                      </select>
-                    </div>
-                    <div class="form-field">
-                      <label class="form-label" for={`vendorPrice-price-${index}`}>Unit price</label>
-                      <input id={`vendorPrice-price-${index}`} class="form-control" type="number" min="0" step="0.01" bind:value={vendorPrice.unitPrice} />
-                    </div>
-                    <div class="form-field">
-                      <label class="form-label" for={`vendorPrice-currency-${index}`}>Currency</label>
-                      <input id={`vendorPrice-currency-${index}`} class="form-control" type="text" bind:value={vendorPrice.currency} />
-                    </div>
-                    <div class="form-field">
-                      <label class="form-label" for={`vendorPrice-package-${index}`}>Package size</label>
-                      <input id={`vendorPrice-package-${index}`} class="form-control" type="text" bind:value={vendorPrice.packageSize} />
-                    </div>
-                    <div class="form-field">
-                      <label class="form-label" for={`vendorPrice-unitLabel-${index}`}>Unit label</label>
-                      <input id={`vendorPrice-unitLabel-${index}`} class="form-control" type="text" bind:value={vendorPrice.unitLabel} />
-                    </div>
-                    <div class="form-field">
-                      <label class="form-label" for={`vendorPrice-sku-${index}`}>Vendor SKU</label>
-                      <input id={`vendorPrice-sku-${index}`} class="form-control" type="text" bind:value={vendorPrice.vendorSku} />
-                    </div>
-                    <div class="form-field md:col-span-2">
-                      <label class="form-label" for={`vendorPrice-url-${index}`}>Product URL</label>
-                      <input id={`vendorPrice-url-${index}`} class="form-control" type="url" bind:value={vendorPrice.productUrl} />
-                    </div>
-                  </div>
-                  <div class="mt-3 flex items-center justify-between gap-3">
-                    <label class="inline-flex items-center gap-2 text-sm text-content-secondary">
-                      <input type="radio" name="primaryVendorPrice" checked={vendorPrice.isPrimary} on:change={() => setPrimaryVendorPrice(index)} />
-                      Primary price
-                    </label>
-                    <button class="btn btn-xs btn-outline-danger" type="button" on:click={() => removeVendorPriceRow(index)}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {/if}
+          <button class="btn btn-sm btn-outline" type="button" on:click={closeVendorModal}>Close</button>
         </div>
-
         <div class="form-field">
-          <label for="fcChangePerDose" class="form-label">FC change per dose</label>
-          <input
-            id="fcChangePerDose"
-            name="fcChangePerDose"
-            class="form-control"
-            type="text"
-            bind:value={form.fcChangePerDose}
-          />
+          <label class="form-label" for="vendor-name">Name</label>
+          <input id="vendor-name" class="form-control" type="text" bind:value={vendorForm.name} />
         </div>
-
         <div class="form-field">
-          <label for="phChangePerDose" class="form-label">pH change per dose</label>
-          <input
-            id="phChangePerDose"
-            name="phChangePerDose"
-            class="form-control"
-            type="text"
-            bind:value={form.phChangePerDose}
-          />
+          <label class="form-label" for="vendor-slug">Slug</label>
+          <input id="vendor-slug" class="form-control" type="text" bind:value={vendorForm.slug} placeholder="auto from name" />
         </div>
-
         <div class="form-field">
-          <label for="taChangePerDose" class="form-label">TA change per dose</label>
-          <input
-            id="taChangePerDose"
-            name="taChangePerDose"
-            class="form-control"
-            type="text"
-            bind:value={form.taChangePerDose}
-          />
+          <label class="form-label" for="vendor-website">Website URL</label>
+          <input id="vendor-website" class="form-control" type="url" bind:value={vendorForm.websiteUrl} />
         </div>
-
         <div class="form-field">
-          <label for="cyaChangePerDose" class="form-label">CYA change per dose</label>
-          <input
-            id="cyaChangePerDose"
-            name="cyaChangePerDose"
-            class="form-control"
-            type="text"
-            bind:value={form.cyaChangePerDose}
-          />
+          <label class="form-label" for="vendor-provider">Provider tag</label>
+          <input id="vendor-provider" class="form-control" type="text" bind:value={vendorForm.provider} />
         </div>
-
-        <div class="form-field">
-          <label for="formType" class="form-label">Form</label>
-          <select
-            id="formType"
-            name="formType"
-            class="form-control form-select"
-            bind:value={form.formType}
-          >
-            <option value="">Select a form</option>
-            {#each formOptionsForValue(form.formType) as option}
-              <option value={option.value}>{option.label}</option>
-            {/each}
-          </select>
-          <p class="form-helper">Controlled list to keep chemical forms normalized.</p>
-        </div>
-
-        <div class="form-field md:col-span-2">
-          <label for="packageSizes" class="form-label">Package sizes</label>
-          <textarea
-            id="packageSizes"
-            name="packageSizes"
-            class="form-control form-textarea"
-            rows="3"
-            placeholder="1 gal&#10;2.5 gal"
-            bind:value={form.packageSizes}
-          ></textarea>
-          <p class="form-helper">Separate values with commas or new lines.</p>
-        </div>
-      </div>
-
-      <fieldset class="form-fieldset">
-        <legend class="form-legend">Impacts</legend>
-        <label class="form-option">
-          <input type="checkbox" bind:checked={form.affectsFc} />
-          Affects FC
+        <label class="inline-flex items-center gap-2 text-sm text-content-secondary">
+          <input type="checkbox" bind:checked={vendorForm.isActive} />
+          Active vendor
         </label>
-        <label class="form-option">
-          <input type="checkbox" bind:checked={form.affectsPh} />
-          Affects pH
-        </label>
-        <label class="form-option">
-          <input type="checkbox" bind:checked={form.affectsTa} />
-          Affects TA
-        </label>
-        <label class="form-option">
-          <input type="checkbox" bind:checked={form.affectsCya} />
-          Affects CYA
-        </label>
-        <label class="form-option">
-          <input type="checkbox" bind:checked={form.isActive} />
-          Active
-        </label>
-      </fieldset>
-
-      {#if formErrors.length > 0}
-        <div class="form-feedback" data-state="error" role="alert">
-          {#each formErrors as error}
-            <p>{error}</p>
-          {/each}
-        </div>
-      {/if}
-
-      {#if successMessage}
-        <p class="form-feedback" data-state="success" role="status">
-          {successMessage}
-        </p>
-      {/if}
-
-      <div class="flex flex-wrap items-center gap-3">
-        <button class="btn btn-base btn-primary" type="submit" disabled={submitting}>
-          {#if submitting}
-            Saving…
-          {:else if formMode === 'create'}
-            Create chemical
-          {:else}
-            Save changes
-          {/if}
-        </button>
-        {#if formMode === 'edit'}
-          <button class="btn btn-base btn-outline" type="button" on:click={startCreateMode}>
+        {#if vendorFormErrors.length > 0}
+          <p class="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger" role="alert">
+            {vendorFormErrors.join(' ')}
+          </p>
+        {/if}
+        <div class="flex flex-wrap items-center gap-3">
+          <button class="btn btn-base btn-primary" type="submit" disabled={vendorSubmitting}>
+            {#if vendorSubmitting}
+              Saving...
+            {:else if vendorMode === 'create'}
+              Create vendor
+            {:else}
+              Save vendor
+            {/if}
+          </button>
+          <button class="btn btn-base btn-outline" type="button" on:click={closeVendorModal}>
             Cancel
           </button>
+        </div>
+      </form>
+    </Card>
+  </div>
+{/if}
+
+{#if showCatalogModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <Card className="max-h-[90vh] w-full max-w-5xl overflow-y-auto shadow-card" status={formErrors.length ? 'danger' : 'default'}>
+      <form class="space-y-6" novalidate on:submit|preventDefault={handleSubmit}>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-xl font-semibold text-content-primary">
+              {formMode === 'create' ? 'Add catalog item' : 'Edit catalog item'}
+            </h2>
+            {#if formMode === 'edit'}
+              <span class="text-sm text-content-secondary">Editing existing record</span>
+            {/if}
+          </div>
+          <button class="btn btn-sm btn-outline" type="button" on:click={closeCatalogModal}>Close</button>
+        </div>
+        <div class="form-grid md:grid-cols-2 md:gap-6">
+          <div class="form-field">
+            <label for="itemClass" class="form-label">Item class</label>
+            <select id="itemClass" name="itemClass" bind:value={form.itemClass} class="form-control form-select">
+              {#each PRODUCT_ITEM_CLASSES as itemClass}
+                <option value={itemClass}>{itemClass}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="category" class="form-label">Category</label>
+            <select
+              id="category"
+              name="category"
+              bind:value={form.categoryId}
+              class="form-control form-select"
+              required
+            >
+              <option value="" disabled>Select a category</option>
+              {#each categories as category}
+                <option value={category.categoryId}>{category.name}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="name" class="form-label">Name</label>
+            <input
+              id="name"
+              name="name"
+              class="form-control"
+              type="text"
+              placeholder="Liquid Chlorine 12.5%"
+              bind:value={form.name}
+              required
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="brand" class="form-label">Brand</label>
+            <input id="brand" name="brand" class="form-control" type="text" bind:value={form.brand} />
+          </div>
+
+          <div class="form-field">
+            <label for="sku" class="form-label">SKU</label>
+            <input id="sku" name="sku" class="form-control" type="text" bind:value={form.sku} />
+          </div>
+
+          <div class="form-field">
+            <label for="productType" class="form-label">Product type</label>
+            <select
+              id="productType"
+              name="productType"
+              class="form-control form-select"
+              bind:value={form.productType}
+            >
+              <option value="">Select a product type</option>
+              {#each productTypeOptionsForValue(form.productType) as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </select>
+            <p class="form-helper">Controlled list to keep catalog types normalized.</p>
+          </div>
+
+          <div class="form-field md:col-span-2">
+            <label for="activeIngredients" class="form-label">
+              Active ingredients
+            </label>
+            <textarea
+              id="activeIngredients"
+              name="activeIngredients"
+              class="form-control form-textarea"
+              rows="3"
+              placeholder="sodium_hypochlorite: 12.5"
+              bind:value={form.activeIngredients}
+            ></textarea>
+            <p class="form-helper">One per line using "ingredient: percentage".</p>
+          </div>
+
+          <div class="form-field">
+            <label for="replacementIntervalDays" class="form-label">Replacement interval days</label>
+            <input
+              id="replacementIntervalDays"
+              name="replacementIntervalDays"
+              class="form-control"
+              type="text"
+              bind:value={form.replacementIntervalDays}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="compatibleEquipmentType" class="form-label">Compatible equipment type</label>
+            <input
+              id="compatibleEquipmentType"
+              name="compatibleEquipmentType"
+              class="form-control"
+              type="text"
+              bind:value={form.compatibleEquipmentType}
+            />
+          </div>
+
+          <div class="form-field md:col-span-2">
+            <label for="notes" class="form-label">Notes</label>
+            <textarea
+              id="notes"
+              name="notes"
+              class="form-control form-textarea"
+              rows="3"
+              bind:value={form.notes}
+            ></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="concentrationPercent" class="form-label">Concentration (%)</label>
+            <input
+              id="concentrationPercent"
+              name="concentrationPercent"
+              class="form-control"
+              type="text"
+              bind:value={form.concentrationPercent}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="phEffect" class="form-label">pH effect</label>
+            <input id="phEffect" name="phEffect" class="form-control" type="text" bind:value={form.phEffect} />
+          </div>
+
+          <div class="form-field">
+            <label for="strengthFactor" class="form-label">Strength factor</label>
+            <input
+              id="strengthFactor"
+              name="strengthFactor"
+              class="form-control"
+              type="text"
+              bind:value={form.strengthFactor}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="dosePer10kGallons" class="form-label">Dose per 10k gallons</label>
+            <input
+              id="dosePer10kGallons"
+              name="dosePer10kGallons"
+              class="form-control"
+              type="text"
+              bind:value={form.dosePer10kGallons}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="doseUnit" class="form-label">Dose unit</label>
+            <input id="doseUnit" name="doseUnit" class="form-control" type="text" bind:value={form.doseUnit} />
+          </div>
+
+          <div class="form-field">
+            <label for="averageCostPerUnit" class="form-label">
+              Average cost per unit
+            </label>
+            <input
+              id="averageCostPerUnit"
+              name="averageCostPerUnit"
+              class="form-control"
+              type="text"
+              bind:value={form.averageCostPerUnit}
+            />
+          </div>
+
+          <div class="form-field md:col-span-2">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="form-label">Vendor pricing</div>
+                <p class="form-helper">Attach one or more vendor prices and mark a primary listing.</p>
+              </div>
+              <button class="btn btn-sm btn-outline" type="button" on:click={addVendorPriceRow}>
+                Add vendor price
+              </button>
+            </div>
+
+            {#if form.vendorPrices.length > 0}
+              <div class="mt-3 space-y-3">
+                {#each form.vendorPrices as vendorPrice, index}
+                  <div class="rounded-xl border border-border/60 p-4">
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div class="form-field">
+                        <label class="form-label" for={`vendorPrice-vendor-${index}`}>Vendor</label>
+                        <select id={`vendorPrice-vendor-${index}`} class="form-control form-select" bind:value={vendorPrice.vendorId}>
+                          <option value="">Select vendor</option>
+                          {#each vendors as vendorOption}
+                            <option value={vendorOption.vendorId}>{vendorOption.name}</option>
+                          {/each}
+                        </select>
+                      </div>
+                      <div class="form-field">
+                        <label class="form-label" for={`vendorPrice-price-${index}`}>Unit price</label>
+                        <input id={`vendorPrice-price-${index}`} class="form-control" type="number" min="0" step="0.01" bind:value={vendorPrice.unitPrice} />
+                      </div>
+                      <div class="form-field">
+                        <label class="form-label" for={`vendorPrice-currency-${index}`}>Currency</label>
+                        <input id={`vendorPrice-currency-${index}`} class="form-control" type="text" bind:value={vendorPrice.currency} />
+                      </div>
+                      <div class="form-field">
+                        <label class="form-label" for={`vendorPrice-package-${index}`}>Package size</label>
+                        <input id={`vendorPrice-package-${index}`} class="form-control" type="text" bind:value={vendorPrice.packageSize} />
+                      </div>
+                      <div class="form-field">
+                        <label class="form-label" for={`vendorPrice-unitLabel-${index}`}>Unit label</label>
+                        <input id={`vendorPrice-unitLabel-${index}`} class="form-control" type="text" bind:value={vendorPrice.unitLabel} />
+                      </div>
+                      <div class="form-field">
+                        <label class="form-label" for={`vendorPrice-sku-${index}`}>Vendor SKU</label>
+                        <input id={`vendorPrice-sku-${index}`} class="form-control" type="text" bind:value={vendorPrice.vendorSku} />
+                      </div>
+                      <div class="form-field md:col-span-2">
+                        <label class="form-label" for={`vendorPrice-url-${index}`}>Product URL</label>
+                        <input id={`vendorPrice-url-${index}`} class="form-control" type="url" bind:value={vendorPrice.productUrl} />
+                      </div>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between gap-3">
+                      <label class="inline-flex items-center gap-2 text-sm text-content-secondary">
+                        <input type="radio" name="primaryVendorPrice" checked={vendorPrice.isPrimary} on:change={() => setPrimaryVendorPrice(index)} />
+                        Primary price
+                      </label>
+                      <button class="btn btn-xs btn-outline-danger" type="button" on:click={() => removeVendorPriceRow(index)}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="form-field">
+            <label for="fcChangePerDose" class="form-label">FC change per dose</label>
+            <input
+              id="fcChangePerDose"
+              name="fcChangePerDose"
+              class="form-control"
+              type="text"
+              bind:value={form.fcChangePerDose}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="phChangePerDose" class="form-label">pH change per dose</label>
+            <input
+              id="phChangePerDose"
+              name="phChangePerDose"
+              class="form-control"
+              type="text"
+              bind:value={form.phChangePerDose}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="taChangePerDose" class="form-label">TA change per dose</label>
+            <input
+              id="taChangePerDose"
+              name="taChangePerDose"
+              class="form-control"
+              type="text"
+              bind:value={form.taChangePerDose}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="cyaChangePerDose" class="form-label">CYA change per dose</label>
+            <input
+              id="cyaChangePerDose"
+              name="cyaChangePerDose"
+              class="form-control"
+              type="text"
+              bind:value={form.cyaChangePerDose}
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="formType" class="form-label">Form</label>
+            <select
+              id="formType"
+              name="formType"
+              class="form-control form-select"
+              bind:value={form.formType}
+            >
+              <option value="">Select a form</option>
+              {#each formOptionsForValue(form.formType) as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </select>
+            <p class="form-helper">Controlled list to keep chemical forms normalized.</p>
+          </div>
+
+          <div class="form-field md:col-span-2">
+            <label for="packageSizes" class="form-label">Package sizes</label>
+            <textarea
+              id="packageSizes"
+              name="packageSizes"
+              class="form-control form-textarea"
+              rows="3"
+              placeholder="1 gal&#10;2.5 gal"
+              bind:value={form.packageSizes}
+            ></textarea>
+            <p class="form-helper">Separate values with commas or new lines.</p>
+          </div>
+        </div>
+
+        <fieldset class="form-fieldset">
+          <legend class="form-legend">Impacts</legend>
+          <label class="form-option">
+            <input type="checkbox" bind:checked={form.affectsFc} />
+            Affects FC
+          </label>
+          <label class="form-option">
+            <input type="checkbox" bind:checked={form.affectsPh} />
+            Affects pH
+          </label>
+          <label class="form-option">
+            <input type="checkbox" bind:checked={form.affectsTa} />
+            Affects TA
+          </label>
+          <label class="form-option">
+            <input type="checkbox" bind:checked={form.affectsCya} />
+            Affects CYA
+          </label>
+          <label class="form-option">
+            <input type="checkbox" bind:checked={form.isActive} />
+            Active
+          </label>
+        </fieldset>
+
+        {#if formErrors.length > 0}
+          <div class="form-feedback" data-state="error" role="alert">
+            {#each formErrors as error}
+              <p>{error}</p>
+            {/each}
+          </div>
         {/if}
-      </div>
-    </form>
-  </Card>
-</section>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button class="btn btn-base btn-primary" type="submit" disabled={submitting}>
+            {#if submitting}
+              Saving…
+            {:else if formMode === 'create'}
+              Create chemical
+            {:else}
+              Save changes
+            {/if}
+          </button>
+          <button class="btn btn-base btn-outline" type="button" on:click={closeCatalogModal}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Card>
+  </div>
+{/if}

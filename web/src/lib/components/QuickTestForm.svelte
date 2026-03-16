@@ -283,12 +283,13 @@
       type="submit"
       disabled={isSubmitting}
       class="sm:col-span-2 btn btn-base btn-primary"
+      data-loading={isSubmitting ? 'true' : undefined}
+      aria-busy={isSubmitting}
     >
-      {#if isSubmitting}
-        Saving...
-      {:else}
-        Save
-      {/if}
+      <span class="btn__spinner" aria-hidden="true"></span>
+      <span class="btn__content">
+        <span class="btn__label">{isSubmitting ? 'Saving test results...' : 'Save test results'}</span>
+      </span>
     </button>
   </form>
 </Card>

@@ -253,12 +253,17 @@
         {success}
       </p>
     {/if}
-    <button type="submit" class="sm:col-span-2 btn btn-base btn-primary" disabled={isSubmitting}>
-      {#if isSubmitting}
-        Logging...
-      {:else}
-        Log dosing
-      {/if}
+    <button
+      type="submit"
+      class="sm:col-span-2 btn btn-base btn-primary"
+      disabled={isSubmitting}
+      data-loading={isSubmitting ? 'true' : undefined}
+      aria-busy={isSubmitting}
+    >
+      <span class="btn__spinner" aria-hidden="true"></span>
+      <span class="btn__content">
+        <span class="btn__label">{isSubmitting ? 'Logging dosing...' : 'Log dosing'}</span>
+      </span>
     </button>
   </form>
   {#if historyItems.length > 0}

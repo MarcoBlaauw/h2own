@@ -30,19 +30,15 @@ Move cost tracking out of Pool Overview and make Inventory the account-shared op
   - forecasted depletion
   - manual restock/adjustment/decrement entry
   - account-level costs with optional pool filter
+- Non-chemical maintenance supplies are implemented in the shared catalog/inventory model.
+- Vendor price import history is implemented.
+- Background vendor sync runs and sync-run history are implemented.
+- Stale-price visibility is implemented in catalog and inventory views.
+- A real external vendor adapter is implemented for Home Depot.
 
 ## Explicitly Out Of Scope Today
 - Pool devices, smart hardware, and external equipment integrations are not part of the current inventory implementation.
-- Non-chemical maintenance supplies are not implemented yet, even though they belong in inventory scope.
-- Examples not yet modeled:
-  - filter cartridges
-  - DE / filter media accessories sold as supplies rather than dosing chemicals
-  - skimmer nets
-  - brushes
-  - poles
-  - vacuum heads and hoses
-  - test strips and reagent kits
-  - baskets, o-rings, seals, and cleaner replacement parts
+- Equipment/device inventory remains a later expansion from the current chemical-and-supply scope.
 
 ## Layering
 ### Layer 1: Core system
@@ -85,55 +81,23 @@ Move cost tracking out of Pool Overview and make Inventory the account-shared op
 - `inventory_transactions`
   - now owner-aware and vendor-aware
 
-## Planned Next Extension: Non-Chemical Maintenance Supplies
-Goal:
-- bring routine pool maintenance supplies into inventory without forcing them into the chemical catalog model
-
-Examples:
-- filter cartridges
-- skimmer nets
-- wall brushes
-- telescoping poles
-- vacuum heads
-- vacuum hoses
-- test strip packs
-- liquid reagent refills
-- baskets
-- o-rings and seals
-
-Recommended model direction:
-- introduce an inventory item class such as `chemical | supply`
-- keep owner-shared stock and transaction behavior the same
-- keep vendor and price support shared across both classes
-- do not route supplies through chemical dosing fields like `activeIngredients`, `dosePer10kGallons`, or water-balance effects
-
-Likely supply-specific fields:
-- `sku`
-- `brand`
-- `vendorId`
-- `unit`
-- `packageSize`
-- `reorderPoint`
-- `preferredVendorId`
-- `preferredUnitPrice`
-- optional `replacementIntervalDays`
-- optional `compatibleEquipmentType`
-- optional `notes`
-
-UI implications:
-- Inventory page should gain a class/type filter so chemicals and supplies can be viewed together or separately.
-- Admin catalog should split into chemical fields vs supply fields instead of one form trying to represent both.
-- Supply transactions should support restock, manual adjustment, assignment/use, and replacement history.
+## Completed Extensions
+- Non-chemical maintenance supplies are supported through `itemClass = chemical | supply`.
+- Supply-oriented categories and seeded examples are in place.
+- Vendor sync runs and stale-price visibility are active.
+- Home Depot is implemented as the first real external price adapter.
 
 ## Remaining Follow-Ups
-- Implement non-chemical maintenance supply catalog and stock tracking as the next inventory extension.
-- Add scheduled/background vendor import jobs that reuse the current vendor price import pipeline.
-- Add stale-price visibility, retry behavior, and sync-run status around vendor imports.
-- Add real external vendor/API adapters after the background import layer is stable.
-- Extend inventory abstractions for equipment inventory in a later phase without conflating that with supplies.
+- Improve vendor adapter coverage beyond Home Depot.
+- Harden production operations around external sync:
+  - richer sync observability
+  - adapter failure diagnostics
+  - better product matching controls for ambiguous search results
+- Extend inventory abstractions for equipment/device inventory later without conflating that with supplies.
 
 ## Guardrails
 - Shared inventory scope is derived from pools the authenticated user can access.
 - Pool filters remain optional for account-wide views.
 - Duplicate stock rows are merged during migration only when units match.
 - Mixed-unit duplicate stock is intentionally blocked in migration rather than auto-converted.
+- Manual imports and external sync both write through the same normalized vendor pricing model.

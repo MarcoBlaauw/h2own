@@ -98,6 +98,7 @@ describe('admin chemicals page', () => {
       props: { data: baseData() },
     });
 
+    await fireEvent.click(getByRole('button', { name: /add catalog item/i }));
     const submit = getByRole('button', { name: /create chemical/i });
     await fireEvent.click(submit);
 
@@ -108,10 +109,11 @@ describe('admin chemicals page', () => {
   });
 
   it('filters product type options by category', async () => {
-    const { getByLabelText } = render(Page, {
+    const { getByLabelText, getByRole } = render(Page, {
       props: { data: baseData() },
     });
 
+    await fireEvent.click(getByRole('button', { name: /add catalog item/i }));
     await fireEvent.change(getByLabelText('Category'), { target: { value: categories[1].categoryId } });
 
     const productType = getByLabelText('Product type') as HTMLSelectElement;
@@ -142,6 +144,7 @@ describe('admin chemicals page', () => {
       props: { data: baseData() },
     });
 
+    await fireEvent.click(getByRole('button', { name: /add catalog item/i }));
     await fireEvent.change(getByLabelText('Category'), { target: { value: categories[1].categoryId } });
     await fireEvent.input(getByLabelText('Name', { selector: '#name' }), { target: { value: created.name } });
     await fireEvent.change(getByLabelText('Product type'), { target: { value: created.productType } });
@@ -176,6 +179,7 @@ describe('admin chemicals page', () => {
       props: { data: baseData() },
     });
 
+    await fireEvent.click(getByRole('button', { name: /add catalog item/i }));
     await fireEvent.change(getByLabelText('Category'), { target: { value: categories[1].categoryId } });
     await fireEvent.input(getByLabelText('Name', { selector: '#name' }), { target: { value: 'Scale Inhibitor' } });
 
@@ -271,6 +275,7 @@ describe('admin chemicals page', () => {
       props: { data: baseData() },
     });
 
+    await fireEvent.click(getByRole('button', { name: /add vendor/i }));
     await fireEvent.input(getByLabelText('Name', { selector: '#vendor-name' }), {
       target: { value: createdVendor.name },
     });
