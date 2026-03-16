@@ -34,7 +34,7 @@ Move cost tracking out of Pool Overview and make Inventory the account-shared op
 - Vendor price import history is implemented.
 - Background vendor sync runs and sync-run history are implemented.
 - Stale-price visibility is implemented in catalog and inventory views.
-- A real external vendor adapter is implemented for Home Depot.
+- Real external vendor adapters are implemented for Home Depot and Leslie's.
 
 ## Explicitly Out Of Scope Today
 - Pool devices, smart hardware, and external equipment integrations are not part of the current inventory implementation.
@@ -85,7 +85,7 @@ Move cost tracking out of Pool Overview and make Inventory the account-shared op
 - Non-chemical maintenance supplies are supported through `itemClass = chemical | supply`.
 - Supply-oriented categories and seeded examples are in place.
 - Vendor sync runs and stale-price visibility are active.
-- Home Depot is implemented as the first real external price adapter.
+- Home Depot and Leslie's are implemented as the first real external price adapters.
 
 ## Remaining Follow-Ups
 - Improve vendor adapter coverage beyond Home Depot.

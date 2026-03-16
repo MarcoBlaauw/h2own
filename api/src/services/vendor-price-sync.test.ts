@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractHomeDepotProductId,
   parseHomeDepotProductDocument,
+  parseLesliesProductDocument,
   parseHomeDepotSerpApiProductResponse,
   parseHomeDepotSerpApiSearchResponse,
   selectBestHomeDepotSearchCandidate,
@@ -137,5 +138,66 @@ describe('parseHomeDepotProductDocument', () => {
     );
 
     expect(match?.productId).toBe('334625012');
+  });
+});
+
+describe('parseLesliesProductDocument', () => {
+  it('extracts price and metadata from Leslie\'s ld+json product data', () => {
+    const html = `
+      <html>
+        <head>
+          <link rel="canonical" href="https://lesliespool.com/champion-acidblue-low-fume-muriatic-acid-1-gallon/14258.html" />
+          <script type="application/ld+json">
+            {
+              "@context":"http://schema.org/",
+              "@type":"Product",
+              "name":"Champion - AcidBlue Low Fume Muriatic Acid, 1 Gallon",
+              "description":"Champion AcidBlue Low Fume Muriatic Acid, 1 Gallon",
+              "mpn":"14258",
+              "sku":"14258",
+              "brand":{"@type":"Brand","name":"Champion"},
+              "offers":{"@type":"Offer","priceCurrency":"USD","price":"16.99","availability":"http://schema.org/InStock"}
+            }
+          </script>
+        </head>
+        <body>
+          Manufacturer SKU:
+          <span class="manufacturer-id">CH520</span>
+        </body>
+      </html>
+    `;
+
+    expect(parseLesliesProductDocument(html)).toEqual({
+      name: 'Champion - AcidBlue Low Fume Muriatic Acid, 1 Gallon',
+      brand: 'Champion',
+      sku: 'CH520',
+      url: 'https://lesliespool.com/champion-acidblue-low-fume-muriatic-acid-1-gallon/14258.html',
+      price: 16.99,
+      currency: 'USD',
+    });
+  });
+
+  it('falls back to title and inline price extraction when ld+json is absent', () => {
+    const html = `
+      <html>
+        <head>
+          <title>AcidBlue Low Fume Muriatic Acid, 1 Gallon | Leslie's Pool Supplies</title>
+          <link rel="canonical" href="https://lesliespool.com/example-product/14258.html" />
+        </head>
+        <body>
+          Manufacturer SKU:
+          <span class="manufacturer-id">CH520</span>
+          {"price":"16.99"}
+        </body>
+      </html>
+    `;
+
+    expect(parseLesliesProductDocument(html)).toEqual({
+      name: 'AcidBlue Low Fume Muriatic Acid, 1 Gallon',
+      sku: 'CH520',
+      url: 'https://lesliespool.com/example-product/14258.html',
+      price: 16.99,
+      currency: 'USD',
+    });
   });
 });

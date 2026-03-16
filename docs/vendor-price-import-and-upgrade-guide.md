@@ -4,12 +4,13 @@
 The current implementation now spans:
 - Phase 1 manual admin import workflow
 - Phase 2 background sync run infrastructure
-- first real external adapter coverage through Home Depot
+- first real external adapter coverage through Home Depot and Leslie's
 
 Implemented:
 - Admin vendor registry CRUD
 - Manual sync trigger endpoint scaffold
 - Home Depot sync adapter with `auto`, `direct`, and `serpapi` modes
+- Leslie's direct product-page sync adapter
 - Vendor price import endpoint
 - CSV and JSON import support
 - Dry-run preview mode
@@ -89,6 +90,7 @@ Current live adapter note:
 - In `auto` mode, the sync uses SerpApi when `VENDOR_PRICE_SERPAPI_API_KEY` is configured, then falls back to direct product-page sync.
 - In `direct` mode, the sync only uses `product_vendor_prices.productUrl` values that already point to Home Depot product pages.
 - In `serpapi` mode, the sync uses Home Depot search/product APIs through SerpApi to discover product URLs and prices from existing catalog rows even when `productUrl` is missing.
+- Leslie's currently uses direct product-page sync only and requires `product_vendor_prices.productUrl` to already point at a Leslie's PDP.
 
 Recommended env for the SerpApi-backed path:
 ```text

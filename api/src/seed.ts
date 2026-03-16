@@ -364,11 +364,13 @@ async function seed() {
         await ensureVendorPrice({
           productId: product.productId,
           vendorId: leslies.vendorId,
-          unitPrice: '10.49',
+          unitPrice: '16.99',
           currency: 'USD',
           packageSize: '1 gal',
           unitLabel: 'jug',
-          source: 'manual',
+          vendorSku: 'CH520',
+          productUrl: 'https://lesliespool.com/champion-acidblue-low-fume-muriatic-acid-1-gallon/14258.html',
+          source: 'external',
           isPrimary: true,
         });
       }

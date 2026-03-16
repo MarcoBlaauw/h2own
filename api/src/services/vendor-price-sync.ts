@@ -157,6 +157,15 @@ const HOME_DEPOT_HEADERS = {
   pragma: 'no-cache',
 };
 
+const LESLIES_HEADERS = {
+  'user-agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'accept-language': 'en-US,en;q=0.9',
+  'cache-control': 'no-cache',
+  pragma: 'no-cache',
+};
+
 const LD_JSON_SCRIPT_RE = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
 function normalizeJsonLike(input: string) {
@@ -259,6 +268,82 @@ export function parseHomeDepotProductDocument(html: string): HomeDepotParsedProd
   }
 
   return {
+    price: fallbackPrice,
+    currency: 'USD',
+  };
+}
+
+export function parseLesliesProductDocument(html: string): HomeDepotParsedProduct | null {
+  const scripts = Array.from(html.matchAll(LD_JSON_SCRIPT_RE));
+  for (const match of scripts) {
+    const raw = normalizeJsonLike(match[1] ?? '');
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      const product = findProductNode(parsed);
+      if (!product) continue;
+      const offers = asArray(product.offers)[0] as Record<string, unknown> | undefined;
+      const rawPrice = offers?.price ?? product.price;
+      const price = rawPrice === undefined ? undefined : Number(rawPrice);
+      const canonicalUrl = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1];
+      const manufacturerSku =
+        html.match(/Manufacturer SKU:\s*(?:<\/[^>]+>\s*)*<span[^>]+class=["'][^"']*manufacturer-id[^"']*["'][^>]*>([^<]+)</i)?.[1] ??
+        html.match(/Manufacturer SKU:\s*<span[^>]+class=["'][^"']*manufacturer-id[^"']*["'][^>]*>([^<]+)</i)?.[1];
+
+      return {
+        name: typeof product.name === 'string' ? product.name : undefined,
+        brand:
+          typeof product.brand === 'string'
+            ? product.brand
+            : typeof (product.brand as Record<string, unknown> | undefined)?.name === 'string'
+              ? String((product.brand as Record<string, unknown>).name)
+              : undefined,
+        sku:
+          typeof manufacturerSku === 'string'
+            ? manufacturerSku.trim()
+            : typeof product.sku === 'string'
+              ? product.sku
+              : typeof product.mpn === 'string'
+                ? product.mpn
+                : undefined,
+        url:
+          typeof product.url === 'string' && /^https?:\/\//i.test(product.url)
+            ? product.url
+            : canonicalUrl,
+        price: Number.isFinite(price) ? price : undefined,
+        currency:
+          typeof offers?.priceCurrency === 'string'
+            ? String(offers.priceCurrency).toUpperCase()
+            : 'USD',
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  const title = html.match(/<title>\s*([^<]+?)\s*\|/i)?.[1]?.trim();
+  const canonicalUrl = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1];
+  const manufacturerSku =
+    html.match(/Manufacturer SKU:\s*(?:<\/[^>]+>\s*)*<span[^>]+class=["'][^"']*manufacturer-id[^"']*["'][^>]*>([^<]+)</i)?.[1] ??
+    html.match(/Manufacturer SKU:\s*<span[^>]+class=["'][^"']*manufacturer-id[^"']*["'][^>]*>([^<]+)</i)?.[1];
+  const priceMatch =
+    html.match(/"price"\s*:\s*"?(?<price>\d+(?:\.\d+)?)"?/i) ??
+    html.match(/"sale-price"\s*content=["'](?<price>\d+(?:\.\d+)?)["']/i) ??
+    html.match(/content=["']\$?(?<price>\d+(?:\.\d+)?)["'][^>]*itemprop=["']price["']/i);
+
+  if (!priceMatch?.groups?.price) {
+    return null;
+  }
+
+  const fallbackPrice = Number(priceMatch.groups.price);
+  if (!Number.isFinite(fallbackPrice)) {
+    return null;
+  }
+
+  return {
+    name: title,
+    sku: manufacturerSku?.trim(),
+    url: canonicalUrl,
     price: fallbackPrice,
     currency: 'USD',
   };
@@ -602,6 +687,90 @@ class HomeDepotVendorPriceAdapter implements VendorPriceAdapter {
   }
 }
 
+class LesliesVendorPriceAdapter implements VendorPriceAdapter {
+  constructor(
+    private readonly loadLinkedVendorPrices: (vendorId: string) => Promise<LinkedVendorPriceRecord[]>,
+    private readonly upsertVendorPriceRows: (
+      vendorId: string,
+      rows: VendorPriceImportRow[],
+      options?: { dryRun?: boolean },
+    ) => Promise<VendorPriceUpsertResult>,
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+
+  async sync(input: { vendor: VendorRecord; linkedProducts: number }) {
+    const linkedRows = await this.loadLinkedVendorPrices(input.vendor.vendorId);
+    const syncedRows: VendorPriceImportRow[] = [];
+    let skippedRows = 0;
+
+    for (const row of linkedRows) {
+      if (!row.productUrl || !/lesliespool\.com/i.test(row.productUrl)) {
+        skippedRows += 1;
+        continue;
+      }
+
+      try {
+        const response = await this.fetchImpl(row.productUrl, { headers: LESLIES_HEADERS });
+        if (!response.ok) {
+          skippedRows += 1;
+          continue;
+        }
+
+        const html = await response.text();
+        const parsed = parseLesliesProductDocument(html);
+        if (!parsed?.price || parsed.price <= 0) {
+          skippedRows += 1;
+          continue;
+        }
+
+        syncedRows.push({
+          productId: row.productId,
+          productName: parsed.name ?? row.productName,
+          brand: parsed.brand ?? row.productBrand ?? undefined,
+          vendorSku: parsed.sku ?? row.vendorSku ?? undefined,
+          productUrl: parsed.url ?? row.productUrl,
+          unitPrice: parsed.price,
+          currency: parsed.currency ?? 'USD',
+          packageSize: row.packageSize ?? undefined,
+          unitLabel: row.unitLabel ?? undefined,
+          isPrimary: row.isPrimary,
+        });
+      } catch {
+        skippedRows += 1;
+      }
+    }
+
+    if (!syncedRows.length) {
+      return {
+        vendorId: input.vendor.vendorId,
+        vendorName: input.vendor.name,
+        vendorSlug: input.vendor.slug,
+        status: 'completed',
+        updatedPrices: 0,
+        linkedProducts: input.linkedProducts,
+        message:
+          linkedRows.length === 0
+            ? "No Leslie's-linked catalog prices are configured yet. Add Leslie's product URLs to vendor pricing first."
+            : `Leslie's sync completed with no price updates. ${skippedRows} linked products were skipped.`,
+      } satisfies VendorPriceSyncResult;
+    }
+
+    const result = await this.upsertVendorPriceRows(input.vendor.vendorId, syncedRows, {
+      dryRun: false,
+    });
+
+    return {
+      vendorId: input.vendor.vendorId,
+      vendorName: input.vendor.name,
+      vendorSlug: input.vendor.slug,
+      status: 'completed',
+      updatedPrices: result.updatedPrices + result.createdPrices,
+      linkedProducts: input.linkedProducts,
+      message: `Leslie's sync updated ${result.updatedPrices + result.createdPrices} prices and skipped ${result.skippedRows + skippedRows}.`,
+    } satisfies VendorPriceSyncResult;
+  }
+}
+
 class HomeDepotSerpApiClient {
   constructor(
     private readonly fetchImpl: typeof fetch,
@@ -778,7 +947,7 @@ export class VendorPriceSyncService {
   }
 
   private getAdapter(slug: string, provider?: string | null): VendorPriceAdapter {
-    const key = (provider || slug).toLowerCase();
+    const key = (provider && provider.toLowerCase() !== 'manual' ? provider : slug).toLowerCase();
     switch (key) {
       case 'home-depot':
         return new HomeDepotVendorPriceAdapter(
@@ -786,8 +955,13 @@ export class VendorPriceSyncService {
           (vendorId, rows, options) => this.upsertVendorPriceRows(vendorId, rows, options),
           this.fetchImpl,
         );
-      case 'amazon':
       case 'leslies':
+        return new LesliesVendorPriceAdapter(
+          (vendorId) => this.loadLinkedVendorPrices(vendorId),
+          (vendorId, rows, options) => this.upsertVendorPriceRows(vendorId, rows, options),
+          this.fetchImpl,
+        );
+      case 'amazon':
       case 'pool-supply':
       case 'manual':
         return new UnsupportedVendorPriceAdapter(slug);
